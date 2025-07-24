@@ -18,6 +18,7 @@ export interface ApolloContact {
 
 export interface ApolloSearchResponse {
   contacts: ApolloContact[];
+  people: ApolloContact[];
   pagination: {
     page: number;
     per_page: number;
@@ -184,15 +185,18 @@ class ApolloService {
 
       const data: ApolloSearchResponse = await response.json();
       console.log(`Apollo API response:`, JSON.stringify(data, null, 2));
-      console.log(`Apollo returned ${data.contacts?.length || 0} contacts`);
+      
+      // Apollo returns data in 'people' array, not 'contacts'
+      const contacts = data.people || data.contacts || [];
+      console.log(`Apollo returned ${contacts.length} contacts`);
 
-      if (!data.contacts || data.contacts.length === 0) {
+      if (!contacts || contacts.length === 0) {
         console.log("No contacts in primary search, trying broader search...");
         return await this.tryBroaderSearch(params.company_name);
       }
 
       // Process and rank contacts by recruiter likelihood
-      const processedContacts: ProcessedContact[] = data.contacts
+      const processedContacts: ProcessedContact[] = contacts
         .filter(contact => contact.name && contact.title)
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
@@ -303,13 +307,16 @@ class ApolloService {
 
       const data: ApolloSearchResponse = await response.json();
       
-      if (!data.contacts || data.contacts.length === 0) {
+      // Apollo returns data in 'people' array, not 'contacts'
+      const contacts = data.people || data.contacts || [];
+      
+      if (!contacts || contacts.length === 0) {
         console.log("No contacts found even in broader search");
         return [];
       }
 
       // Process broader search results
-      const processedContacts: ProcessedContact[] = data.contacts
+      const processedContacts: ProcessedContact[] = contacts
         .filter(contact => contact.name && contact.title)
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
