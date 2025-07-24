@@ -81,6 +81,35 @@ class ApolloService {
     return { isRecruiter, confidence: maxConfidence };
   }
 
+  async testApiConnection(): Promise<boolean> {
+    if (!this.apiKey) return false;
+    
+    try {
+      const testPayload = {
+        q_organization_name: "Google",
+        page: 1,
+        per_page: 1
+      };
+
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(testPayload)
+      });
+
+      const data = await response.json();
+      console.log(`Apollo API test with Google: ${response.status}, contacts: ${data.contacts?.length || 0}`);
+      return response.ok && data.contacts && data.contacts.length > 0;
+    } catch (error) {
+      console.error("Apollo API connection test failed:", error);
+      return false;
+    }
+  }
+
   async searchContacts(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required. Please add APOLLO_API_KEY to your environment variables.");
@@ -90,12 +119,35 @@ class ApolloService {
       // Try a very basic search to test if Apollo API is working
       const companyDomain = this.extractDomain(params.company_name);
       
-      // Minimal search - just try to find anyone at the company first
-      const searchPayload = {
-        q_organization_domains: companyDomain ? [companyDomain] : undefined,
-        page: 1,
-        per_page: 10
-      };
+      // Try multiple search approaches to test Apollo API
+      let searchPayload: any = {};
+      
+      // First try: organization name only (no domain)
+      if (params.company_name) {
+        searchPayload = {
+          q_organization_name: params.company_name,
+          page: 1,
+          per_page: 10
+        };
+      }
+      
+      // If that fails, try with domain
+      if (companyDomain && Object.keys(searchPayload).length === 0) {
+        searchPayload = {
+          q_organization_domains: [companyDomain],
+          page: 1,
+          per_page: 10
+        };
+      }
+      
+      // Fallback: try a test company we know should have data
+      if (Object.keys(searchPayload).length === 0) {
+        searchPayload = {
+          q_organization_name: "Google",
+          page: 1,
+          per_page: 5
+        };
+      }
       
       // Remove undefined fields
       Object.keys(searchPayload).forEach(key => {

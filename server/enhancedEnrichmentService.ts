@@ -54,7 +54,14 @@ export class EnhancedEnrichmentService {
       verified_emails: 0
     };
 
-    // Step 1: Search Apollo for contacts
+    // Step 1: Test Apollo API connection first
+    if (apolloService.isConfigured()) {
+      console.log("Testing Apollo API connection...");
+      const connectionTest = await apolloService.testApiConnection();
+      console.log(`Apollo API connection test result: ${connectionTest}`);
+    }
+
+    // Step 2: Search Apollo for contacts
     let apolloContacts: ProcessedContact[] = [];
     if (apolloService.isConfigured()) {
       try {
