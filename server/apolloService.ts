@@ -196,37 +196,70 @@ class ApolloService {
       }
 
       // Process and rank contacts by recruiter likelihood
-      const processedContacts: ProcessedContact[] = contacts
+      const candidateContacts = contacts
         .filter(contact => contact.name && contact.title)
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
           
-          // Filter out Apollo's placeholder emails
-          const cleanEmail = this.isPlaceholderEmail(contact.email) ? undefined : contact.email;
-          
           return {
+            apolloContact: contact,
             full_name: contact.name,
             title: contact.title,
-            email: cleanEmail,
+            email: contact.email,
             linkedin_url: contact.linkedin_url,
             company_name: contact.organization_name || params.company_name,
             is_recruiter_likely: isRecruiter,
             recruiter_confidence: confidence
           };
         })
-        .sort((a, b) => {
-          // Sort by recruiter confidence first, then by whether they have email
-          if (a.recruiter_confidence !== b.recruiter_confidence) {
-            return b.recruiter_confidence - a.recruiter_confidence;
-          }
-          if (a.email && !b.email) return -1;
-          if (!a.email && b.email) return 1;
-          return 0;
-        })
-        .slice(0, 10); // Take top 10 matches
+        .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
+        .slice(0, 10); // Take top 10 candidates for enrichment
 
-      console.log(`Processed ${processedContacts.length} recruiter contacts`);
-      return processedContacts;
+      console.log(`Found ${candidateContacts.length} candidate contacts, enriching emails...`);
+
+      // Step 2: Enrich contacts to get real email addresses
+      const enrichedContacts: ProcessedContact[] = [];
+      
+      for (const candidate of candidateContacts) {
+        try {
+          // Try to enrich the contact to get real email
+          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: enrichedContact?.email || undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+          
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (error) {
+          console.error(`Enrichment failed for ${candidate.full_name}:`, error);
+          
+          // Include contact without email if enrichment fails
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+        }
+      }
+
+      console.log(`Processed ${enrichedContacts.length} recruiter contacts with enrichment`);
+      return enrichedContacts;
 
     } catch (error) {
       console.error("Apollo search error:", error);
@@ -250,10 +283,11 @@ class ApolloService {
         headers: {
           "Cache-Control": "no-cache",
           "Content-Type": "application/json",
-          "X-Api-Key": this.apiKey
+          "x-api-key": this.apiKey
         },
         body: JSON.stringify({
-          email: email
+          email: email,
+          reveal_personal_emails: true
         })
       });
 
@@ -267,6 +301,61 @@ class ApolloService {
 
     } catch (error) {
       console.error(`Apollo enrichment error for ${email}:`, error);
+      return null;
+    }
+  }
+
+  async enrichContactByProfile(contact: ApolloContact): Promise<ApolloContact | null> {
+    if (!this.apiKey) {
+      throw new Error("Apollo API key is required");
+    }
+
+    try {
+      console.log(`Enriching contact by profile: ${contact.name}`);
+
+      const matchPayload: any = {
+        reveal_personal_emails: true
+      };
+
+      // Use multiple identifiers for better matching
+      if (contact.first_name && contact.last_name) {
+        matchPayload.first_name = contact.first_name;
+        matchPayload.last_name = contact.last_name;
+      } else if (contact.name) {
+        const nameParts = contact.name.split(' ');
+        matchPayload.first_name = nameParts[0];
+        matchPayload.last_name = nameParts.slice(1).join(' ');
+      }
+
+      if (contact.organization_name) {
+        matchPayload.organization_name = contact.organization_name;
+      }
+
+      if (contact.linkedin_url) {
+        matchPayload.linkedin_url = contact.linkedin_url;
+      }
+
+      const response = await fetch(`${this.baseUrl}/people/match`, {
+        method: "POST",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(matchPayload)
+      });
+
+      if (!response.ok) {
+        console.error(`Apollo profile enrichment failed for ${contact.name}: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      console.log(`Enrichment result for ${contact.name}: ${data.person?.email ? 'Email found' : 'No email'}`);
+      return data.person || null;
+
+    } catch (error) {
+      console.error(`Apollo profile enrichment error for ${contact.name}:`, error);
       return null;
     }
   }
@@ -318,19 +407,16 @@ class ApolloService {
         return [];
       }
 
-      // Process broader search results
-      const processedContacts: ProcessedContact[] = contacts
+      // Process broader search results with enrichment
+      const candidateContacts = contacts
         .filter(contact => contact.name && contact.title)
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
           
-          // Filter out Apollo's placeholder emails
-          const cleanEmail = this.isPlaceholderEmail(contact.email) ? undefined : contact.email;
-          
           return {
+            apolloContact: contact,
             full_name: contact.name,
             title: contact.title,
-            email: cleanEmail,
             linkedin_url: contact.linkedin_url,
             company_name: contact.organization_name || companyName,
             is_recruiter_likely: isRecruiter,
@@ -340,8 +426,47 @@ class ApolloService {
         .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
         .slice(0, 5);
 
-      console.log(`Broader search returned ${processedContacts.length} contacts`);
-      return processedContacts;
+      console.log(`Broader search found ${candidateContacts.length} candidates, enriching emails...`);
+
+      // Enrich contacts to get real email addresses
+      const enrichedContacts: ProcessedContact[] = [];
+      
+      for (const candidate of candidateContacts) {
+        try {
+          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: enrichedContact?.email || undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (error) {
+          console.error(`Broader search enrichment failed for ${candidate.full_name}:`, error);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+        }
+      }
+
+      console.log(`Broader search returned ${enrichedContacts.length} enriched contacts`);
+      return enrichedContacts;
 
     } catch (error) {
       console.error("Broader Apollo search failed:", error);
