@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +42,7 @@ export function RecruiterMessageCard({ recruiter }: RecruiterMessageCardProps) {
       setEmailSubject(data.email.subject);
       setEmailContent(data.email.content);
       setLinkedinContent(data.linkedin.content);
+      setIsExpanded(true); // Auto-expand to show generated messages
       queryClient.invalidateQueries({ queryKey: [`/api/recruiters/${recruiter.id}/messages`] });
       toast({
         title: "Messages generated!",
@@ -84,13 +85,15 @@ export function RecruiterMessageCard({ recruiter }: RecruiterMessageCardProps) {
   const linkedinMessage = messages.find(m => m.messageType === "linkedin");
 
   // Initialize content when messages load
-  if (emailMessage && !emailContent) {
-    setEmailContent(emailMessage.content);
-    setEmailSubject(emailMessage.subject || "");
-  }
-  if (linkedinMessage && !linkedinContent) {
-    setLinkedinContent(linkedinMessage.content);
-  }
+  useEffect(() => {
+    if (emailMessage) {
+      setEmailContent(emailMessage.content);
+      setEmailSubject(emailMessage.subject || "");
+    }
+    if (linkedinMessage) {
+      setLinkedinContent(linkedinMessage.content);
+    }
+  }, [emailMessage, linkedinMessage]);
 
   const handleGenerateMessages = () => {
     generateMessagesMutation.mutate();
@@ -154,15 +157,16 @@ export function RecruiterMessageCard({ recruiter }: RecruiterMessageCardProps) {
           
           <div className="flex items-center space-x-2">
             {hasMessages ? (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setIsExpanded(!isExpanded)}
-              >
-                <Edit className="w-4 h-4 mr-1" />
-                Edit Messages
-                {isExpanded ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
-              </Button>
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                >
+                  <Edit className="w-4 h-4 mr-1" />
+                  Edit Messages
+                  {isExpanded ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                </Button>
+              </CollapsibleTrigger>
             ) : (
               <Button 
                 size="sm"
@@ -174,7 +178,7 @@ export function RecruiterMessageCard({ recruiter }: RecruiterMessageCardProps) {
                 ) : (
                   <MessageCircle className="w-4 h-4 mr-1" />
                 )}
-                Generate Messages
+                {generateMessagesMutation.isPending ? "Generating..." : "Generate Messages"}
               </Button>
             )}
           </div>
