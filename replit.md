@@ -140,7 +140,9 @@ The enrichment service is structured to easily integrate with:
 - NeverBounce email verification with status badges (✅ Valid, ⚠️ Risky, ❌ Invalid)
 - Modular apolloService.ts and verifierService.ts architecture
 - Enhanced OpenAI prompt for extracting accurate Apollo search parameters
-- Workflow: OpenAI extraction → Apollo search → NeverBounce verification → Database storage
-- Top 3 recruiter matches with confidence scoring and verification status
+- **CRITICAL FIX (Jan 2025)**: Removed fake recruiter generation from OpenAI - Apollo is now sole source of contact data
+- Workflow: OpenAI parameter extraction → Apollo recruiter search → NeverBounce verification → Database storage
+- Top 3 Apollo recruiter matches with confidence scoring and verification status
+- Broader search fallback when primary Apollo search returns no results
 - Full UI support for verification status display with icons
 - Database schema with Apollo ID tracking and verification data storage

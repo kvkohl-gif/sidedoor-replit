@@ -178,12 +178,13 @@ Return the extracted data in the JSON format specified.`;
 }
 
 export async function extractRecruiterInfo(jobInput: string, inputType: "text" | "url"): Promise<RecruiterExtraction> {
-  const systemPrompt = `You are an expert assistant that extracts recruiter contact information and generates personalized outreach messages from job descriptions. 
+  const systemPrompt = `You are an assistant that extracts company information and generates outreach messages from job descriptions.
+
+CRITICAL: Do NOT generate recruiter names, contacts, or personnel information. Apollo API will provide real recruiter data.
 
 Your task is to:
-1. Identify potential recruiter or hiring manager contacts
-2. Extract company and job information
-3. Generate professional outreach messages
+1. Extract basic company and job information ONLY
+2. Generate professional email and LinkedIn message templates
 
 Always respond with valid JSON in the exact format specified.`;
 
@@ -194,32 +195,28 @@ Please analyze this job posting and return JSON with the following structure:
 {
   "company_name": "...",
   "job_title": "...",
-  "recruiters": [
-    { "name": "...", "title": "...", "email": "...", "linkedin_url": "...", "confidence_score": 0-100 },
-    {...}
-  ],
+  "recruiters": [],
   "email_draft": "...",
   "linkedin_message": "..."
 }
 
 Instructions:
-- Extract up to 3 potential recruiter/hiring contacts
-- Confidence score should reflect how likely this person is to be the actual recruiter (0-100)
-- Generate professional, personalized outreach messages
-- If information is not available, use reasonable professional estimates based on the company and role
-- Email draft should be 150-200 words
+- NEVER generate recruiter names or contact information - leave recruiters array empty
+- Extract only company name and job title from the posting
+- Generate professional, personalized outreach message templates
+- Email draft should be 150-200 words with subject line
 - LinkedIn message should be 80-120 words
-- Include proper subject line in email draft`;
+- Messages should be templates that can work with any recruiter at the company`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.3,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -229,21 +226,20 @@ Instructions:
       throw new Error("Failed to extract required company and job information");
     }
     
-    if (!result.recruiters || !Array.isArray(result.recruiters)) {
-      result.recruiters = [];
-    }
+    // Always return empty array for recruiters - Apollo will provide real data
+    result.recruiters = [];
     
     if (!result.email_draft) {
-      result.email_draft = "Please customize this message for your specific situation.";
+      result.email_draft = "Please customize this message template for your specific outreach.";
     }
     
     if (!result.linkedin_message) {
-      result.linkedin_message = "Please customize this message for your specific situation.";
+      result.linkedin_message = "Please customize this message template for your specific outreach.";
     }
 
     return result as RecruiterExtraction;
   } catch (error) {
     console.error("OpenAI API error:", error);
-    throw new Error("Failed to extract recruiter information. Please try again.");
+    throw new Error("Failed to extract job information. Please try again.");
   }
 }

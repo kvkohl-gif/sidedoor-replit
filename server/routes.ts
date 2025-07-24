@@ -117,32 +117,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Saved ${apolloSearchResult.contacts.length} Apollo contacts to database`);
         }
 
-        // Fallback to OpenAI-extracted contacts if Apollo didn't find anyone
-        if (apolloSearchResult.contacts.length === 0 && extraction.recruiters && extraction.recruiters.length > 0) {
-          console.log("No Apollo contacts found, using OpenAI-extracted contacts as fallback");
+        // If no Apollo contacts found, create a placeholder message
+        if (apolloSearchResult.contacts.length === 0) {
+          console.log("No Apollo contacts found - no fallback contacts will be generated");
           
-          const companyDomain = ContactEnrichmentService.extractDomain(companyName);
-          const enrichedContacts = await enrichmentService.enrichContacts(extraction.recruiters, companyDomain);
-
-          const recruiterContacts = enrichedContacts.map(contact => ({
+          // Create a single informational record indicating no contacts were found
+          await storage.createRecruiterContact({
             jobSubmissionId: updatedSubmission.id,
-            name: contact.name,
-            title: contact.title,
-            email: contact.verifiedEmail || contact.email,
-            linkedinUrl: contact.linkedinUrl,
-            confidenceScore: extraction.recruiters.find(r => r.name === contact.name)?.confidence_score || 50,
-            emailVerified: contact.emailVerified ? "true" : "false",
-            verificationStatus: contact.verificationStatus,
-            sourcePlatform: contact.sourcePlatform,
-            recruiterConfidence: 0.6,
-          }));
-
-          for (const contact of recruiterContacts) {
-            await storage.createRecruiterContact(contact);
-            totalContactsAdded++;
-          }
+            name: "No Recruiter Contacts Found",
+            title: "Apollo search returned no results",
+            email: null,
+            linkedinUrl: null,
+            confidenceScore: 0,
+            source: "Apollo Search",
+            emailVerified: "false",
+            verificationStatus: "unknown",
+            sourcePlatform: "apollo",
+            recruiterConfidence: 0.0,
+          });
           
-          console.log(`Saved ${recruiterContacts.length} OpenAI fallback contacts`);
+          console.log("Created placeholder record for no contacts found");
         }
 
         console.log(`Total contacts added: ${totalContactsAdded}`);

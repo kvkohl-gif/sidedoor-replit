@@ -135,6 +135,13 @@ class ApolloService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Apollo API error (${response.status}):`, errorText);
+        
+        // If no results, try a broader search
+        if (response.status === 200 || response.status === 404) {
+          console.log("Trying broader Apollo search...");
+          return await this.tryBroaderSearch(params.company_name);
+        }
+        
         throw new Error(`Apollo API request failed: ${response.status} ${response.statusText}`);
       }
 
@@ -142,7 +149,8 @@ class ApolloService {
       console.log(`Apollo returned ${data.contacts?.length || 0} contacts`);
 
       if (!data.contacts || data.contacts.length === 0) {
-        return [];
+        console.log("No contacts in primary search, trying broader search...");
+        return await this.tryBroaderSearch(params.company_name);
       }
 
       // Process and rank contacts by recruiter likelihood
@@ -215,6 +223,68 @@ class ApolloService {
     } catch (error) {
       console.error(`Apollo enrichment error for ${email}:`, error);
       return null;
+    }
+  }
+
+  private async tryBroaderSearch(companyName: string): Promise<ProcessedContact[]> {
+    try {
+      // Simplified search with just company name and basic HR titles
+      const broadSearchPayload = {
+        q_organization_name: companyName,
+        page: 1,
+        per_page: 10,
+        person_titles: ["recruiter", "hr", "talent", "people"]
+      };
+
+      console.log(`Trying broader Apollo search for ${companyName}`);
+
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Content-Type": "application/json",
+          "X-Api-Key": this.apiKey
+        },
+        body: JSON.stringify(broadSearchPayload)
+      });
+
+      if (!response.ok) {
+        console.log(`Broader search also failed: ${response.status}`);
+        return [];
+      }
+
+      const data: ApolloSearchResponse = await response.json();
+      
+      if (!data.contacts || data.contacts.length === 0) {
+        console.log("No contacts found even in broader search");
+        return [];
+      }
+
+      // Process broader search results
+      const processedContacts: ProcessedContact[] = data.contacts
+        .filter(contact => contact.name && contact.title)
+        .map(contact => {
+          const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
+          
+          return {
+            full_name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            linkedin_url: contact.linkedin_url,
+            company_name: contact.organization_name || companyName,
+            is_recruiter_likely: isRecruiter,
+            recruiter_confidence: confidence
+          };
+        })
+        .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
+        .slice(0, 5);
+
+      console.log(`Broader search returned ${processedContacts.length} contacts`);
+      return processedContacts;
+
+    } catch (error) {
+      console.error("Broader Apollo search failed:", error);
+      return [];
     }
   }
 
