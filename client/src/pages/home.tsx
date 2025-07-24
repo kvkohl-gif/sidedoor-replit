@@ -9,7 +9,6 @@ import { Search, MessageSquare, BarChart3 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { LoadingAnimation, MultiStepLoading } from "@/components/ui/loading-animation";
 
 export default function Home() {
   const [inputType, setInputType] = useState<"text" | "url">("text");
@@ -117,66 +116,64 @@ export default function Home() {
                 </Button>
               </div>
 
-              {/* Input Area */}
-              {inputType === "text" ? (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Paste Job Description
-                  </label>
-                  <Textarea
-                    placeholder="Paste the full job description here..."
-                    className="h-48 resize-none"
-                    value={jobInput}
-                    onChange={(e) => setJobInput(e.target.value)}
-                  />
+              {/* Input Area with Loading State */}
+              {submitMutation.isPending ? (
+                <div className="flex flex-col items-center justify-center h-48 space-y-4">
+                  {/* Loading Spinner */}
+                  <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  {/* Processing Text */}
+                  <p className="text-sm text-slate-500 animate-pulse">Processing...</p>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Job URL
-                  </label>
-                  <Input
-                    type="url"
-                    placeholder="https://company.com/jobs/position"
-                    value={jobInput}
-                    onChange={(e) => setJobInput(e.target.value)}
-                  />
-                </div>
+                <>
+                  {inputType === "text" ? (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Paste Job Description
+                      </label>
+                      <Textarea
+                        placeholder="Paste the full job description here..."
+                        className="h-48 resize-none"
+                        value={jobInput}
+                        onChange={(e) => setJobInput(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Job URL
+                      </label>
+                      <Input
+                        type="url"
+                        placeholder="https://company.com/jobs/position"
+                        value={jobInput}
+                        onChange={(e) => setJobInput(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Submit Button */}
-              <div className="text-center">
-                <Button 
-                  onClick={handleSubmit}
-                  className="bg-primary text-white hover:bg-blue-700 px-8 py-3"
-                  size="lg"
-                  disabled={submitMutation.isPending}
-                >
-                  {submitMutation.isPending ? "Processing..." : "Find Recruiters & Generate Messages"}
-                  {!submitMutation.isPending && (
+              {/* Submit Button - Hidden during loading */}
+              {!submitMutation.isPending && (
+                <div className="text-center">
+                  <Button 
+                    onClick={handleSubmit}
+                    className="bg-primary text-white hover:bg-blue-700 px-8 py-3"
+                    size="lg"
+                  >
+                    Find Recruiters & Generate Messages
                     <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>
-                  )}
-                </Button>
-              </div>
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Multi-Step Loading Animation */}
-        {submitMutation.isPending && (
-          <div className="mt-8">
-            <MultiStepLoading 
-              steps={[
-                { id: "analyze", label: "Analyzing job description with OpenAI", status: "active" },
-                { id: "search", label: "Searching Apollo for recruiter contacts", status: "pending" },
-                { id: "verify", label: "Verifying emails with NeverBounce", status: "pending" },
-                { id: "complete", label: "Generating personalized messages", status: "pending" }
-              ]}
-            />
-          </div>
-        )}
+
 
         {/* Features Grid */}
         <div className="grid md:grid-cols-3 gap-8 mt-20">
