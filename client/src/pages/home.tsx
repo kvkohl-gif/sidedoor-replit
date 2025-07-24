@@ -1,22 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, MessageSquare, BarChart3 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Search, MessageSquare, BarChart3, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
-  const [inputType, setInputType] = useState<"text" | "url">("text");
+  const [inputType, setInputType] = useState<"text" | "url">("url");
   const [jobInput, setJobInput] = useState("");
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [autoSwitchMessage, setAutoSwitchMessage] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus when switching to text input after URL failure
+  useEffect(() => {
+    if (inputType === "text" && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [inputType]);
 
   const submitMutation = useMutation({
     mutationFn: async (data: { jobInput: string; inputType: string }) => {
@@ -36,7 +47,43 @@ export default function Home() {
     },
   });
 
-  const handleSubmit = () => {
+  // Smart content detection
+  const isValidUrl = (text: string): boolean => {
+    try {
+      const url = new URL(text);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const looksLikeJobDescription = (text: string): boolean => {
+    const lowercaseText = text.toLowerCase();
+    const jobDescriptorWords = [
+      'responsibilities', 'requirements', 'qualifications', 'experience',
+      'we are looking', 'job description', 'role summary', 'about the role',
+      'what you\'ll do', 'who you are', 'benefits', 'salary', 'location'
+    ];
+    
+    return jobDescriptorWords.some(word => lowercaseText.includes(word)) && 
+           text.length > 100; // Job descriptions are typically longer
+  };
+
+  const handleInputChange = (value: string) => {
+    setJobInput(value);
+    setAutoSwitchMessage("");
+
+    // Smart auto-switching logic
+    if (inputType === "url" && value.length > 50 && !isValidUrl(value) && looksLikeJobDescription(value)) {
+      setAutoSwitchMessage("This looks like a full job description. Switching to the right input field…");
+      setTimeout(() => {
+        setInputType("text");
+        setAutoSwitchMessage("");
+      }, 1500);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!jobInput.trim()) {
       toast({
         title: "Error",
@@ -46,7 +93,41 @@ export default function Home() {
       return;
     }
 
-    submitMutation.mutate({ jobInput: jobInput.trim(), inputType });
+    // For URL submissions, try to validate and handle failures
+    if (inputType === "url") {
+      if (!isValidUrl(jobInput.trim())) {
+        toast({
+          title: "Invalid URL",
+          description: "Please enter a valid URL (e.g., https://company.com/jobs/position)",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    try {
+      await submitMutation.mutateAsync({ jobInput: jobInput.trim(), inputType });
+    } catch (error: any) {
+      // Handle URL parsing failures with auto-switch
+      if (inputType === "url" && (
+        error.message?.includes("fetch") || 
+        error.message?.includes("parse") ||
+        error.message?.includes("timeout") ||
+        error.message?.includes("empty")
+      )) {
+        toast({
+          title: "URL Parsing Failed",
+          description: "We couldn't fetch the job details from that URL. Please paste the job description manually.",
+          variant: "destructive",
+        });
+        setInputType("text");
+        // Focus will be handled by useEffect below
+        return;
+      }
+      
+      // Re-throw other errors to be handled by mutation's onError
+      throw error;
+    }
   };
 
   const handleLogout = () => {
@@ -99,22 +180,38 @@ export default function Home() {
               {/* Toggle Buttons */}
               <div className="flex bg-slate-100 p-1 rounded-lg w-fit mx-auto">
                 <Button
-                  variant={inputType === "text" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setInputType("text")}
-                  className={inputType === "text" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
-                >
-                  Job Description
-                </Button>
-                <Button
                   variant={inputType === "url" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setInputType("url")}
+                  onClick={() => {
+                    setInputType("url");
+                    setAutoSwitchMessage("");
+                  }}
                   className={inputType === "url" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
                 >
                   Job URL
                 </Button>
+                <Button
+                  variant={inputType === "text" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setInputType("text");
+                    setAutoSwitchMessage("");
+                  }}
+                  className={inputType === "text" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
+                >
+                  Job Description
+                </Button>
               </div>
+
+              {/* Auto-switch message */}
+              {autoSwitchMessage && (
+                <Alert className="bg-blue-50 border-blue-200">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800">
+                    {autoSwitchMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Input Area with Loading State */}
               {submitMutation.isPending ? (
@@ -122,33 +219,44 @@ export default function Home() {
                   {/* Loading Spinner */}
                   <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
                   {/* Processing Text */}
-                  <p className="text-sm text-slate-500 animate-pulse">Processing...</p>
+                  <p className="text-sm text-slate-500 animate-pulse">
+                    {inputType === "url" ? "Analyzing job URL..." : "Processing job description..."}
+                  </p>
                 </div>
               ) : (
                 <>
-                  {inputType === "text" ? (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Paste Job Description
-                      </label>
-                      <Textarea
-                        placeholder="Paste the full job description here..."
-                        className="h-48 resize-none"
-                        value={jobInput}
-                        onChange={(e) => setJobInput(e.target.value)}
-                      />
-                    </div>
-                  ) : (
+                  {inputType === "url" ? (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         Job URL
                       </label>
                       <Input
+                        ref={inputRef}
                         type="url"
-                        placeholder="https://company.com/jobs/position"
+                        placeholder="Paste the job listing URL (e.g., LinkedIn, Greenhouse, Lever)"
                         value={jobInput}
-                        onChange={(e) => setJobInput(e.target.value)}
+                        onChange={(e) => handleInputChange(e.target.value)}
+                        className="text-base"
                       />
+                      <p className="text-xs text-slate-500 mt-1">
+                        We'll automatically fetch and analyze the job details from the URL
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Job Description
+                      </label>
+                      <Textarea
+                        ref={textareaRef}
+                        placeholder="Paste the full job description here..."
+                        className="h-48 resize-none text-base"
+                        value={jobInput}
+                        onChange={(e) => handleInputChange(e.target.value)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Include as much detail as possible for better recruiter matching
+                      </p>
                     </div>
                   )}
                 </>
@@ -161,8 +269,9 @@ export default function Home() {
                     onClick={handleSubmit}
                     className="bg-primary text-white hover:bg-blue-700 px-8 py-3"
                     size="lg"
+                    disabled={!jobInput.trim()}
                   >
-                    Find Recruiters & Generate Messages
+                    {inputType === "url" ? "Analyze Job & Find Recruiters" : "Find Recruiters & Generate Messages"}
                     <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>
