@@ -87,16 +87,14 @@ class ApolloService {
     }
 
     try {
-      // Try a simpler search first - just company domain and basic recruiter titles
+      // Try a very basic search to test if Apollo API is working
       const companyDomain = this.extractDomain(params.company_name);
       
-      // First try with just domain and very simple filters
+      // Minimal search - just try to find anyone at the company first
       const searchPayload = {
         q_organization_domains: companyDomain ? [companyDomain] : undefined,
-        organization_names: [params.company_name],
-        person_titles: ["recruiter", "talent acquisition"],
         page: 1,
-        per_page: 25
+        per_page: 10
       };
       
       // Remove undefined fields
@@ -108,7 +106,7 @@ class ApolloService {
 
       console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
 
-      const response = await fetch(`${this.baseUrl}/people/search`, {
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -236,7 +234,7 @@ class ApolloService {
 
       console.log(`Trying broader Apollo search for ${companyName} with domain: ${companyDomain}`);
 
-      const response = await fetch(`${this.baseUrl}/people/search`, {
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
