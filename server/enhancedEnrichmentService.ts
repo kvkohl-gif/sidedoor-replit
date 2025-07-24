@@ -1,5 +1,6 @@
 import { apolloService, type ProcessedContact } from "./apolloService";
 import { verifierService, type EmailVerificationResult, type VerificationStatus } from "./verifierService";
+import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult } from "./emailPatternService";
 import type { InsertRecruiterContact } from "@shared/schema";
 
 export interface ContactSearchRequest {
@@ -35,6 +36,7 @@ export interface ContactSearchResult {
     apollo_results: number;
     verified_emails: number;
   };
+  emailPatterns?: PatternAnalysisResult;
 }
 
 export class EnhancedEnrichmentService {
@@ -153,9 +155,34 @@ export class EnhancedEnrichmentService {
       
       console.log(`Returning ${topContacts.length} enriched contacts (${searchMetadata.verified_emails} with verified emails)`);
       
+      // Step 4: Analyze email patterns for suggestions
+      let emailPatterns: PatternAnalysisResult | undefined;
+      
+      if (topContacts.length > 0) {
+        try {
+          console.log("Analyzing email patterns with OpenAI...");
+          const companyDomain = request.company_name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') + '.com';
+          
+          emailPatterns = await analyzeEmailPatterns(
+            topContacts.map(c => ({
+              name: c.name,
+              email: c.email || '',
+              verificationStatus: c.verificationStatus,
+              emailVerified: c.emailVerified
+            })),
+            companyDomain
+          );
+          
+          console.log(`Email pattern analysis completed: ${emailPatterns.suggestions.length} suggestions generated`);
+        } catch (error) {
+          console.error("Email pattern analysis failed:", error);
+        }
+      }
+      
       return {
         contacts: topContacts,
-        searchMetadata
+        searchMetadata,
+        emailPatterns
       };
     }
 
@@ -188,23 +215,33 @@ export class EnhancedEnrichmentService {
    */
   convertToInsertFormat(
     contacts: EnrichedContact[], 
-    jobSubmissionId: number
+    jobSubmissionId: number,
+    emailSuggestions?: EmailSuggestion[]
   ): InsertRecruiterContact[] {
-    return contacts.map(contact => ({
-      jobSubmissionId,
-      name: contact.name,
-      title: contact.title,
-      email: contact.email,
-      linkedinUrl: contact.linkedinUrl,
-      confidenceScore: contact.confidenceScore,
-      source: contact.source,
-      emailVerified: contact.emailVerified ? "true" : "false",
-      verificationStatus: contact.verificationStatus,
-      sourcePlatform: contact.sourcePlatform,
-      apolloId: contact.apolloId,
-      recruiterConfidence: contact.recruiterConfidence,
-      verificationData: contact.verificationData ? JSON.stringify(contact.verificationData) : null
-    }));
+    return contacts.map(contact => {
+      // Find email suggestion for this contact
+      const suggestion = emailSuggestions?.find(s => 
+        s.name === contact.name || s.original_email === contact.email
+      );
+
+      return {
+        jobSubmissionId,
+        name: contact.name,
+        title: contact.title,
+        email: contact.email,
+        linkedinUrl: contact.linkedinUrl,
+        confidenceScore: contact.confidenceScore,
+        source: contact.source,
+        emailVerified: contact.emailVerified ? "true" : "false",
+        verificationStatus: contact.verificationStatus,
+        sourcePlatform: contact.sourcePlatform,
+        apolloId: contact.apolloId,
+        recruiterConfidence: contact.recruiterConfidence,
+        verificationData: contact.verificationData ? JSON.stringify(contact.verificationData) : null,
+        suggestedEmail: suggestion?.suggested_email || null,
+        emailSuggestionReasoning: suggestion?.confidence_reasoning || null,
+      };
+    });
   }
 
   /**

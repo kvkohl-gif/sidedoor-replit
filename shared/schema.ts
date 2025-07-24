@@ -63,8 +63,19 @@ export const recruiterContacts = pgTable("recruiter_contacts", {
   apolloId: varchar("apollo_id"), // Apollo contact ID for future reference
   recruiterConfidence: real("recruiter_confidence").default(0.0), // 0.0 to 1.0 confidence score
   verificationData: jsonb("verification_data"), // Store full verification response
+  suggestedEmail: varchar("suggested_email"), // AI-suggested email alternative
+  emailSuggestionReasoning: text("email_suggestion_reasoning"), // Explanation for suggestion
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const emailPatternAnalysis = pgTable("email_pattern_analysis", {
+  id: serial("id").primaryKey(),
+  jobSubmissionId: integer("job_submission_id").notNull().references(() => jobSubmissions.id),
+  verifiedPattern: varchar("verified_pattern"),
+  analysisSummary: text("analysis_summary"),
+  suggestionsCount: integer("suggestions_count"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
@@ -97,6 +108,10 @@ export const insertRecruiterContactSchema = createInsertSchema(recruiterContacts
   id: true,
 });
 
+export const insertEmailPatternAnalysisSchema = createInsertSchema(emailPatternAnalysis).omit({
+  id: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -104,6 +119,8 @@ export type JobSubmission = typeof jobSubmissions.$inferSelect;
 export type InsertJobSubmission = z.infer<typeof insertJobSubmissionSchema>;
 export type RecruiterContact = typeof recruiterContacts.$inferSelect;
 export type InsertRecruiterContact = z.infer<typeof insertRecruiterContactSchema>;
+export type EmailPatternAnalysis = typeof emailPatternAnalysis.$inferSelect;
+export type InsertEmailPatternAnalysis = z.infer<typeof insertEmailPatternAnalysisSchema>;
 
 // Extended types with relations
 export type JobSubmissionWithRecruiters = JobSubmission & {

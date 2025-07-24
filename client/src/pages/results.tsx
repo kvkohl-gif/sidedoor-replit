@@ -38,7 +38,7 @@ export default function Results() {
     retry: false,
   });
 
-  const { data: enhancedJobData } = useQuery({
+  const { data: enhancedJobData } = useQuery<any>({
     queryKey: ["/api/submissions", id, "job-data"],
     enabled: isAuthenticated && !!id,
     retry: false,
@@ -70,6 +70,15 @@ export default function Results() {
 
   const copyEmail = async (email: string) => {
     await copyToClipboard(email, "Email address");
+  };
+
+  const [showSuggestions, setShowSuggestions] = useState<{[key: number]: boolean}>({});
+
+  const toggleSuggestion = (contactId: number) => {
+    setShowSuggestions(prev => ({
+      ...prev,
+      [contactId]: !prev[contactId]
+    }));
   };
 
   const getConfidenceBadge = (score: number | null) => {
@@ -186,30 +195,30 @@ export default function Results() {
           </p>
           {enhancedJobData?.enhancedData?.location && (
             <p className="text-sm text-slate-500 mt-1">
-              📍 {enhancedJobData.enhancedData.location}
+              📍 {enhancedJobData?.enhancedData?.location}
             </p>
           )}
         </div>
 
         {/* Enhanced Job Information */}
-        {enhancedJobData?.hasEnhancedData && enhancedJobData.enhancedData && (
+        {enhancedJobData?.hasEnhancedData && enhancedJobData?.enhancedData && (
           <Card className="mb-8">
             <CardContent className="p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Job Details</h2>
               
-              {enhancedJobData.enhancedData.job_description && (
+              {enhancedJobData?.enhancedData?.job_description && (
                 <div className="mb-4">
                   <h3 className="font-medium text-slate-900 mb-2">Description</h3>
-                  <p className="text-slate-700 text-sm">{enhancedJobData.enhancedData.job_description}</p>
+                  <p className="text-slate-700 text-sm">{enhancedJobData?.enhancedData?.job_description}</p>
                 </div>
               )}
 
               <div className="grid md:grid-cols-2 gap-6">
-                {enhancedJobData.enhancedData.responsibilities && enhancedJobData.enhancedData.responsibilities.length > 0 && (
+                {enhancedJobData?.enhancedData?.responsibilities && enhancedJobData?.enhancedData?.responsibilities.length > 0 && (
                   <div>
                     <h3 className="font-medium text-slate-900 mb-2">Key Responsibilities</h3>
                     <ul className="text-sm text-slate-700 space-y-1">
-                      {enhancedJobData.enhancedData.responsibilities.map((item: string, index: number) => (
+                      {enhancedJobData?.enhancedData?.responsibilities.map((item: string, index: number) => (
                         <li key={index} className="flex items-start">
                           <span className="text-primary mr-2">•</span>
                           {item}
@@ -219,11 +228,11 @@ export default function Results() {
                   </div>
                 )}
 
-                {enhancedJobData.enhancedData.requirements && enhancedJobData.enhancedData.requirements.length > 0 && (
+                {enhancedJobData?.enhancedData?.requirements && enhancedJobData?.enhancedData?.requirements.length > 0 && (
                   <div>
                     <h3 className="font-medium text-slate-900 mb-2">Requirements</h3>
                     <ul className="text-sm text-slate-700 space-y-1">
-                      {enhancedJobData.enhancedData.requirements.map((item: string, index: number) => (
+                      {enhancedJobData?.enhancedData?.requirements.map((item: string, index: number) => (
                         <li key={index} className="flex items-start">
                           <span className="text-primary mr-2">•</span>
                           {item}
@@ -234,11 +243,11 @@ export default function Results() {
                 )}
               </div>
 
-              {enhancedJobData.enhancedData.likely_departments && enhancedJobData.enhancedData.likely_departments.length > 0 && (
+              {enhancedJobData?.enhancedData?.likely_departments && enhancedJobData?.enhancedData?.likely_departments.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-slate-200">
                   <h3 className="font-medium text-slate-900 mb-2">Likely Departments</h3>
                   <div className="flex flex-wrap gap-2">
-                    {enhancedJobData.enhancedData.likely_departments.map((dept: string, index: number) => (
+                    {enhancedJobData?.enhancedData?.likely_departments.map((dept: string, index: number) => (
                       <Badge key={index} variant="secondary" className="text-xs">
                         {dept}
                       </Badge>
@@ -295,19 +304,47 @@ export default function Results() {
                         
                         <div className="space-y-3">
                           {recruiter.email && (
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <Mail className="w-5 h-5 text-slate-400" />
-                                <span className="text-slate-700">{recruiter.email}</span>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <Mail className="w-5 h-5 text-slate-400" />
+                                  <span className="text-slate-700">{recruiter.email}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyEmail(recruiter.email!)}
+                                  className="text-primary hover:text-blue-700"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => copyEmail(recruiter.email!)}
-                                className="text-primary hover:text-blue-700"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
+                              
+                              {/* Email Suggestion */}
+                              {(recruiter as any).suggestedEmail && (recruiter as any).suggestedEmail !== recruiter.email && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-amber-800">AI Suggested Email:</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyEmail((recruiter as any).suggestedEmail)}
+                                      className="text-amber-700 hover:text-amber-800 text-xs"
+                                    >
+                                      <Copy className="w-3 h-3 mr-1" />
+                                      Use This
+                                    </Button>
+                                  </div>
+                                  <div className="text-sm text-amber-700">
+                                    ✅ {(recruiter as any).suggestedEmail}
+                                  </div>
+                                  {(recruiter as any).emailSuggestionReasoning && (
+                                    <div className="text-xs text-amber-600 mt-1">
+                                      💬 {(recruiter as any).emailSuggestionReasoning}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                           

@@ -100,13 +100,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
 
+        // Save email pattern analysis if available
+        if (apolloSearchResult.emailPatterns) {
+          try {
+            await storage.createEmailPatternAnalysis({
+              jobSubmissionId: updatedSubmission.id,
+              verifiedPattern: apolloSearchResult.emailPatterns.verified_pattern || null,
+              analysisSummary: apolloSearchResult.emailPatterns.analysis_summary,
+              suggestionsCount: apolloSearchResult.emailPatterns.suggestions.length,
+            });
+            console.log(`Saved email pattern analysis with ${apolloSearchResult.emailPatterns.suggestions.length} suggestions`);
+          } catch (error) {
+            console.error("Failed to save email pattern analysis:", error);
+          }
+        }
+
         let totalContactsAdded = 0;
 
         // Save Apollo contacts to database
         if (apolloSearchResult.contacts.length > 0) {
           const contactsToInsert = enhancedEnrichmentService.convertToInsertFormat(
             apolloSearchResult.contacts,
-            updatedSubmission.id
+            updatedSubmission.id,
+            apolloSearchResult.emailPatterns?.suggestions
           );
 
           for (const contact of contactsToInsert) {
@@ -246,6 +262,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching enhanced job data:", error);
       res.status(500).json({ message: "Failed to fetch enhanced job data" });
+    }
+  });
+
+  // Get email pattern analysis for a submission
+  app.get("/api/submissions/:id/email-patterns", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const submissionId = parseInt(req.params.id);
+      
+      if (isNaN(submissionId)) {
+        return res.status(400).json({ message: "Invalid submission ID" });
+      }
+
+      // Verify user owns this submission
+      const submission = await storage.getJobSubmissionById(submissionId);
+      if (!submission || submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const patterns = await storage.getEmailPatternAnalysis(submissionId);
+      res.json(patterns || { message: "No pattern analysis found" });
+    } catch (error) {
+      console.error("Error fetching email patterns:", error);
+      res.status(500).json({ message: "Failed to fetch email patterns" });
     }
   });
 

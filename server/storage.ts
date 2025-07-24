@@ -2,12 +2,15 @@ import {
   users,
   jobSubmissions,
   recruiterContacts,
+  emailPatternAnalysis,
   type User,
   type UpsertUser,
   type JobSubmission,
   type InsertJobSubmission,
   type RecruiterContact,
   type InsertRecruiterContact,
+  type EmailPatternAnalysis,
+  type InsertEmailPatternAnalysis,
   type JobSubmissionWithRecruiters,
 } from "@shared/schema";
 import { db } from "./db";
@@ -105,6 +108,23 @@ export class DatabaseStorage implements IStorage {
       .values(contacts)
       .returning();
     return created;
+  }
+
+  // Email pattern analysis operations
+  async createEmailPatternAnalysis(analysis: InsertEmailPatternAnalysis): Promise<EmailPatternAnalysis> {
+    const [created] = await db
+      .insert(emailPatternAnalysis)
+      .values(analysis)
+      .returning();
+    return created;
+  }
+
+  async getEmailPatternAnalysis(jobSubmissionId: number): Promise<EmailPatternAnalysis | undefined> {
+    const [analysis] = await db
+      .select()
+      .from(emailPatternAnalysis)
+      .where(eq(emailPatternAnalysis.jobSubmissionId, jobSubmissionId));
+    return analysis;
   }
 }
 

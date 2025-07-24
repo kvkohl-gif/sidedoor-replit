@@ -1,0 +1,82 @@
+Objective
+Use OpenAI to:
+
+Review email addresses returned by Apollo/NeverBounce.
+
+Identify email patterns from verified addresses at the same company domain.
+
+If a risky email is detected (or missing), suggest a likely valid alternative using the verified pattern.
+
+Return both:
+
+Original (risky) email
+
+Suggested email
+
+Confidence explanation
+
+✅ Example OpenAI Prompt Template
+Use this in Replit backend (via Python/Node + OpenAI API) or Bubble with the ChatGPT/4 plugin.
+
+json
+Copy
+Edit
+{
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are an intelligent assistant that evaluates and improves email contact data for job applicants. You identify patterns in verified email addresses and suggest alternatives when an email is marked 'risky' or unverifiable."
+    },
+    {
+      "role": "user",
+      "content": "Here are recruiter contacts for BetterHelp:\n\nVerified:\n- Doraliz Aranda: doraliz.aranda@betterhelp.com (Verified)\n\nRisky:\n- Laura Walls: walls@betterhelp.com (Risky)\n- Lory Leblanc: lory@betterhelp.com (Risky)\n\nPlease identify the verified email format, then suggest more likely emails for the risky ones. Output JSON with:\n{\n  \"name\": \"\",\n  \"original_email\": \"\",\n  \"suggested_email\": \"\",\n  \"confidence_reasoning\": \"\"\n}"
+    }
+  ],
+  "temperature": 0.3
+}
+🧠 What This Prompt Will Do
+Recognize that doraliz.aranda@betterhelp.com is a first.last format
+
+See that walls@betterhelp.com and lory@betterhelp.com don’t follow the pattern
+
+Suggest:
+
+laura.walls@betterhelp.com
+
+lory.leblanc@betterhelp.com
+
+Include confidence reasoning like:
+
+“Based on the verified format ‘first.last@betterhelp.com’, this is a likely match for the person’s full name.”
+
+✅ Sample JSON Output (What You Can Display in UI)
+json
+Copy
+Edit
+[
+  {
+    "name": "Laura Walls",
+    "original_email": "walls@betterhelp.com",
+    "suggested_email": "laura.walls@betterhelp.com",
+    "confidence_reasoning": "The verified email format is 'first.last@betterhelp.com'. This follows the same structure for Laura Walls."
+  },
+  {
+    "name": "Lory Leblanc",
+    "original_email": "lory@betterhelp.com",
+    "suggested_email": "lory.leblanc@betterhelp.com",
+    "confidence_reasoning": "Follows the same verified email pattern at betterhelp.com."
+  }
+]
+🖼️ UI Display Suggestion
+For each “risky” email:
+
+Show:
+
+⚠️ walls@betterhelp.com (Risky)
+
+✅ Suggested: laura.walls@betterhelp.com (Likely verified format)
+
+💬 “Based on verified format: first.last@betterhelp.com”
+
+Add a “Use this” toggle next to the suggestion if the user wants to override the original.
