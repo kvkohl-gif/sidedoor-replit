@@ -2,8 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { extractRecruiterInfo } from "./openai";
+import { extractRecruiterInfo, extractJobData } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
+import { urlScrapingService } from "./urlScrapingService";
 import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -37,18 +38,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create initial job submission
       const jobSubmission = await storage.createJobSubmission(submissionData);
 
+      // Process job input based on type
+      let jobContent = submissionData.jobInput;
+      let jobDataExtraction = null;
+
+      // If URL, scrape the content first
+      if (submissionData.inputType === "url") {
+        console.log(`Scraping URL: ${submissionData.jobInput}`);
+        const scrapedData = await urlScrapingService.scrapeJobURL(submissionData.jobInput);
+        
+        if (scrapedData.error) {
+          throw new Error(`Failed to scrape URL: ${scrapedData.error}`);
+        }
+        
+        jobContent = scrapedData.cleanedContent;
+        console.log(`Scraped content length: ${jobContent.length} characters`);
+        
+        // Extract structured job data using enhanced prompt
+        jobDataExtraction = await extractJobData(jobContent);
+        console.log(`Extracted job data:`, jobDataExtraction);
+      }
+
       // Extract recruiter information using OpenAI
       try {
         const extraction = await extractRecruiterInfo(
-          submissionData.jobInput, 
+          jobContent, 
           submissionData.inputType as "text" | "url"
         );
 
+        // Use enhanced job data if available, otherwise fall back to basic extraction
+        const companyName = jobDataExtraction?.company_name || extraction.company_name;
+        const jobTitle = jobDataExtraction?.job_title || extraction.job_title;
+
         // Update job submission with extracted data
         const updatedSubmission = await storage.updateJobSubmission(jobSubmission.id, {
-          openaiResponseRaw: JSON.stringify(extraction),
-          companyName: extraction.company_name,
-          jobTitle: extraction.job_title,
+          openaiResponseRaw: JSON.stringify({
+            basic_extraction: extraction,
+            enhanced_data: jobDataExtraction
+          }),
+          companyName,
+          jobTitle,
           emailDraft: extraction.email_draft,
           linkedinMessage: extraction.linkedin_message,
         });
@@ -134,6 +163,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching submission:", error);
       res.status(500).json({ message: "Failed to fetch submission" });
+    }
+  });
+
+  // Get enhanced job data for a submission
+  app.get("/api/submissions/:id/job-data", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const submissionId = parseInt(req.params.id);
+      
+      if (isNaN(submissionId)) {
+        return res.status(400).json({ message: "Invalid submission ID" });
+      }
+
+      const submission = await storage.getJobSubmissionById(submissionId);
+      
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      // Ensure user owns this submission
+      if (submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Parse the enhanced job data from openaiResponseRaw
+      let enhancedData = null;
+      if (submission.openaiResponseRaw) {
+        try {
+          const parsed = JSON.parse(submission.openaiResponseRaw);
+          enhancedData = parsed.enhanced_data;
+        } catch (error) {
+          console.error("Error parsing enhanced data:", error);
+        }
+      }
+
+      res.json({
+        submissionId: submission.id,
+        enhancedData,
+        hasEnhancedData: !!enhancedData
+      });
+    } catch (error) {
+      console.error("Error fetching enhanced job data:", error);
+      res.status(500).json({ message: "Failed to fetch enhanced job data" });
     }
   });
 

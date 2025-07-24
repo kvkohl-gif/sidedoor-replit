@@ -37,6 +37,12 @@ export default function Results() {
     retry: false,
   });
 
+  const { data: enhancedJobData } = useQuery({
+    queryKey: ["/api/submissions", id, "job-data"],
+    enabled: isAuthenticated && !!id,
+    retry: false,
+  });
+
   const handleLogout = () => {
     window.location.href = "/api/logout";
   };
@@ -173,7 +179,71 @@ export default function Results() {
           <p className="text-slate-600">
             {submission.companyName || "Unknown Company"}
           </p>
+          {enhancedJobData?.enhancedData?.location && (
+            <p className="text-sm text-slate-500 mt-1">
+              📍 {enhancedJobData.enhancedData.location}
+            </p>
+          )}
         </div>
+
+        {/* Enhanced Job Information */}
+        {enhancedJobData?.hasEnhancedData && enhancedJobData.enhancedData && (
+          <Card className="mb-8">
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Job Details</h2>
+              
+              {enhancedJobData.enhancedData.job_description && (
+                <div className="mb-4">
+                  <h3 className="font-medium text-slate-900 mb-2">Description</h3>
+                  <p className="text-slate-700 text-sm">{enhancedJobData.enhancedData.job_description}</p>
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {enhancedJobData.enhancedData.responsibilities && enhancedJobData.enhancedData.responsibilities.length > 0 && (
+                  <div>
+                    <h3 className="font-medium text-slate-900 mb-2">Key Responsibilities</h3>
+                    <ul className="text-sm text-slate-700 space-y-1">
+                      {enhancedJobData.enhancedData.responsibilities.map((item: string, index: number) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-primary mr-2">•</span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {enhancedJobData.enhancedData.requirements && enhancedJobData.enhancedData.requirements.length > 0 && (
+                  <div>
+                    <h3 className="font-medium text-slate-900 mb-2">Requirements</h3>
+                    <ul className="text-sm text-slate-700 space-y-1">
+                      {enhancedJobData.enhancedData.requirements.map((item: string, index: number) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-primary mr-2">•</span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {enhancedJobData.enhancedData.likely_departments && enhancedJobData.enhancedData.likely_departments.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <h3 className="font-medium text-slate-900 mb-2">Likely Departments</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {enhancedJobData.enhancedData.likely_departments.map((dept: string, index: number) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {dept}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Recruiters Column */}

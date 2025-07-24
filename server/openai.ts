@@ -5,6 +5,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+export interface JobDataExtraction {
+  job_title: string;
+  company_name: string;
+  job_description: string;
+  responsibilities: string[];
+  requirements: string[];
+  location: string;
+  recruiter_keywords_section: string;
+}
+
+export interface RecruitingInsights {
+  linkedin_keywords: string[];
+  likely_departments: string[];
+}
+
 export interface RecruiterExtraction {
   company_name: string;
   job_title: string;
@@ -17,6 +32,65 @@ export interface RecruiterExtraction {
   }[];
   email_draft: string;
   linkedin_message: string;
+}
+
+/**
+ * Extract structured job data using the enhanced OpenAI prompt
+ */
+export async function extractJobData(content: string): Promise<JobDataExtraction & RecruitingInsights> {
+  const systemPrompt = `You are an intelligent job data extractor. Given the full content of a job listing page from a company career site, your job is to extract key structured information about the role and the company. Use only the content from the page. Do not make up any data.
+
+Return the result in structured JSON format with the following fields:
+
+{
+  "job_title": [exact title as listed on the page],
+  "company_name": [company name as listed],
+  "job_description": [concise summary of the role from the page],
+  "responsibilities": [array of 3–6 bullet points summarizing the key responsibilities],
+  "requirements": [array of 3–6 bullet points listing the qualifications or skills],
+  "location": [location listed, or "Remote" if stated],
+  "recruiter_keywords_section": [text block containing team, recruiter, or contact info if present],
+  "linkedin_keywords": [comma-separated list of names or titles of any people mentioned],
+  "likely_departments": [guess one or more departments involved, like "People Team", "Talent Acquisition", "Recruiting", "Product Team"]
+}
+
+Do NOT hallucinate information. Only use what's visible in the source content. If fields are missing, leave them blank.`;
+
+  const userPrompt = `Extract structured information from this job posting content:
+
+${content}
+
+Return the extracted data in the JSON format specified.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    // Validate and ensure required fields
+    return {
+      job_title: result.job_title || "Unknown Position",
+      company_name: result.company_name || "Unknown Company",
+      job_description: result.job_description || "",
+      responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities : [],
+      requirements: Array.isArray(result.requirements) ? result.requirements : [],
+      location: result.location || "",
+      recruiter_keywords_section: result.recruiter_keywords_section || "",
+      linkedin_keywords: Array.isArray(result.linkedin_keywords) ? result.linkedin_keywords : [],
+      likely_departments: Array.isArray(result.likely_departments) ? result.likely_departments : [],
+    };
+  } catch (error) {
+    console.error("OpenAI job data extraction error:", error);
+    throw new Error("Failed to extract job data. Please try again.");
+  }
 }
 
 export async function extractRecruiterInfo(jobInput: string, inputType: "text" | "url"): Promise<RecruiterExtraction> {
