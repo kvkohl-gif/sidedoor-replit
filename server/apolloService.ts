@@ -87,47 +87,28 @@ class ApolloService {
     }
 
     try {
-      // Build comprehensive search query using Apollo's correct field names and broader filters
+      // Try a simpler search first - just company domain and basic recruiter titles
       const companyDomain = this.extractDomain(params.company_name);
+      
+      // First try with just domain and very simple filters
       const searchPayload = {
-        // Use q_organization_domains which is more reliable than q_organization_name
-        ...(companyDomain && { q_organization_domains: [companyDomain] }),
-        // Also include organization name as backup
-        q_organization_name: params.company_name,
+        q_organization_domains: companyDomain ? [companyDomain] : undefined,
+        organization_names: [params.company_name],
+        person_titles: ["recruiter", "talent acquisition"],
         page: 1,
-        per_page: 25,
-        // Broader job title search with variations and partial matches
-        person_titles: [
-          "recruiter",
-          "recruiting manager", 
-          "talent acquisition",
-          "talent acquisition manager",
-          "talent acquisition partner",
-          "ta partner",
-          "technical recruiter",
-          "senior recruiter", 
-          "people ops",
-          "people operations",
-          "people operations manager",
-          "hiring manager",
-          "hr manager",
-          "human resources",
-          "people partner",
-          "talent partner",
-          "head of talent",
-          "director of recruiting",
-          "director of talent",
-          "head of people",
-          "sourcer",
-          "talent sourcer",
-          "people business partner",
-          "hr business partner"
-        ]
+        per_page: 25
       };
+      
+      // Remove undefined fields
+      Object.keys(searchPayload).forEach(key => {
+        if ((searchPayload as any)[key] === undefined) {
+          delete (searchPayload as any)[key];
+        }
+      });
 
       console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
 
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+      const response = await fetch(`${this.baseUrl}/people/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -255,7 +236,7 @@ class ApolloService {
 
       console.log(`Trying broader Apollo search for ${companyName} with domain: ${companyDomain}`);
 
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+      const response = await fetch(`${this.baseUrl}/people/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
