@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { extractRecruiterInfo, extractJobData } from "./openai";
+import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
 import { urlScrapingService } from "./urlScrapingService";
@@ -83,14 +83,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           linkedinMessage: extraction.linkedin_message,
         });
 
+        // Extract optimized Apollo search parameters
+        console.log(`Extracting Apollo search parameters for ${companyName}`);
+        const apolloParams = await extractApolloSearchParams(jobContent);
+        console.log(`Apollo search params:`, apolloParams);
+
         // Apollo + NeverBounce Enhanced Search
         console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);
         
         const apolloSearchResult = await enhancedEnrichmentService.searchAndEnrichContacts({
-          company_name: companyName,
-          job_title: jobTitle,
-          location: jobDataExtraction?.location,
-          departments: jobDataExtraction?.likely_departments
+          company_name: apolloParams.company_name || companyName,
+          job_title: apolloParams.job_title || jobTitle,
+          location: apolloParams.location || jobDataExtraction?.location,
+          departments: apolloParams.relevant_departments || jobDataExtraction?.likely_departments
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);

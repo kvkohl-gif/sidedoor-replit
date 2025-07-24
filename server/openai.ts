@@ -35,6 +35,90 @@ export interface RecruiterExtraction {
 }
 
 /**
+ * Extract Apollo search parameters from job content
+ */
+export async function extractApolloSearchParams(content: string): Promise<{
+  job_title: string | null;
+  domain: string | null;
+  company_name: string | null;
+  location: string | null;
+  relevant_departments: string[];
+  person_titles: string[];
+  person_seniorities: string[];
+  organization_locations: string[];
+}> {
+  const systemPrompt = `You are a data extraction AI that helps prepare accurate and structured inputs for an Apollo People Search query.
+Only extract clearly stated facts from the provided job description or URL content.
+Do not guess or infer — if a value is not explicitly mentioned, return null.
+
+Your job is to extract Apollo search parameters in this exact format:
+
+{
+  "job_title": "[Exact role title from the listing]",
+  "domain": "[Company domain, e.g. wave.com]",
+  "company_name": "[Company name if present]",
+  "location": "[City or country if listed]",
+  "relevant_departments": ["People", "Recruiting", "Talent", "HR", "Product", "Engineering", "Growth"],
+  "person_titles": [
+    "Technical Recruiter",
+    "Senior Recruiter", 
+    "Talent Acquisition Manager",
+    "Head of Talent",
+    "Director of Recruiting",
+    "People Operations Manager"
+  ],
+  "person_seniorities": ["manager", "head", "director", "vp", "c_suite"],
+  "organization_locations": ["[If present, use HQ city or country]"]
+}
+
+Do not return any names or emails. Do not make assumptions.
+This prompt is used as a first step to enrich data using Apollo's API, so accuracy matters more than completeness.`;
+
+  const userPrompt = `Extract Apollo search parameters from this job posting content:
+
+${content}
+
+Return the extracted data in the JSON format specified.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      job_title: result.job_title || null,
+      domain: result.domain || null,
+      company_name: result.company_name || null,
+      location: result.location || null,
+      relevant_departments: Array.isArray(result.relevant_departments) ? result.relevant_departments : [],
+      person_titles: Array.isArray(result.person_titles) ? result.person_titles : [],
+      person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : [],
+      organization_locations: Array.isArray(result.organization_locations) ? result.organization_locations : []
+    };
+  } catch (error) {
+    console.error("OpenAI Apollo params extraction error:", error);
+    return {
+      job_title: null,
+      domain: null,
+      company_name: null,
+      location: null,
+      relevant_departments: [],
+      person_titles: [],
+      person_seniorities: [],
+      organization_locations: []
+    };
+  }
+}
+
+/**
  * Extract structured job data using the enhanced OpenAI prompt
  */
 export async function extractJobData(content: string): Promise<JobDataExtraction & RecruitingInsights> {

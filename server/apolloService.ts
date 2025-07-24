@@ -87,7 +87,7 @@ class ApolloService {
     }
 
     try {
-      // Build search query with company and title filters
+      // Build comprehensive search query using Apollo's search parameters
       const searchPayload = {
         q_organization_name: params.company_name,
         page: 1,
@@ -95,18 +95,32 @@ class ApolloService {
         person_titles: [
           "recruiter",
           "talent acquisition",
+          "talent acquisition manager", 
+          "technical recruiter",
+          "senior recruiter",
           "people ops",
+          "people operations",
+          "people operations manager",
           "hiring manager",
           "hr manager",
           "human resources",
           "people partner",
           "talent partner",
-          "technical recruiter",
-          "sourcer"
-        ]
+          "head of talent",
+          "director of recruiting",
+          "director of talent",
+          "head of people",
+          "sourcer",
+          "talent sourcer"
+        ],
+        person_seniorities: ["manager", "director", "head", "vp"],
+        // Add organization domain if we can extract it
+        ...(params.company_name && this.extractDomain(params.company_name) && {
+          organization_domains: [this.extractDomain(params.company_name)]
+        })
       };
 
-      console.log(`Searching Apollo for contacts at ${params.company_name}`);
+      console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
 
       const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
@@ -202,6 +216,26 @@ class ApolloService {
       console.error(`Apollo enrichment error for ${email}:`, error);
       return null;
     }
+  }
+
+  private extractDomain(companyName: string): string | null {
+    // Simple domain extraction - could be enhanced with a lookup table
+    const cleaned = companyName.toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .replace(/(inc|corp|llc|ltd|company|co)$/, '');
+    
+    // For known companies, return the actual domain
+    const domainMap: Record<string, string> = {
+      'betterhelp': 'betterhelp.com',
+      'wave': 'wave.com',
+      'google': 'google.com',
+      'microsoft': 'microsoft.com',
+      'amazon': 'amazon.com',
+      'meta': 'meta.com',
+      'apple': 'apple.com'
+    };
+    
+    return domainMap[cleaned] || `${cleaned}.com`;
   }
 
   isConfigured(): boolean {
