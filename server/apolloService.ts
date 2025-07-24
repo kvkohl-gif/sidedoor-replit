@@ -141,6 +141,7 @@ class ApolloService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Apollo API error (${response.status}):`, errorText);
+        console.error(`Apollo API response headers:`, Object.fromEntries(response.headers.entries()));
         
         // If no results, try a broader search
         if (response.status === 200 || response.status === 404) {
@@ -152,6 +153,7 @@ class ApolloService {
       }
 
       const data: ApolloSearchResponse = await response.json();
+      console.log(`Apollo API response:`, JSON.stringify(data, null, 2));
       console.log(`Apollo returned ${data.contacts?.length || 0} contacts`);
 
       if (!data.contacts || data.contacts.length === 0) {
