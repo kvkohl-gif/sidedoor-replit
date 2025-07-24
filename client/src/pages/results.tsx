@@ -102,12 +102,8 @@ export default function Results() {
   // Message improvement mutations
   const improveEmailMutation = useMutation({
     mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
-      const response = await apiRequest("/api/improve-message", {
-        method: "POST",
-        body: JSON.stringify({ message, tone }),
-        headers: { "Content-Type": "application/json" },
-      });
-      return response;
+      const response = await apiRequest("POST", "/api/improve-message", { message, tone });
+      return await response.json();
     },
     onSuccess: (data) => {
       setEmailDraft(data.improvedMessage);
@@ -139,12 +135,8 @@ export default function Results() {
 
   const improveLinkedinMutation = useMutation({
     mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
-      const response = await apiRequest("/api/improve-message", {
-        method: "POST",
-        body: JSON.stringify({ message, tone }),
-        headers: { "Content-Type": "application/json" },
-      });
-      return response;
+      const response = await apiRequest("POST", "/api/improve-message", { message, tone });
+      return await response.json();
     },
     onSuccess: (data) => {
       setLinkedinMessage(data.improvedMessage);
