@@ -60,6 +60,11 @@ export const recruiterContacts = pgTable("recruiter_contacts", {
   emailVerified: varchar("email_verified").default("false"),
   verificationStatus: varchar("verification_status").default("unknown"), // valid, risky, invalid, unknown
   sourcePlatform: varchar("source_platform").default("openai"), // openai, apollo, zoominfo, clay
+  apolloId: varchar("apollo_id"), // Apollo contact ID for future reference
+  recruiterConfidence: real("recruiter_confidence").default(0.0), // 0.0 to 1.0 confidence score
+  verificationData: jsonb("verification_data"), // Store full verification response
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Relations

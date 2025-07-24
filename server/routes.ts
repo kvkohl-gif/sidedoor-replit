@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { extractRecruiterInfo, extractJobData } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
+import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
 import { urlScrapingService } from "./urlScrapingService";
 import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
@@ -82,24 +83,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
           linkedinMessage: extraction.linkedin_message,
         });
 
-        // Enrich and verify recruiter contacts
-        const companyDomain = ContactEnrichmentService.extractDomain(extraction.company_name);
-        const enrichedContacts = await enrichmentService.enrichContacts(extraction.recruiters, companyDomain);
+        // Apollo + NeverBounce Enhanced Search
+        console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);
+        
+        const apolloSearchResult = await enhancedEnrichmentService.searchAndEnrichContacts({
+          company_name: companyName,
+          job_title: jobTitle,
+          location: jobDataExtraction?.location,
+          departments: jobDataExtraction?.likely_departments
+        });
 
-        // Create recruiter contacts with enrichment data
-        const recruiterContacts = enrichedContacts.map(contact => ({
-          jobSubmissionId: jobSubmission.id,
-          name: contact.name,
-          title: contact.title,
-          email: contact.verifiedEmail || contact.email,
-          linkedinUrl: contact.linkedinUrl,
-          confidenceScore: extraction.recruiters.find(r => r.name === contact.name)?.confidence_score || 50,
-          emailVerified: contact.emailVerified ? "true" : "false",
-          verificationStatus: contact.verificationStatus,
-          sourcePlatform: contact.sourcePlatform,
-        }));
+        console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
 
-        await storage.createRecruiterContacts(recruiterContacts);
+        let totalContactsAdded = 0;
+
+        // Save Apollo contacts to database
+        if (apolloSearchResult.contacts.length > 0) {
+          const contactsToInsert = enhancedEnrichmentService.convertToInsertFormat(
+            apolloSearchResult.contacts,
+            updatedSubmission.id
+          );
+
+          for (const contact of contactsToInsert) {
+            await storage.createRecruiterContact(contact);
+            totalContactsAdded++;
+          }
+          
+          console.log(`Saved ${apolloSearchResult.contacts.length} Apollo contacts to database`);
+        }
+
+        // Fallback to OpenAI-extracted contacts if Apollo didn't find anyone
+        if (apolloSearchResult.contacts.length === 0 && extraction.recruiters && extraction.recruiters.length > 0) {
+          console.log("No Apollo contacts found, using OpenAI-extracted contacts as fallback");
+          
+          const companyDomain = ContactEnrichmentService.extractDomain(companyName);
+          const enrichedContacts = await enrichmentService.enrichContacts(extraction.recruiters, companyDomain);
+
+          const recruiterContacts = enrichedContacts.map(contact => ({
+            jobSubmissionId: updatedSubmission.id,
+            name: contact.name,
+            title: contact.title,
+            email: contact.verifiedEmail || contact.email,
+            linkedinUrl: contact.linkedinUrl,
+            confidenceScore: extraction.recruiters.find(r => r.name === contact.name)?.confidence_score || 50,
+            emailVerified: contact.emailVerified ? "true" : "false",
+            verificationStatus: contact.verificationStatus,
+            sourcePlatform: contact.sourcePlatform,
+            recruiterConfidence: 0.6,
+          }));
+
+          for (const contact of recruiterContacts) {
+            await storage.createRecruiterContact(contact);
+            totalContactsAdded++;
+          }
+          
+          console.log(`Saved ${recruiterContacts.length} OpenAI fallback contacts`);
+        }
+
+        console.log(`Total contacts added: ${totalContactsAdded}`);
 
         // Return the complete submission with recruiters
         const completeSubmission = await storage.getJobSubmissionById(jobSubmission.id);
@@ -206,6 +247,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching enhanced job data:", error);
       res.status(500).json({ message: "Failed to fetch enhanced job data" });
+    }
+  });
+
+  // API status endpoint for debugging
+  app.get("/api/status", isAuthenticated, async (req, res) => {
+    try {
+      const serviceStatus = enhancedEnrichmentService.getServiceStatus();
+      res.json({
+        apollo: {
+          configured: serviceStatus.apollo_configured,
+          status: serviceStatus.apollo_configured ? "ready" : "api_key_missing"
+        },
+        neverbounce: {
+          configured: serviceStatus.neverbounce_configured,
+          status: serviceStatus.neverbounce_configured ? "ready" : "api_key_missing"
+        },
+        openai: {
+          configured: !!process.env.OPENAI_API_KEY,
+          status: !!process.env.OPENAI_API_KEY ? "ready" : "api_key_missing"
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching API status:", error);
+      res.status(500).json({ message: "Failed to fetch API status" });
     }
   });
 

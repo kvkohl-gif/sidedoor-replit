@@ -90,6 +90,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Recruiter contact operations
+  async createRecruiterContact(contact: InsertRecruiterContact): Promise<RecruiterContact> {
+    const [created] = await db
+      .insert(recruiterContacts)
+      .values(contact)
+      .returning();
+    return created;
+  }
+
   async createRecruiterContacts(contacts: InsertRecruiterContact[]): Promise<RecruiterContact[]> {
     if (contacts.length === 0) return [];
     const created = await db
