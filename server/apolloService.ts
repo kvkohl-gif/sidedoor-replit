@@ -87,17 +87,25 @@ class ApolloService {
     }
 
     try {
-      // Build comprehensive search query using Apollo's search parameters
+      // Build comprehensive search query using Apollo's correct field names and broader filters
+      const companyDomain = this.extractDomain(params.company_name);
       const searchPayload = {
+        // Use q_organization_domains which is more reliable than q_organization_name
+        ...(companyDomain && { q_organization_domains: [companyDomain] }),
+        // Also include organization name as backup
         q_organization_name: params.company_name,
         page: 1,
         per_page: 25,
+        // Broader job title search with variations and partial matches
         person_titles: [
           "recruiter",
+          "recruiting manager", 
           "talent acquisition",
-          "talent acquisition manager", 
+          "talent acquisition manager",
+          "talent acquisition partner",
+          "ta partner",
           "technical recruiter",
-          "senior recruiter",
+          "senior recruiter", 
           "people ops",
           "people operations",
           "people operations manager",
@@ -111,13 +119,11 @@ class ApolloService {
           "director of talent",
           "head of people",
           "sourcer",
-          "talent sourcer"
+          "talent sourcer",
+          "people business partner",
+          "hr business partner"
         ],
-        person_seniorities: ["manager", "director", "head", "vp"],
-        // Add organization domain if we can extract it
-        ...(params.company_name && this.extractDomain(params.company_name) && {
-          organization_domains: [this.extractDomain(params.company_name)]
-        })
+        person_seniorities: ["individual_contributor", "manager", "director", "head", "vp", "c_suite"]
       };
 
       console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
@@ -125,9 +131,9 @@ class ApolloService {
       const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
         headers: {
-          "Cache-Control": "no-cache",
           "Content-Type": "application/json",
-          "X-Api-Key": this.apiKey
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey  // Use lowercase x-api-key as per Apollo docs
         },
         body: JSON.stringify(searchPayload)
       });
@@ -228,22 +234,32 @@ class ApolloService {
 
   private async tryBroaderSearch(companyName: string): Promise<ProcessedContact[]> {
     try {
-      // Simplified search with just company name and basic HR titles
+      const companyDomain = this.extractDomain(companyName);
+      // Very broad search with minimal filters
       const broadSearchPayload = {
+        // Use domain for more reliable matching
+        ...(companyDomain && { q_organization_domains: [companyDomain] }),
         q_organization_name: companyName,
         page: 1,
         per_page: 10,
-        person_titles: ["recruiter", "hr", "talent", "people"]
+        // Minimal job title filters for broader results
+        person_titles: [
+          "recruiter", 
+          "talent acquisition", 
+          "hr", 
+          "people ops",
+          "hiring"
+        ]
       };
 
-      console.log(`Trying broader Apollo search for ${companyName}`);
+      console.log(`Trying broader Apollo search for ${companyName} with domain: ${companyDomain}`);
 
       const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
         headers: {
-          "Cache-Control": "no-cache",
           "Content-Type": "application/json",
-          "X-Api-Key": this.apiKey
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey
         },
         body: JSON.stringify(broadSearchPayload)
       });

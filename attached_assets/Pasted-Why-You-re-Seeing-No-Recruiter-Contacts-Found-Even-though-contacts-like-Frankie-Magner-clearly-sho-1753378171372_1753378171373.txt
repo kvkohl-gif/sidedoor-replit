@@ -1,0 +1,69 @@
+Why You’re Seeing “No Recruiter Contacts Found”
+Even though contacts like Frankie Magner clearly show up in Apollo UI when searching “BetterHelp Talent Acquisition”, your app isn’t retrieving them due to:
+
+Too Narrow Filters in Your API Query
+
+You may be filtering only for exact job titles like "Recruiter" or "Recruiting Manager", and missing valid variations (e.g. “Talent Acquisition Partner”).
+
+Or your filters could require an exact domain match (e.g. betterhelp.com), and are excluding matches due to email verification or domain variants.
+
+Incorrect or Incomplete Company Matching
+
+If your backend isn’t parsing BetterHelp properly from the job description or URL, the API might be searching for the wrong company.
+
+Apollo API Field Mismatch
+
+Apollo may not return emails unless explicitly requested with the correct permissions or headers, and you might be missing that step in your call.
+
+Missing Pagination or Result Cap
+
+Apollo limits search results. If you're not paginating or your results are capped at 0 by a bug, it’ll show as empty.
+
+🔧 Fix Steps
+1. Loosen the Job Title Filter
+Update your query to look for multiple job title variations, e.g.:
+
+json
+Copy
+Edit
+[
+  "Recruiter",
+  "Recruiting Manager",
+  "Talent Acquisition",
+  "Talent Partner",
+  "TA Partner",
+  "People Operations"
+]
+Search by job title contains rather than exact match.
+
+2. Fix Company Matching
+Make sure your code is:
+
+Pulling the company name from either the job URL or scraped title (BetterHelp)
+
+Normalizing it (e.g. lowercase, removing punctuation)
+
+Sending it as the organization_names filter in Apollo API
+
+3. Validate API Call Format
+Here’s a minimum viable Apollo API call structure you should be using in your Replit project:
+
+js
+Copy
+Edit
+fetch("https://api.apollo.io/v1/mixed_people/search", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-cache",
+    "x-api-key": process.env.APOLLO_API_KEY,
+  },
+  body: JSON.stringify({
+    q_organization_domains: ["betterhelp.com"],
+    person_titles: ["talent acquisition", "recruiter"],
+    page: 1,
+    per_page: 10
+  })
+})
+Note: q_organization_domains is more reliable than just organization_names.
+
