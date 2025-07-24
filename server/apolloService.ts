@@ -201,10 +201,13 @@ class ApolloService {
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
           
+          // Filter out Apollo's placeholder emails
+          const cleanEmail = this.isPlaceholderEmail(contact.email) ? undefined : contact.email;
+          
           return {
             full_name: contact.name,
             title: contact.title,
-            email: contact.email,
+            email: cleanEmail,
             linkedin_url: contact.linkedin_url,
             company_name: contact.organization_name || params.company_name,
             is_recruiter_likely: isRecruiter,
@@ -321,10 +324,13 @@ class ApolloService {
         .map(contact => {
           const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
           
+          // Filter out Apollo's placeholder emails
+          const cleanEmail = this.isPlaceholderEmail(contact.email) ? undefined : contact.email;
+          
           return {
             full_name: contact.name,
             title: contact.title,
-            email: contact.email,
+            email: cleanEmail,
             linkedin_url: contact.linkedin_url,
             company_name: contact.organization_name || companyName,
             is_recruiter_likely: isRecruiter,
@@ -341,6 +347,23 @@ class ApolloService {
       console.error("Broader Apollo search failed:", error);
       return [];
     }
+  }
+
+  private isPlaceholderEmail(email?: string): boolean {
+    if (!email) return false;
+    
+    // Apollo placeholder email patterns
+    const placeholderPatterns = [
+      'email_not_unlocked@domain.com',
+      'email_locked@domain.com', 
+      '@domain.com',
+      'contact@example.com',
+      'noemail@apollo.io'
+    ];
+    
+    return placeholderPatterns.some(pattern => 
+      email.includes(pattern) || email === pattern
+    );
   }
 
   private extractDomain(companyName: string): string | null {

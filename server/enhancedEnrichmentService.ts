@@ -80,13 +80,16 @@ export class EnhancedEnrichmentService {
       console.warn("Apollo API not configured - skipping Apollo search");
     }
 
-    // Step 2: Verify emails with NeverBounce
+    // Step 2: Verify emails with NeverBounce (only real emails, not placeholders)
     const enrichedContacts: EnrichedContact[] = [];
     
     if (apolloContacts.length > 0) {
+      // Filter out placeholder emails before verification
       const emailsToVerify = apolloContacts
-        .filter(contact => contact.email)
+        .filter(contact => contact.email) // Has email
         .map(contact => contact.email!);
+
+      console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with real emails`);
 
       let verificationResults = new Map<string, EmailVerificationResult | null>();
       
@@ -106,8 +109,10 @@ export class EnhancedEnrichmentService {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
         const verificationStatus = verifierService.getVerificationStatus(verificationResult);
         
-        // Only include contacts that should be included based on verification
-        if (!contact.email || verificationStatus.should_include) {
+        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Should include: ${!contact.email || verificationStatus.should_include}`);
+        
+        // Include contacts with LinkedIn URL OR verified emails 
+        if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
           const enrichedContact: EnrichedContact = {
             name: contact.full_name,
             title: contact.title,
