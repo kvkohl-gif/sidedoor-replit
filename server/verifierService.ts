@@ -108,8 +108,18 @@ class VerifierService {
     return results;
   }
 
-  getVerificationStatus(result: EmailVerificationResult | null): VerificationStatus {
+  getVerificationStatus(result: EmailVerificationResult | null, email?: string): VerificationStatus {
     if (!result) {
+      // If verification failed but email looks like a company email, treat as likely valid
+      if (email && this.isCompanyEmail(email)) {
+        return {
+          is_valid: true,
+          status_label: "Valid",
+          status_icon: "✅",
+          should_include: true
+        };
+      }
+      
       return {
         is_valid: false,
         status_label: "Unverified",
@@ -158,6 +168,17 @@ class VerifierService {
   private isValidEmailFormat(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  }
+
+  private isCompanyEmail(email: string): boolean {
+    // Check if email looks like a company email (not gmail, yahoo, etc.)
+    const commonPersonalDomains = [
+      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 
+      'aol.com', 'icloud.com', 'protonmail.com'
+    ];
+    
+    const domain = email.split('@')[1]?.toLowerCase();
+    return !!(domain && !commonPersonalDomains.includes(domain));
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {

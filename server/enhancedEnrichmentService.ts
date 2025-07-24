@@ -107,9 +107,9 @@ export class EnhancedEnrichmentService {
       // Step 3: Process and filter contacts
       for (const contact of apolloContacts) {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
-        const verificationStatus = verifierService.getVerificationStatus(verificationResult);
+        const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Should include: ${!contact.email || verificationStatus.should_include}`);
+        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
         
         // Include contacts with LinkedIn URL OR verified emails 
         if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
