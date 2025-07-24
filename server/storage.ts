@@ -28,7 +28,11 @@ export interface IStorage {
   updateJobSubmission(id: number, updates: Partial<JobSubmission>): Promise<JobSubmission>;
   
   // Recruiter contact operations
+  createRecruiterContact(contact: InsertRecruiterContact): Promise<RecruiterContact>;
   createRecruiterContacts(contacts: InsertRecruiterContact[]): Promise<RecruiterContact[]>;
+  
+  // Email pattern analysis operations
+  createEmailPatternAnalysis(analysis: InsertEmailPatternAnalysis): Promise<EmailPatternAnalysis>;
 }
 
 export class DatabaseStorage implements IStorage {

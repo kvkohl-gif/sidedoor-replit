@@ -226,6 +226,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update job submission (status, notes, etc.)
+  app.patch("/api/submissions/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const submissionId = parseInt(req.params.id);
+      
+      if (isNaN(submissionId)) {
+        return res.status(400).json({ message: "Invalid submission ID" });
+      }
+
+      // First verify the submission exists and user owns it
+      const submission = await storage.getJobSubmissionById(submissionId);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      if (submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Update the submission
+      const updatedSubmission = await storage.updateJobSubmission(submissionId, req.body);
+      res.json(updatedSubmission);
+    } catch (error) {
+      console.error("Error updating submission:", error);
+      res.status(500).json({ message: "Failed to update submission" });
+    }
+  });
+
   // Get enhanced job data for a submission
   app.get("/api/submissions/:id/job-data", isAuthenticated, async (req: any, res) => {
     try {

@@ -1,0 +1,77 @@
+Dashboard Page Enhancements (Search History View)
+A. Status Dropdown Convert the “Complete” badge into a status selector dropdown:
+* Not Contacted, Email Sent, Awaiting Reply, Follow-Up Needed, Rejected, Interview Scheduled
+* Use colored status dots or icons to show progress (e.g., green check for "Email Sent").
+B. Last Action Metadata
+* Add a timestamp or metadata below each card: Last contact: Emily Torres on Jul 23
+* Auto-fill if user sends an email from the platform. Allow manual override.
+C. Filters (Top or Sidebar)
+* Allow filtering jobs by:
+    * Company
+    * Status
+    * Position Title
+    * Date Created
+    * Contacted vs. Not Contacted
+D. Archiving + Snooze
+* Add “Archive” and “Snooze” buttons to job cards
+* Snoozed jobs collapse into a drawer that can be toggled open
+E. Inline Notes
+* Small ✏️ icon to add job-specific notes: “Hiring manager is a woman, follow up in 3 days.”
+F. Sorting Options
+* Dropdown to sort by: Newest → Oldest, Status, Company Name, Recruiters Found
+
+
+Job Detail Page Enhancements (Results View)
+
+👤 Per Contact (Recruiter Card) Enhancements
+1. Status Dropdown per Contact
+* Replace "Valid/Verified" badge or add an additional dropdown.
+* Options:
+    * Not Contacted
+    * Email Sent
+    * Awaiting Reply
+    * Follow-Up Needed
+    * Rejected
+    * Interview Scheduled
+* Each status should have a color-coded icon/dot for quick visual reference.
+* Default is Not Contacted.
+2. Last Action Metadata
+* Add metadata beneath the contact name or below the status:
+    * Example: Last contacted: Jul 23
+* Auto-filled when user sends an email via platform.
+* Allow manual editing via pencil icon or hover-edit.
+3. Contacted / Not Contacted Filter
+* Add a toggle/filter bar at the top of the recruiter list:
+    * Show: All | Contacted | Not Contacted
+* Based on the current status field — Not Contacted = default; all others = Contacted.
+4. Inline Notes per Contact
+* Add small ✏️ icon or “Add Note” link.
+* Inline textarea expands when clicked.
+* Example note: “Met at Women in Tech NYC – circle back post-August.”
+* Save per contact and persist in backend.
+5. Generate Email & Message Editor
+* For each recruiter card:
+    * Add a “Generate Email” button.
+    * Clicking expands a collapsible section:
+        * Shows AI-generated email + LinkedIn message.
+        * Both should be editable in-line with “Save” buttons.
+        * Optional toggle: ✅ “Mark this version as sent”
+6. Message History per Contact (Optional)
+* Beneath generated messages, show:
+    * Previous messages sent or saved
+    * Date/time, version label (e.g., “Custom Draft A”)
+    * Revert or reuse button
+
+🗂 Job-Level Enhancements (Top of the Page or Sidebar)
+A. Archive & Snooze Buttons
+* Add 🗃️ Archive and 😴 Snooze buttons at the top right of the job listing.
+* Archived = hides the job from dashboard unless filter toggled on.
+* Snoozed = moves to a separate collapsible drawer (optional with date picker: “Snooze until [date]”).
+B. Job-Level Notes
+* Near the Job Title or in header area, add:
+    * ✏️ icon → reveals multi-line note input
+    * Save per job (e.g., “Hiring manager appears to be female, targeting more diverse team”)
+C. Visual Layout Suggestions
+* Left column: Job description + tags + department
+* Middle column: Recruiter contact list + statuses
+* Right column: Message generation + notes + action buttons
