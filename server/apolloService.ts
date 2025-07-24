@@ -213,7 +213,7 @@ class ApolloService {
           };
         })
         .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
-        .slice(0, 10); // Take top 10 candidates for enrichment
+        .slice(0, 3); // Take top 3 candidates for enrichment (testing mode)
 
       console.log(`Found ${candidateContacts.length} candidate contacts, enriching emails...`);
 
@@ -424,7 +424,7 @@ class ApolloService {
           };
         })
         .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
-        .slice(0, 5);
+        .slice(0, 3); // Take top 3 candidates for broader search (testing mode)
 
       console.log(`Broader search found ${candidateContacts.length} candidates, enriching emails...`);
 
