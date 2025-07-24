@@ -1,0 +1,213 @@
+ AI App Builder Prompt: “Recruiter Contact Finder MVP”
+🔷 App Name: Recruiter Contact Finder
+🧩 Purpose:
+Build a no-code web app that allows users to paste a job description or drop a job URL. The app uses OpenAI’s API to extract recruiter or hiring team contact details, company context, and suggested outreach messages (email + LinkedIn). The response is saved and displayed to the user, and each user can track their submission history.
+
+🔒 User Authentication:
+Enable account creation and login using:
+
+Email & password
+
+Store user session to associate submissions
+
+📦 Database Schema:
+User
+email (default)
+
+full_name (text)
+
+job_submissions (list of JobSubmission)
+
+JobSubmission
+user → User
+
+job_input → text (either full JD or URL)
+
+input_type → text (values: “text” or “url”)
+
+openai_response_raw → text (full JSON or text output from GPT)
+
+recruiters → list of RecruiterContact
+
+email_draft → text
+
+linkedin_message → text
+
+company_name → text
+
+job_title → text
+
+submitted_at → date
+
+RecruiterContact
+job_submission → JobSubmission
+
+name → text
+
+title → text
+
+email → text
+
+linkedin_url → text
+
+confidence_score → number
+
+source → text (e.g. “OpenAI”)
+
+MessageDraft (optional)
+job_submission → JobSubmission
+
+recruiter → RecruiterContact
+
+content → text
+
+type → text (e.g. “Email”, “LinkedIn”)
+
+is_edited → yes/no
+
+created_at → date
+
+🧱 Frontend Pages & Components
+1. Home (public)
+Hero text: “Find the right recruiter for any job instantly.”
+
+Multiline input field → for pasting job description
+
+OR single-line input field → for pasting job URL
+
+Submit button: “Find Recruiters & Generate Message”
+
+2. Sign Up / Login Pages
+Email and password auth
+
+Redirect to dashboard after login
+
+3. Results Page
+Page type: JobSubmission
+
+Displays:
+
+Job title, company
+
+Recruiter list (repeating group):
+
+name, title, email, LinkedIn
+
+Email draft (text box)
+
+LinkedIn message (text box)
+
+"Back to Dashboard" button
+
+4. Dashboard (for logged-in users)
+Repeating group of JobSubmission
+
+Shows company name, date, and link to view results
+
+🔄 Workflow Logic
+On Button Click (from Home page):
+Create new JobSubmission
+
+Store user
+
+Save input (JD or URL)
+
+Set input_type = “text” or “url”
+
+Call OpenAI API (via API Connector):
+
+Endpoint: https://api.openai.com/v1/chat/completions
+
+Model: gpt-3.5-turbo or gpt-4
+
+Prompt includes job description with instruction to return:
+
+Up to 3 recruiter/hiring contacts (with name, title, email, LinkedIn, confidence)
+
+Email draft
+
+LinkedIn message
+
+Company name and role title
+
+Format: clean JSON
+
+Parse GPT response:
+
+Save raw response to openai_response_raw
+
+Save extracted recruiter data to RecruiterContact entries
+
+Save email + LinkedIn message to JobSubmission
+
+Redirect user to Results page
+
+Pass the JobSubmission object as page data
+
+🔗 API Integration Details
+OpenAI API Setup (via API Connector):
+Endpoint: POST https://api.openai.com/v1/chat/completions
+
+Headers:
+
+Authorization: Bearer [API_KEY]
+
+Content-Type: application/json
+
+Body:
+
+json
+Copy
+Edit
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are an assistant that extracts recruiter contact information and suggested outreach from job descriptions."
+    },
+    {
+      "role": "user",
+      "content": "Job description: [replace with input text]. Please return JSON with the following structure:\n\n{\n  \"company_name\": \"...\",\n  \"job_title\": \"...\",\n  \"recruiters\": [\n    { \"name\": \"...\", \"title\": \"...\", \"email\": \"...\", \"linkedin_url\": \"...\", \"confidence_score\": 0-100 },\n    {...}\n  ],\n  \"email_draft\": \"...\",\n  \"linkedin_message\": \"...\"\n}"
+    }
+  ],
+  "temperature": 0.7
+}
+Optional: Future API Integrations
+Clay API or Apollo.io API for real recruiter contact enrichment (via LinkedIn scraping)
+
+Hunter.io for email guessing
+
+Clearbit or People Data Labs for enrichment
+
+🔐 Privacy & Access Rules
+Only logged-in users can:
+
+Create submissions
+
+View their own JobSubmissions
+
+Each JobSubmission is tied to Current User
+
+RecruiterContact and MessageDraft are tied to a specific submission
+
+✅ Additional Features (Optional):
+Add status handling (processing, complete, error)
+
+Enable editing and saving of drafts
+
+Add a “copy to clipboard” button for messages
+
+Add “retry” button for submissions that failed
+
+✅ Deployment & Testing Checklist
+✔️ Live test with OpenAI API key
+
+✔️ Confirm at least one working submission flow (JD → GPT → Display result)
+
+✔️ Store and display recruiter contact info
+
+✔️ Secure routes (unauthenticated users can’t access results)
+
+✔️ Display error if OpenAI call fails
+
