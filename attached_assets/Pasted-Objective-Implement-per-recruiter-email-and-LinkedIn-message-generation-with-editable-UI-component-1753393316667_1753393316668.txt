@@ -1,0 +1,59 @@
+Objective:
+Implement per-recruiter email and LinkedIn message generation, with editable UI components and message tracking, all within the job details page UI.
+
+🧩 Key Features:
+1. Generate Email & LinkedIn Message per Recruiter
+* Each recruiter card should have a “Generate Messages” button.
+* When clicked:
+    * Expands a collapsible message container under the contact.
+    * Uses OpenAI to generate:
+        * ✉️ Email draft
+        * 💼 LinkedIn message draft
+    * Show loading state while content is generated (e.g., spinner or “Generating…” text).
+    * If already generated, show “Edit Message” button instead.
+2. Editable Message Fields
+* Within the expanded message section:
+    * Each draft (email and LinkedIn) is fully editable by the user.
+    * Add a “Save Changes” button under each message.
+    * Consider autosave on blur for improved UX.
+    * Optional: add word count or character guidance (esp. for LinkedIn).
+3. Message Status & Usage Tracker
+* Under each message section:
+    * Add a checkbox toggle: ✅ Mark as Sent
+    * When checked:
+        * Auto-fill timestamp (e.g., “Sent on Jul 24”)
+        * Update recruiter card metadata (Last Contacted: [date])
+    * Optionally support:
+        * A dropdown to label message: “Original Draft,” “Custom v2,” “Manual Rewrite,” etc.
+UX / Layout Guidelines
+* Use an accordion-style dropdown per recruiter to keep the UI compact.
+* Suggested Layout per Contact Card (Collapsed → Expanded): mathematica CopyEdit   ┌────────────────────────────────────────────┐
+* │ Name, Title, Email ✅ Status Dropdown       │
+* │ Last Contacted: Jul 23 ✏️ Notes Icon        │
+* │ [ Generate Messages ]                      │
+* └────────────────────────────────────────────┘
+* 
+* ↓ On Click:
+* 
+* ┌──────────────── Email & LinkedIn Editor ───────────────┐
+* │ ✉️ Email Message: [Editable TextArea]                  │
+* │ [Save]     [Mark as Sent]  ⏱ Sent on Jul 24            │
+* │                                                      ▼ │
+* │ 💼 LinkedIn Message: [Editable TextArea]               │
+* │ [Save]     [Mark as Sent]                              │
+* │ Message History (optional)                            │
+* └────────────────────────────────────────────────────────┘
+*   
+
+🧪 Backend & Data Model Suggestions:
+* RecruiterContact:
+    * id
+    * job_id
+    * name, title, email, linkedIn_url
+    * status (Not Contacted, Email Sent, etc.)
+    * last_contacted_date
+    * email_message, linkedin_message
+    * message_sent_flag (true/false)
+    * message_history (array of past versions, optional)
+
+

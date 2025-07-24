@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
+import { RecruiterMessageCard } from "@/components/ui/recruiter-message-card";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
@@ -62,7 +63,21 @@ export default function Results() {
   });
 
   // Fetch enhanced job data
-  const { data: enhancedJobData } = useQuery({
+  const { data: enhancedJobData } = useQuery<{
+    submissionId: number;
+    enhancedData?: {
+      company_name?: string;
+      job_title?: string;
+      location?: string;
+      experience_level?: string;
+      department?: string;
+      likely_departments?: string[];
+      requirements?: string[];
+      responsibilities?: string[];
+      benefits?: string[];
+    };
+    hasEnhancedData: boolean;
+  }>({
     queryKey: ["/api/submissions", submissionId, "job-data"],
     enabled: !!submissionId && !!submission && isAuthenticated,
     retry: (failureCount, error) => {
@@ -510,6 +525,11 @@ export default function Results() {
                                 </a>
                               </div>
                             )}
+                          </div>
+
+                          {/* Per-Recruiter Message Generation */}
+                          <div className="mt-4 pt-4 border-t">
+                            <RecruiterMessageCard recruiter={recruiter} />
                           </div>
                         </CardContent>
                       </Card>

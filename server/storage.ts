@@ -3,6 +3,7 @@ import {
   jobSubmissions,
   recruiterContacts,
   emailPatternAnalysis,
+  messageTemplates,
   type User,
   type UpsertUser,
   type JobSubmission,
@@ -11,6 +12,8 @@ import {
   type InsertRecruiterContact,
   type EmailPatternAnalysis,
   type InsertEmailPatternAnalysis,
+  type MessageTemplate,
+  type InsertMessageTemplate,
   type JobSubmissionWithRecruiters,
 } from "@shared/schema";
 import { db } from "./db";
@@ -33,6 +36,13 @@ export interface IStorage {
   
   // Email pattern analysis operations
   createEmailPatternAnalysis(analysis: InsertEmailPatternAnalysis): Promise<EmailPatternAnalysis>;
+  
+  // Message template operations
+  createMessageTemplate(template: InsertMessageTemplate): Promise<MessageTemplate>;
+  getMessageTemplatesByRecruiter(recruiterId: number): Promise<MessageTemplate[]>;
+  getMessageTemplateById(id: number): Promise<MessageTemplate | undefined>;
+  updateMessageTemplate(id: number, updates: Partial<MessageTemplate>): Promise<MessageTemplate>;
+  getRecruiterById(id: number): Promise<RecruiterContact | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -129,6 +139,48 @@ export class DatabaseStorage implements IStorage {
       .from(emailPatternAnalysis)
       .where(eq(emailPatternAnalysis.jobSubmissionId, jobSubmissionId));
     return analysis;
+  }
+
+  // Message template operations
+  async createMessageTemplate(template: InsertMessageTemplate): Promise<MessageTemplate> {
+    const [created] = await db
+      .insert(messageTemplates)
+      .values(template)
+      .returning();
+    return created;
+  }
+
+  async getMessageTemplatesByRecruiter(recruiterId: number): Promise<MessageTemplate[]> {
+    return await db
+      .select()
+      .from(messageTemplates)
+      .where(eq(messageTemplates.recruiterContactId, recruiterId))
+      .orderBy(desc(messageTemplates.createdAt));
+  }
+
+  async getMessageTemplateById(id: number): Promise<MessageTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(messageTemplates)
+      .where(eq(messageTemplates.id, id));
+    return template;
+  }
+
+  async updateMessageTemplate(id: number, updates: Partial<MessageTemplate>): Promise<MessageTemplate> {
+    const [updated] = await db
+      .update(messageTemplates)
+      .set(updates)
+      .where(eq(messageTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getRecruiterById(id: number): Promise<RecruiterContact | undefined> {
+    const [recruiter] = await db
+      .select()
+      .from(recruiterContacts)
+      .where(eq(recruiterContacts.id, id));
+    return recruiter;
   }
 }
 

@@ -321,6 +321,163 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Message template routes
+  app.post("/api/recruiters/:recruiterId/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const recruiterId = parseInt(req.params.recruiterId);
+      const { messageType, subject, content, version } = req.body;
+      
+      if (isNaN(recruiterId)) {
+        return res.status(400).json({ message: "Invalid recruiter ID" });
+      }
+
+      // Verify the recruiter belongs to a job submission owned by the user
+      const recruiter = await storage.getRecruiterById(recruiterId);
+      if (!recruiter) {
+        return res.status(404).json({ message: "Recruiter not found" });
+      }
+
+      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
+      if (!submission || submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const template = await storage.createMessageTemplate({
+        recruiterContactId: recruiterId,
+        messageType,
+        subject,
+        content,
+        version: version || "v1"
+      });
+
+      res.json(template);
+    } catch (error) {
+      console.error("Error creating message template:", error);
+      res.status(500).json({ message: "Failed to create message template" });
+    }
+  });
+
+  app.get("/api/recruiters/:recruiterId/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const recruiterId = parseInt(req.params.recruiterId);
+      
+      if (isNaN(recruiterId)) {
+        return res.status(400).json({ message: "Invalid recruiter ID" });
+      }
+
+      // Verify access through job submission ownership
+      const recruiter = await storage.getRecruiterById(recruiterId);
+      if (!recruiter) {
+        return res.status(404).json({ message: "Recruiter not found" });
+      }
+
+      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
+      if (!submission || submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const templates = await storage.getMessageTemplatesByRecruiter(recruiterId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching message templates:", error);
+      res.status(500).json({ message: "Failed to fetch message templates" });
+    }
+  });
+
+  app.patch("/api/messages/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const messageId = parseInt(req.params.id);
+      
+      if (isNaN(messageId)) {
+        return res.status(400).json({ message: "Invalid message ID" });
+      }
+
+      // Verify ownership through recruiter -> job submission
+      const template = await storage.getMessageTemplateById(messageId);
+      if (!template) {
+        return res.status(404).json({ message: "Message template not found" });
+      }
+
+      const recruiter = await storage.getRecruiterById(template.recruiterContactId);
+      if (!recruiter) {
+        return res.status(404).json({ message: "Recruiter not found" });
+      }
+      
+      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
+      
+      if (!submission || submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updated = await storage.updateMessageTemplate(messageId, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating message template:", error);
+      res.status(500).json({ message: "Failed to update message template" });
+    }
+  });
+
+  app.post("/api/recruiters/:recruiterId/generate-messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const recruiterId = parseInt(req.params.recruiterId);
+      
+      if (isNaN(recruiterId)) {
+        return res.status(400).json({ message: "Invalid recruiter ID" });
+      }
+
+      // Verify access and get context
+      const recruiter = await storage.getRecruiterById(recruiterId);
+      if (!recruiter) {
+        return res.status(404).json({ message: "Recruiter not found" });
+      }
+
+      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
+      if (!submission || submission.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Generate personalized messages using OpenAI
+      const { generatePersonalizedMessages } = await import("./personalizedMessaging.js");
+      const messages = await generatePersonalizedMessages({
+        recruiterName: recruiter.name || "Hiring Manager",
+        recruiterTitle: recruiter.title || "Recruiter",
+        companyName: submission.companyName || "the company",
+        jobTitle: submission.jobTitle || "this position",
+        jobDescription: submission.jobInput,
+        recruiterEmail: recruiter.email
+      });
+
+      // Save both messages to database
+      const emailTemplate = await storage.createMessageTemplate({
+        recruiterContactId: recruiterId,
+        messageType: "email",
+        subject: messages.emailSubject,
+        content: messages.emailContent,
+        version: "v1"
+      });
+
+      const linkedinTemplate = await storage.createMessageTemplate({
+        recruiterContactId: recruiterId,
+        messageType: "linkedin",
+        subject: null,
+        content: messages.linkedinContent,
+        version: "v1"
+      });
+
+      res.json({
+        email: emailTemplate,
+        linkedin: linkedinTemplate
+      });
+    } catch (error) {
+      console.error("Error generating messages:", error);
+      res.status(500).json({ message: "Failed to generate messages" });
+    }
+  });
+
   // API status endpoint for debugging
   app.get("/api/status", isAuthenticated, async (req, res) => {
     try {
