@@ -1,0 +1,98 @@
+Prompt: UI/UX and Functionality Updates for Recruiter Contact Tool
+🎨 1. Remove Loading Visuals
+Please remove the current loading/processing animation visuals shown during API calls or transitions. If needed, use a subtle spinner or progress dot bar inline with the submit button instead of full-screen loaders.
+
+🔗 2. Swap URL and Job Description Display
+On the recruiter/email results page, display the Job URL first and the Job Description summary second. Update the layout and hierarchy to reflect this order for both URL and pasted JD submissions.
+
+🧾 3. Update Layout for Email & LinkedIn Messages
+The current side-by-side message layout feels cramped. Please update this to a stacked layout:
+
+Title each section clearly: “Email Draft” and “LinkedIn Message”
+
+Each message should be displayed inside a card with:
+
+Editable text area
+
+“Regenerate” or “Improve” button
+
+“Copy” button
+
+Optionally, use tabs or accordions if space needs to be minimized
+
+📌 4. Job Description Summary Not Showing for JD Paste
+When a user pastes in a full job description (vs. a URL), the job summary should still display at the top of the recruiter + message results page.
+
+Add this logic to both flows: URL or direct JD input
+
+➕ 5. Collapse/Expand Toggle for Job Description Summary
+Add a small collapse/expand arrow next to the job summary section at the top of the page.
+
+Default to expanded
+
+Allow user to toggle summary visibility for a cleaner view
+
+⚠️ 6. Error Message Handling
+Update all error messages to:
+
+Appear as dismissible alert banners at the top of the screen
+
+Include a small ❌ icon to allow users to exit/close them
+
+Use red or yellow banner backgrounds depending on severity
+
+🔍 7. Hover Tooltips for “Risky” Tags
+When a recruiter email is labeled “Risky”, users should be able to hover over the tag to see an explanation. Example:
+
+“This is a catch-all domain. The server accepts all emails, but individual email validity could not be confirmed.”
+
+Use small tooltip icon or standard hover behavior
+
+❓ 8. Clarify “Unknown” Confidence Scores
+When confidence score is “Unknown”:
+
+Add a label or icon that says: “Confidence Score” to clarify what the number is for
+
+On hover, show:
+
+“This confidence score was sourced from Apollo. 'Unknown' means no data was returned for this contact.”
+
+You can also gray out the value visually to differentiate from known scores
+
+✍️ 9. Make Message Texts Editable
+Both the Email Draft and LinkedIn Message should be displayed in a content-editable text box or textarea, so users can revise before copying.
+
+Include “Copy” button at the bottom
+
+Optional: Add “Save My Edit” if you're storing user changes
+
+🤖 10. Add OpenAI-Based Text Editing Feature
+Implement an “Improve Message with AI” feature above each message box:
+
+Add a dropdown with tone options:
+
+“More Confident”
+
+“More Concise”
+
+“Friendlier”
+
+“Professional”
+
+“Personalized”
+
+When user selects a tone and clicks “Improve”, send the current message to OpenAI using a prompt like:
+
+text
+Copy
+Edit
+Rewrite the following message to sound more [tone]. Preserve the meaning, and keep it suitable for outreach.
+
+Message:
+[insert current message here]
+Replace message with revised version, or offer a preview modal with “Accept / Cancel”
+
+✅ Bonus: Optional Improvements
+Add hover tooltips for email verification tags (e.g. ✅ Verified: “Confirmed via NeverBounce”)
+
+Add "Confidence Source" in a small font under each score to eliminate ambiguity

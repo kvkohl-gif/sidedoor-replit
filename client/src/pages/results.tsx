@@ -1,48 +1,36 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams } from "wouter";
-import { Button } from "@/components/ui/button";
+import { useParams, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Mail, Copy, ExternalLink } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ArrowLeft, Mail, Copy, ExternalLink, ChevronDown, ChevronUp, Edit, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { LoadingAnimation, MultiStepLoading } from "@/components/ui/loading-animation";
+import { apiRequest } from "@/lib/queryClient";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
-  const { id } = useParams();
+  const params = useParams();
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const submissionId = params.id;
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
-
-  const { data: submission, isLoading: submissionLoading, error } = useQuery<JobSubmissionWithRecruiters>({
-    queryKey: ["/api/submissions", id],
-    enabled: isAuthenticated && !!id,
-    retry: false,
-  });
-
-  const { data: enhancedJobData } = useQuery<any>({
-    queryKey: ["/api/submissions", id, "job-data"],
-    enabled: isAuthenticated && !!id,
-    retry: false,
-  });
+  // State for UI interactions
+  const [showSuggestions, setShowSuggestions] = useState<{[key: number]: boolean}>({});
+  const [jobSummaryExpanded, setJobSummaryExpanded] = useState(true);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [linkedinMessage, setLinkedinMessage] = useState("");
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [isEditingLinkedin, setIsEditingLinkedin] = useState(false);
+  const [selectedEmailTone, setSelectedEmailTone] = useState<string>("");
+  const [selectedLinkedinTone, setSelectedLinkedinTone] = useState<string>("");
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
@@ -52,17 +40,56 @@ export default function Results() {
     setLocation("/dashboard");
   };
 
-  const copyToClipboard = async (text: string, type: string) => {
+  const toggleSuggestion = (contactId: number) => {
+    setShowSuggestions(prev => ({
+      ...prev,
+      [contactId]: !prev[contactId]
+    }));
+  };
+
+  // Fetch submission data
+  const {
+    data: submission,
+    isLoading: submissionLoading,
+    error,
+  } = useQuery<JobSubmissionWithRecruiters>({
+    queryKey: ["/api/submissions", submissionId],
+    enabled: !!submissionId && isAuthenticated,
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) return false;
+      return failureCount < 3;
+    },
+  });
+
+  // Fetch enhanced job data
+  const { data: enhancedJobData } = useQuery({
+    queryKey: ["/api/submissions", submissionId, "job-data"],
+    enabled: !!submissionId && !!submission && isAuthenticated,
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) return false;
+      return failureCount < 3;
+    },
+  });
+
+  // Initialize messages when submission loads
+  useEffect(() => {
+    if (submission) {
+      setEmailDraft(submission.emailDraft || "");
+      setLinkedinMessage(submission.linkedinMessage || "");
+    }
+  }, [submission]);
+
+  const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
       toast({
         title: "Copied!",
-        description: `${type} copied to clipboard`,
+        description: `${label} copied to clipboard`,
       });
-    } catch (error) {
+    } catch (err) {
       toast({
-        title: "Error",
-        description: "Failed to copy to clipboard",
+        title: "Failed to copy",
+        description: "Please copy the text manually",
         variant: "destructive",
       });
     }
@@ -72,29 +99,144 @@ export default function Results() {
     await copyToClipboard(email, "Email address");
   };
 
-  const [showSuggestions, setShowSuggestions] = useState<{[key: number]: boolean}>({});
+  // Message improvement mutations
+  const improveEmailMutation = useMutation({
+    mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
+      const response = await apiRequest("/api/improve-message", {
+        method: "POST",
+        body: JSON.stringify({ message, tone }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      setEmailDraft(data.improvedMessage);
+      setSelectedEmailTone("");
+      toast({
+        title: "Message improved!",
+        description: "Your email draft has been updated with AI suggestions.",
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Failed to improve message",
+        description: "Please try again or edit manually.",
+        variant: "destructive",
+      });
+    },
+  });
 
-  const toggleSuggestion = (contactId: number) => {
-    setShowSuggestions(prev => ({
-      ...prev,
-      [contactId]: !prev[contactId]
-    }));
+  const improveLinkedinMutation = useMutation({
+    mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
+      const response = await apiRequest("/api/improve-message", {
+        method: "POST",
+        body: JSON.stringify({ message, tone }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      setLinkedinMessage(data.improvedMessage);
+      setSelectedLinkedinTone("");
+      toast({
+        title: "Message improved!",
+        description: "Your LinkedIn message has been updated with AI suggestions.",
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Failed to improve message",
+        description: "Please try again or edit manually.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleImproveEmail = () => {
+    if (selectedEmailTone && emailDraft) {
+      improveEmailMutation.mutate({ message: emailDraft, tone: selectedEmailTone });
+    }
+  };
+
+  const handleImproveLinkedin = () => {
+    if (selectedLinkedinTone && linkedinMessage) {
+      improveLinkedinMutation.mutate({ message: linkedinMessage, tone: selectedLinkedinTone });
+    }
   };
 
   const getConfidenceBadge = (score: number | null) => {
-    if (!score) return { variant: "secondary" as const, text: "Unknown" };
-    if (score >= 90) return { variant: "default" as const, text: `${score}% confidence`, className: "bg-emerald-100 text-emerald-800" };
-    if (score >= 75) return { variant: "default" as const, text: `${score}% confidence`, className: "bg-amber-100 text-amber-800" };
-    return { variant: "secondary" as const, text: `${score}% confidence` };
+    if (!score) return { 
+      variant: "secondary" as const, 
+      text: "Unknown", 
+      tooltip: "This confidence score was sourced from Apollo. 'Unknown' means no data was returned for this contact.",
+      className: "text-slate-400"
+    };
+    if (score >= 90) return { 
+      variant: "default" as const, 
+      text: `${score}% confidence`, 
+      className: "bg-emerald-100 text-emerald-800",
+      tooltip: "High confidence match based on job title analysis"
+    };
+    if (score >= 75) return { 
+      variant: "default" as const, 
+      text: `${score}% confidence`, 
+      className: "bg-amber-100 text-amber-800",
+      tooltip: "Good confidence match based on job title analysis"
+    };
+    return { 
+      variant: "secondary" as const, 
+      text: `${score}% confidence`,
+      tooltip: "Moderate confidence match based on job title analysis"
+    };
   };
 
   const getVerificationBadge = (status: string | null, verified: string | null) => {
     if (verified === "true") {
-      if (status === "valid") return { variant: "default" as const, text: "Verified", className: "bg-emerald-100 text-emerald-800" };
-      if (status === "risky") return { variant: "default" as const, text: "Risky", className: "bg-amber-100 text-amber-800" };
+      if (status === "valid") return { 
+        variant: "default" as const, 
+        text: "✅ Verified", 
+        className: "bg-emerald-100 text-emerald-800",
+        tooltip: "Email confirmed deliverable via NeverBounce verification"
+      };
+      if (status === "risky") return { 
+        variant: "default" as const, 
+        text: "⚠️ Risky", 
+        className: "bg-amber-100 text-amber-800",
+        tooltip: "This is a catch-all domain. The server accepts all emails, but individual email validity could not be confirmed."
+      };
     }
-    if (status === "invalid") return { variant: "destructive" as const, text: "Invalid" };
-    return { variant: "secondary" as const, text: "Unverified" };
+    if (status === "invalid") return { 
+      variant: "destructive" as const, 
+      text: "❌ Invalid",
+      tooltip: "Email confirmed undeliverable via NeverBounce verification"
+    };
+    return { 
+      variant: "secondary" as const, 
+      text: "❓ Unverified",
+      tooltip: "Email verification not attempted or failed"
+    };
   };
 
   if (isLoading || !isAuthenticated) {
@@ -109,27 +251,11 @@ export default function Results() {
   }
 
   if (submissionLoading) {
-    const steps = [
-      { id: "fetch", label: "Fetching submission data", status: "active" as const },
-      { id: "contacts", label: "Loading recruiter contacts", status: "pending" as const },
-      { id: "verification", label: "Checking email verification", status: "pending" as const },
-      { id: "complete", label: "Preparing results", status: "pending" as const }
-    ];
-
     return (
-      <div className="min-h-screen bg-slate-50">
-        <nav className="bg-white border-b border-slate-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
-              <Button variant="ghost" onClick={handleLogout}>
-                Logout
-              </Button>
-            </div>
-          </div>
-        </nav>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <MultiStepLoading steps={steps} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-slate-600 text-sm">Loading results...</p>
         </div>
       </div>
     );
@@ -200,179 +326,202 @@ export default function Results() {
           )}
         </div>
 
-        {/* Enhanced Job Information */}
-        {enhancedJobData?.hasEnhancedData && enhancedJobData?.enhancedData && (
-          <Card className="mb-8">
+        {/* Job URL and Description Summary */}
+        <Collapsible open={jobSummaryExpanded} onOpenChange={setJobSummaryExpanded} className="mb-8">
+          <Card>
             <CardContent className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Job Details</h2>
+              <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+                <h2 className="text-lg font-semibold text-slate-900">Job Information</h2>
+                {jobSummaryExpanded ? (
+                  <ChevronUp className="w-5 h-5 text-slate-500" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-slate-500" />
+                )}
+              </CollapsibleTrigger>
               
-              {enhancedJobData?.enhancedData?.job_description && (
-                <div className="mb-4">
-                  <h3 className="font-medium text-slate-900 mb-2">Description</h3>
-                  <p className="text-slate-700 text-sm">{enhancedJobData?.enhancedData?.job_description}</p>
-                </div>
-              )}
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {enhancedJobData?.enhancedData?.responsibilities && enhancedJobData?.enhancedData?.responsibilities.length > 0 && (
+              <CollapsibleContent className="mt-4 space-y-4">
+                {/* Job URL - Display first */}
+                {submission.inputType === "url" && (
                   <div>
-                    <h3 className="font-medium text-slate-900 mb-2">Key Responsibilities</h3>
-                    <ul className="text-sm text-slate-700 space-y-1">
-                      {enhancedJobData?.enhancedData?.responsibilities.map((item: string, index: number) => (
-                        <li key={index} className="flex items-start">
-                          <span className="text-primary mr-2">•</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
+                    <h3 className="font-medium text-slate-900 mb-2">Job URL</h3>
+                    <a 
+                      href={submission.jobInput} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:text-blue-700 break-all text-sm flex items-center"
+                    >
+                      {submission.jobInput}
+                      <ExternalLink className="w-4 h-4 ml-2 flex-shrink-0" />
+                    </a>
                   </div>
                 )}
 
-                {enhancedJobData?.enhancedData?.requirements && enhancedJobData?.enhancedData?.requirements.length > 0 && (
+                {/* Job Description Summary - Display second */}
+                {(enhancedJobData?.enhancedData?.job_description || submission.inputType === "text") && (
                   <div>
-                    <h3 className="font-medium text-slate-900 mb-2">Requirements</h3>
-                    <ul className="text-sm text-slate-700 space-y-1">
-                      {enhancedJobData?.enhancedData?.requirements.map((item: string, index: number) => (
-                        <li key={index} className="flex items-start">
-                          <span className="text-primary mr-2">•</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
+                    <h3 className="font-medium text-slate-900 mb-2">Job Description</h3>
+                    <p className="text-slate-700 text-sm leading-relaxed">
+                      {enhancedJobData?.enhancedData?.job_description || 
+                       (submission.inputType === "text" ? submission.jobInput.substring(0, 500) + "..." : "")}
+                    </p>
                   </div>
                 )}
-              </div>
 
-              {enhancedJobData?.enhancedData?.likely_departments && enhancedJobData?.enhancedData?.likely_departments.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <h3 className="font-medium text-slate-900 mb-2">Likely Departments</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {enhancedJobData?.enhancedData?.likely_departments.map((dept: string, index: number) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {dept}
-                      </Badge>
-                    ))}
+                {/* Enhanced Job Details */}
+                {enhancedJobData?.enhancedData && (
+                  <div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-slate-200">
+                    {enhancedJobData?.enhancedData?.responsibilities && enhancedJobData?.enhancedData?.responsibilities.length > 0 && (
+                      <div>
+                        <h3 className="font-medium text-slate-900 mb-2">Key Responsibilities</h3>
+                        <ul className="text-sm text-slate-700 space-y-1">
+                          {enhancedJobData?.enhancedData?.responsibilities.map((item: string, index: number) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-primary mr-2">•</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {enhancedJobData?.enhancedData?.requirements && enhancedJobData?.enhancedData?.requirements.length > 0 && (
+                      <div>
+                        <h3 className="font-medium text-slate-900 mb-2">Requirements</h3>
+                        <ul className="text-sm text-slate-700 space-y-1">
+                          {enhancedJobData?.enhancedData?.requirements.map((item: string, index: number) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-primary mr-2">•</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
+
+                {enhancedJobData?.enhancedData?.likely_departments && enhancedJobData?.enhancedData?.likely_departments.length > 0 && (
+                  <div className="pt-4 border-t border-slate-200">
+                    <h3 className="font-medium text-slate-900 mb-2">Likely Departments</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {enhancedJobData?.enhancedData?.likely_departments.map((dept: string, index: number) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {dept}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CollapsibleContent>
             </CardContent>
           </Card>
-        )}
+        </Collapsible>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Recruiters Column */}
-          <div className="lg:col-span-2">
+        {/* Recruiters and Messages Layout */}
+        <div className="space-y-8">
+          {/* Recruiters Section */}
+          <div>
             <h2 className="text-xl font-semibold text-slate-900 mb-6">Recruiter Contacts</h2>
             
             {submission.recruiters && submission.recruiters.length > 0 ? (
               <div className="space-y-4">
                 {submission.recruiters.map((recruiter) => {
-                  const badge = getConfidenceBadge(recruiter.confidenceScore);
+                  const confidenceBadge = getConfidenceBadge(recruiter.confidenceScore);
+                  const verificationBadge = getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified);
                   return (
-                    <Card key={recruiter.id}>
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              {recruiter.name || "Unknown Recruiter"}
-                            </h3>
-                            <p className="text-slate-600">
-                              {recruiter.title || "Unknown Title"}
-                            </p>
-                          </div>
-                          <div className="text-right space-y-2">
+                    <TooltipProvider key={recruiter.id}>
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex justify-between items-start mb-4">
                             <div>
-                              <Badge 
-                                variant={badge.variant}
-                                className={badge.className}
-                              >
-                                {badge.text}
-                              </Badge>
+                              <h3 className="text-lg font-semibold text-slate-900">
+                                {recruiter.name || "Unknown Recruiter"}
+                              </h3>
+                              <p className="text-slate-600">
+                                {recruiter.title || "Unknown Title"}
+                              </p>
                             </div>
-                            {recruiter.email && (
+                            <div className="text-right space-y-2">
                               <div>
-                                <Badge 
-                                  variant={getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified).variant}
-                                  className={getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified).className}
-                                >
-                                  {getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified).text}
-                                </Badge>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Badge 
+                                      variant={confidenceBadge.variant}
+                                      className={confidenceBadge.className}
+                                    >
+                                      {confidenceBadge.text}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-sm">
+                                      <strong>Confidence Score</strong><br/>
+                                      {confidenceBadge.tooltip}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {recruiter.email && (
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <Mail className="w-5 h-5 text-slate-400" />
-                                  <span className="text-slate-700">{recruiter.email}</span>
+                              {recruiter.email && (
+                                <div>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <Badge 
+                                        variant={verificationBadge.variant}
+                                        className={verificationBadge.className}
+                                      >
+                                        {verificationBadge.text}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-sm">{verificationBadge.tooltip}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {recruiter.email && (
+                              <div className="flex items-center space-x-3">
+                                <Mail className="w-5 h-5 text-slate-400" />
+                                <span className="text-slate-700">{recruiter.email}</span>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => copyEmail(recruiter.email!)}
-                                  className="text-primary hover:text-blue-700"
+                                  className="text-primary hover:text-blue-700 p-1"
                                 >
                                   <Copy className="w-4 h-4" />
                                 </Button>
                               </div>
-                              
-                              {/* Email Suggestion */}
-                              {(recruiter as any).suggestedEmail && (recruiter as any).suggestedEmail !== recruiter.email && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-amber-800">AI Suggested Email:</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => copyEmail((recruiter as any).suggestedEmail)}
-                                      className="text-amber-700 hover:text-amber-800 text-xs"
-                                    >
-                                      <Copy className="w-3 h-3 mr-1" />
-                                      Use This
-                                    </Button>
-                                  </div>
-                                  <div className="text-sm text-amber-700">
-                                    ✅ {(recruiter as any).suggestedEmail}
-                                  </div>
-                                  {(recruiter as any).emailSuggestionReasoning && (
-                                    <div className="text-xs text-amber-600 mt-1">
-                                      💬 {(recruiter as any).emailSuggestionReasoning}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          {!recruiter.email && recruiter.linkedinUrl && (
-                            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-                              No verified email found. Use LinkedIn to connect.
-                            </div>
-                          )}
-                          
-                          {recruiter.linkedinUrl && (
-                            <div className="flex items-center space-x-3">
-                              <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                              </svg>
-                              <a
-                                href={recruiter.linkedinUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:text-blue-700 flex items-center"
-                              >
-                                LinkedIn Profile
-                                <ExternalLink className="w-4 h-4 ml-1" />
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            )}
+
+                            {!recruiter.email && recruiter.linkedinUrl && (
+                              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                                No verified email found. Use LinkedIn to connect.
+                              </div>
+                            )}
+
+                            {recruiter.linkedinUrl && (
+                              <div className="flex items-center space-x-3">
+                                <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                </svg>
+                                <a
+                                  href={recruiter.linkedinUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:text-blue-700 flex items-center"
+                                >
+                                  LinkedIn Profile
+                                  <ExternalLink className="w-4 h-4 ml-1" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TooltipProvider>
                   );
                 })}
               </div>
@@ -385,55 +534,153 @@ export default function Results() {
             )}
           </div>
 
-          {/* Messages Column */}
-          <div className="lg:col-span-1">
+          {/* Messages Section - Stacked Layout */}
+          <div>
             <h2 className="text-xl font-semibold text-slate-900 mb-6">Generated Messages</h2>
             
-            {/* Email Draft */}
-            <Card className="mb-6">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Email Draft</h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(submission.emailDraft || "", "Email draft")}
-                    className="text-primary hover:text-blue-700"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copy
-                  </Button>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {submission.emailDraft || "No email draft available."}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              {/* Email Draft */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900">Email Draft</h3>
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsEditingEmail(!isEditingEmail)}
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        {isEditingEmail ? "Save" : "Edit"}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {isEditingEmail ? (
+                    <div className="space-y-4">
+                      <Textarea
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        className="min-h-[120px]"
+                        placeholder="Edit your email draft..."
+                      />
+                      <div className="flex space-x-2">
+                        <Select value={selectedEmailTone} onValueChange={setSelectedEmailTone}>
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Improve with AI" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="confident">More Confident</SelectItem>
+                            <SelectItem value="concise">More Concise</SelectItem>
+                            <SelectItem value="friendly">Friendlier</SelectItem>
+                            <SelectItem value="professional">Professional</SelectItem>
+                            <SelectItem value="personalized">Personalized</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handleImproveEmail}
+                          disabled={!selectedEmailTone || improveEmailMutation.isPending}
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-1 ${improveEmailMutation.isPending ? 'animate-spin' : ''}`} />
+                          {improveEmailMutation.isPending ? 'Improving...' : 'Improve'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 p-4 rounded-lg">
+                      <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                        {emailDraft}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="mt-4">
+                    <Button 
+                      onClick={() => copyToClipboard(emailDraft, "Email draft")}
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Email Draft
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* LinkedIn Message */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">LinkedIn Message</h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(submission.linkedinMessage || "", "LinkedIn message")}
-                    className="text-primary hover:text-blue-700"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copy
-                  </Button>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {submission.linkedinMessage || "No LinkedIn message available."}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              {/* LinkedIn Message */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900">LinkedIn Message</h3>
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsEditingLinkedin(!isEditingLinkedin)}
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        {isEditingLinkedin ? "Save" : "Edit"}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {isEditingLinkedin ? (
+                    <div className="space-y-4">
+                      <Textarea
+                        value={linkedinMessage}
+                        onChange={(e) => setLinkedinMessage(e.target.value)}
+                        className="min-h-[120px]"
+                        placeholder="Edit your LinkedIn message..."
+                      />
+                      <div className="flex space-x-2">
+                        <Select value={selectedLinkedinTone} onValueChange={setSelectedLinkedinTone}>
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Improve with AI" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="confident">More Confident</SelectItem>
+                            <SelectItem value="concise">More Concise</SelectItem>
+                            <SelectItem value="friendly">Friendlier</SelectItem>
+                            <SelectItem value="professional">Professional</SelectItem>
+                            <SelectItem value="personalized">Personalized</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handleImproveLinkedin}
+                          disabled={!selectedLinkedinTone || improveLinkedinMutation.isPending}
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-1 ${improveLinkedinMutation.isPending ? 'animate-spin' : ''}`} />
+                          {improveLinkedinMutation.isPending ? 'Improving...' : 'Improve'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 p-4 rounded-lg">
+                      <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                        {linkedinMessage}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="mt-4">
+                    <Button 
+                      onClick={() => copyToClipboard(linkedinMessage, "LinkedIn message")}
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy LinkedIn Message
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

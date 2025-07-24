@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import OpenAI from "openai";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
@@ -314,6 +315,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching API status:", error);
       res.status(500).json({ message: "Failed to fetch API status" });
+    }
+  });
+
+  // Message improvement endpoint
+  app.post("/api/improve-message", isAuthenticated, async (req, res) => {
+    try {
+      const { message, tone } = req.body;
+      
+      if (!message || !tone) {
+        return res.status(400).json({ message: "Message and tone are required" });
+      }
+
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      const tonePrompts = {
+        confident: "Rewrite the following message to sound more confident and assertive. Preserve the meaning, and keep it suitable for outreach.",
+        concise: "Rewrite the following message to be more concise and direct while maintaining the key points. Preserve the meaning, and keep it suitable for outreach.",
+        friendly: "Rewrite the following message to sound friendlier and more approachable. Preserve the meaning, and keep it suitable for outreach.",
+        professional: "Rewrite the following message to sound more professional and formal. Preserve the meaning, and keep it suitable for outreach.",
+        personalized: "Rewrite the following message to sound more personalized and engaging. Preserve the meaning, and keep it suitable for outreach."
+      };
+
+      const prompt = tonePrompts[tone as keyof typeof tonePrompts] || tonePrompts.professional;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: prompt
+          },
+          {
+            role: "user",
+            content: `Message:\n${message}`
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      });
+
+      const improvedMessage = response.choices[0].message.content;
+      
+      res.json({ improvedMessage });
+    } catch (error) {
+      console.error("Error improving message:", error);
+      res.status(500).json({ message: "Failed to improve message" });
     }
   });
 
