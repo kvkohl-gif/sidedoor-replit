@@ -9,6 +9,7 @@ import { Search, MessageSquare, BarChart3 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingAnimation, MultiStepLoading } from "@/components/ui/loading-animation";
 
 export default function Home() {
   const [inputType, setInputType] = useState<"text" | "url">("text");
@@ -162,6 +163,20 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Multi-Step Loading Animation */}
+        {submitMutation.isPending && (
+          <div className="mt-8">
+            <MultiStepLoading 
+              steps={[
+                { id: "analyze", label: "Analyzing job description with OpenAI", status: "active" },
+                { id: "search", label: "Searching Apollo for recruiter contacts", status: "pending" },
+                { id: "verify", label: "Verifying emails with NeverBounce", status: "pending" },
+                { id: "complete", label: "Generating personalized messages", status: "pending" }
+              ]}
+            />
+          </div>
+        )}
 
         {/* Features Grid */}
         <div className="grid md:grid-cols-3 gap-8 mt-20">

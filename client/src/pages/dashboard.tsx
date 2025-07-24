@@ -8,6 +8,7 @@ import { Plus, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { LoadingAnimation } from "@/components/ui/loading-animation";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Dashboard() {
@@ -65,10 +66,10 @@ export default function Dashboard() {
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-slate-600">Loading...</p>
-        </div>
+        <LoadingAnimation 
+          type="default" 
+          message="Loading your dashboard..." 
+        />
       </div>
     );
   }
@@ -110,9 +111,11 @@ export default function Dashboard() {
 
         {/* Loading State */}
         {submissionsLoading && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-slate-600">Loading submissions...</p>
+          <div className="py-8">
+            <LoadingAnimation 
+              type="search" 
+              message="Loading your submission history..." 
+            />
           </div>
         )}
 

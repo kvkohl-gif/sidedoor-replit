@@ -8,6 +8,7 @@ import { ArrowLeft, Mail, Copy, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { LoadingAnimation, MultiStepLoading } from "@/components/ui/loading-animation";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
@@ -99,6 +100,13 @@ export default function Results() {
   }
 
   if (submissionLoading) {
+    const steps = [
+      { id: "fetch", label: "Fetching submission data", status: "active" as const },
+      { id: "contacts", label: "Loading recruiter contacts", status: "pending" as const },
+      { id: "verification", label: "Checking email verification", status: "pending" as const },
+      { id: "complete", label: "Preparing results", status: "pending" as const }
+    ];
+
     return (
       <div className="min-h-screen bg-slate-50">
         <nav className="bg-white border-b border-slate-200">
@@ -112,10 +120,7 @@ export default function Results() {
           </div>
         </nav>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-slate-600">Loading submission...</p>
-          </div>
+          <MultiStepLoading steps={steps} />
         </div>
       </div>
     );
