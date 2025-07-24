@@ -48,8 +48,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Scraping URL: ${submissionData.jobInput}`);
         const scrapedData = await urlScrapingService.scrapeJobURL(submissionData.jobInput);
         
-        if (scrapedData.error) {
-          throw new Error(`Failed to scrape URL: ${scrapedData.error}`);
+        if (scrapedData.error || !scrapedData.cleanedContent || scrapedData.cleanedContent.length < 50) {
+          return res.status(400).json({ 
+            message: "Unable to extract content from this URL. Please try copying and pasting the job description text directly instead.",
+            details: scrapedData.error || "Insufficient content extracted"
+          });
         }
         
         jobContent = scrapedData.cleanedContent;
