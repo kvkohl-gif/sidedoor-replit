@@ -137,12 +137,14 @@ The enrichment service is structured to easily integrate with:
 
 ### Current Implementation
 - Apollo.io API integration for professional contact search with optimized search parameters
+- **NEW: Advanced title filtering with predefined recruiter titles** - Uses Apollo's `person_titles` parameter with 21 specific recruiter roles
 - NeverBounce email verification with status badges (✅ Valid, ⚠️ Risky, ❌ Invalid)
 - Modular apolloService.ts and verifierService.ts architecture
 - Enhanced OpenAI prompt for extracting accurate Apollo search parameters
 - **CRITICAL FIX (Jan 2025)**: Removed fake recruiter generation from OpenAI - Apollo is now sole source of contact data
-- Workflow: OpenAI parameter extraction → Apollo recruiter search → NeverBounce verification → Database storage
-- Top 3 Apollo recruiter matches with confidence scoring and verification status
-- Broader search fallback when primary Apollo search returns no results
-- Full UI support for verification status display with icons
+- Workflow: OpenAI parameter extraction → Apollo recruiter search (with title filters) → NeverBounce verification → Database storage
+- **Enhanced confidence scoring**: Exact title matches (100% for "recruiter") + partial keyword matching (85-90% for "talent acquisition")
+- Three-tier search strategy: 1) Title-filtered search 2) Non-filtered search with client-side filtering 3) Broader fallback
+- Full UI support for verification status display with icons and detailed tooltips
 - Database schema with Apollo ID tracking and verification data storage
+- Message editing with AI-powered tone improvement (Confident, Concise, Friendly, Professional, Personalized)

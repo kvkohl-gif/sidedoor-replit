@@ -43,6 +43,31 @@ export interface ProcessedContact {
   recruiter_confidence: number;
 }
 
+// Predefined recruiter titles for Apollo filtering
+const RECRUITER_TITLES = [
+  "recruiter",
+  "technical recruiter",
+  "senior recruiter",
+  "lead recruiter",
+  "recruiting coordinator",
+  "recruiting manager",
+  "recruiting lead",
+  "talent acquisition",
+  "talent acquisition specialist",
+  "talent acquisition partner",
+  "talent acquisition coordinator",
+  "talent acquisition manager",
+  "talent acquisition executive",
+  "talent acquisition recruiter",
+  "talent development manager",
+  "talent manager",
+  "acquisition manager",
+  "acquisition specialist",
+  "people operations manager",
+  "people partner",
+  "people experience lead"
+];
+
 class ApolloService {
   private apiKey: string;
   private baseUrl = "https://api.apollo.io/v1";
@@ -55,18 +80,50 @@ class ApolloService {
   }
 
   private isRecruiterTitle(title: string): { isRecruiter: boolean; confidence: number } {
+    const titleLower = title.toLowerCase().trim();
+    
+    // Exact match scoring for predefined recruiter titles
+    const titleScoring: { [key: string]: number } = {
+      "recruiter": 1.0,
+      "technical recruiter": 1.0,
+      "senior recruiter": 0.95,
+      "lead recruiter": 0.95,
+      "recruiting coordinator": 0.85,
+      "recruiting manager": 0.95,
+      "recruiting lead": 0.95,
+      "talent acquisition": 0.9,
+      "talent acquisition specialist": 0.9,
+      "talent acquisition partner": 0.95,
+      "talent acquisition coordinator": 0.85,
+      "talent acquisition manager": 0.95,
+      "talent acquisition executive": 0.95,
+      "talent acquisition recruiter": 1.0,
+      "talent development manager": 0.7,
+      "talent manager": 0.8,
+      "acquisition manager": 0.6,
+      "acquisition specialist": 0.65,
+      "people operations manager": 0.8,
+      "people partner": 0.85,
+      "people experience lead": 0.75
+    };
+
+    // Check for exact matches first
+    if (titleScoring[titleLower]) {
+      return { isRecruiter: true, confidence: Math.round(titleScoring[titleLower] * 100) };
+    }
+
+    // Check for partial matches with keywords
     const recruiterKeywords = [
-      { terms: ["recruiter", "recruitment"], weight: 1.0 },
-      { terms: ["talent acquisition", "talent"], weight: 0.9 },
-      { terms: ["people ops", "people operations"], weight: 0.8 },
-      { terms: ["technical recruiter", "tech recruiter"], weight: 1.0 },
-      { terms: ["hiring manager", "hiring"], weight: 0.7 },
-      { terms: ["hr manager", "human resources"], weight: 0.6 },
-      { terms: ["sourcr", "sourcing"], weight: 0.8 },
-      { terms: ["people partner", "people team"], weight: 0.7 }
+      { terms: ["recruiter", "recruitment"], weight: 0.9 },
+      { terms: ["talent acquisition"], weight: 0.85 },
+      { terms: ["people operations", "people ops"], weight: 0.75 },
+      { terms: ["talent"], weight: 0.7 },
+      { terms: ["hiring manager", "hiring"], weight: 0.6 },
+      { terms: ["hr manager", "human resources"], weight: 0.5 },
+      { terms: ["sourcing"], weight: 0.7 },
+      { terms: ["people partner"], weight: 0.8 }
     ];
 
-    const titleLower = title.toLowerCase();
     let maxConfidence = 0;
     let isRecruiter = false;
 
@@ -79,7 +136,7 @@ class ApolloService {
       }
     }
 
-    return { isRecruiter, confidence: maxConfidence };
+    return { isRecruiter, confidence: Math.round(maxConfidence * 100) };
   }
 
   async testApiConnection(): Promise<boolean> {
@@ -123,19 +180,21 @@ class ApolloService {
       // Try multiple search approaches to test Apollo API
       let searchPayload: any = {};
       
-      // First try: organization name only (no domain)
+      // First try: organization name with recruiter title filtering
       if (params.company_name) {
         searchPayload = {
           q_organization_name: params.company_name,
+          person_titles: RECRUITER_TITLES,
           page: 1,
           per_page: 10
         };
       }
       
-      // If that fails, try with domain
+      // If that fails, try with domain and title filtering
       if (companyDomain && Object.keys(searchPayload).length === 0) {
         searchPayload = {
           q_organization_domains: [companyDomain],
+          person_titles: RECRUITER_TITLES,
           page: 1,
           per_page: 10
         };
@@ -191,8 +250,8 @@ class ApolloService {
       console.log(`Apollo returned ${contacts.length} contacts`);
 
       if (!contacts || contacts.length === 0) {
-        console.log("No contacts in primary search, trying broader search...");
-        return await this.tryBroaderSearch(params.company_name);
+        console.log("No contacts found with title filtering, trying without title filters...");
+        return await this.searchWithoutTitleFilter(params);
       }
 
       // Process and rank contacts by recruiter likelihood
@@ -360,6 +419,112 @@ class ApolloService {
     }
   }
 
+  private async searchWithoutTitleFilter(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
+    try {
+      const companyDomain = this.extractDomain(params.company_name);
+      
+      // Search without title filtering
+      const searchPayload = {
+        ...(companyDomain && { q_organization_domains: [companyDomain] }),
+        q_organization_name: params.company_name,
+        page: 1,
+        per_page: 15 // Get more results since we'll filter client-side
+      };
+
+      console.log(`Searching Apollo without title filter for ${params.company_name}`);
+
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(searchPayload)
+      });
+
+      if (!response.ok) {
+        console.log(`Search without title filter failed: ${response.status}`);
+        return await this.tryBroaderSearch(params.company_name);
+      }
+
+      const data: ApolloSearchResponse = await response.json();
+      const contacts = data.people || data.contacts || [];
+      
+      if (!contacts || contacts.length === 0) {
+        console.log("No contacts found without title filter, trying broader search...");
+        return await this.tryBroaderSearch(params.company_name);
+      }
+
+      // Filter and process results to find recruiters
+      const candidateContacts = contacts
+        .filter(contact => contact.name && contact.title)
+        .map(contact => {
+          const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
+          
+          return {
+            apolloContact: contact,
+            full_name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            linkedin_url: contact.linkedin_url,
+            company_name: contact.organization_name || params.company_name,
+            is_recruiter_likely: isRecruiter,
+            recruiter_confidence: confidence
+          };
+        })
+        .filter(contact => contact.is_recruiter_likely) // Only keep likely recruiters
+        .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
+        .slice(0, 3); // Take top 3 recruiter candidates
+
+      console.log(`Found ${candidateContacts.length} recruiter candidates without title filter, enriching emails...`);
+
+      // Enrich contacts to get real email addresses
+      const enrichedContacts: ProcessedContact[] = [];
+      
+      for (const candidate of candidateContacts) {
+        try {
+          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: enrichedContact?.email || undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (error) {
+          console.error(`Enrichment failed for ${candidate.full_name}:`, error);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence
+          };
+          
+          enrichedContacts.push(processedContact);
+        }
+      }
+
+      console.log(`Search without title filter returned ${enrichedContacts.length} enriched contacts`);
+      return enrichedContacts;
+
+    } catch (error) {
+      console.error("Search without title filter failed:", error);
+      return await this.tryBroaderSearch(params.company_name);
+    }
+  }
+
   private async tryBroaderSearch(companyName: string): Promise<ProcessedContact[]> {
     try {
       const companyDomain = this.extractDomain(companyName);
@@ -370,13 +535,15 @@ class ApolloService {
         q_organization_name: companyName,
         page: 1,
         per_page: 10,
-        // Minimal job title filters for broader results
+        // Use core recruiter titles for broader search
         person_titles: [
           "recruiter", 
           "talent acquisition", 
-          "hr", 
-          "people ops",
-          "hiring"
+          "talent acquisition manager",
+          "talent acquisition specialist",
+          "recruiting manager",
+          "people operations manager",
+          "people partner"
         ]
       };
 
