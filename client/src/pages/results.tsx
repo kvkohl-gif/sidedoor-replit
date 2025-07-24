@@ -4,11 +4,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Mail, Copy, ExternalLink, ChevronDown, ChevronUp, Edit, RefreshCw } from "lucide-react";
+import { ArrowLeft, Mail, Copy, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -26,12 +25,6 @@ export default function Results() {
   // State for UI interactions
   const [showSuggestions, setShowSuggestions] = useState<{[key: number]: boolean}>({});
   const [jobSummaryExpanded, setJobSummaryExpanded] = useState(true);
-  const [emailDraft, setEmailDraft] = useState("");
-  const [linkedinMessage, setLinkedinMessage] = useState("");
-  const [isEditingEmail, setIsEditingEmail] = useState(false);
-  const [isEditingLinkedin, setIsEditingLinkedin] = useState(false);
-  const [selectedEmailTone, setSelectedEmailTone] = useState<string>("");
-  const [selectedLinkedinTone, setSelectedLinkedinTone] = useState<string>("");
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
@@ -86,20 +79,12 @@ export default function Results() {
     },
   });
 
-  // Initialize messages when submission loads
-  useEffect(() => {
-    if (submission) {
-      setEmailDraft(submission.emailDraft || "");
-      setLinkedinMessage(submission.linkedinMessage || "");
-    }
-  }, [submission]);
-
-  const copyToClipboard = async (text: string, label: string) => {
+  const copyEmail = async (email: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(email);
       toast({
         title: "Copied!",
-        description: `${label} copied to clipboard`,
+        description: "Email address copied to clipboard",
       });
     } catch (err) {
       toast({
@@ -107,89 +92,6 @@ export default function Results() {
         description: "Please copy the text manually",
         variant: "destructive",
       });
-    }
-  };
-
-  const copyEmail = async (email: string) => {
-    await copyToClipboard(email, "Email address");
-  };
-
-  // Message improvement mutations
-  const improveEmailMutation = useMutation({
-    mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
-      const response = await apiRequest("POST", "/api/improve-message", { message, tone });
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      setEmailDraft(data.improvedMessage);
-      setSelectedEmailTone("");
-      toast({
-        title: "Message improved!",
-        description: "Your email draft has been updated with AI suggestions.",
-      });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Failed to improve message",
-        description: "Please try again or edit manually.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const improveLinkedinMutation = useMutation({
-    mutationFn: async ({ message, tone }: { message: string; tone: string }) => {
-      const response = await apiRequest("POST", "/api/improve-message", { message, tone });
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      setLinkedinMessage(data.improvedMessage);
-      setSelectedLinkedinTone("");
-      toast({
-        title: "Message improved!",
-        description: "Your LinkedIn message has been updated with AI suggestions.",
-      });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Failed to improve message",
-        description: "Please try again or edit manually.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleImproveEmail = () => {
-    if (selectedEmailTone && emailDraft) {
-      improveEmailMutation.mutate({ message: emailDraft, tone: selectedEmailTone });
-    }
-  };
-
-  const handleImproveLinkedin = () => {
-    if (selectedLinkedinTone && linkedinMessage) {
-      improveLinkedinMutation.mutate({ message: linkedinMessage, tone: selectedLinkedinTone });
     }
   };
 
@@ -544,155 +446,6 @@ export default function Results() {
                 </CardContent>
               </Card>
             )}
-          </div>
-
-          {/* Messages Section - Stacked Layout */}
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900 mb-6">Generated Messages</h2>
-            
-            <div className="space-y-6">
-              {/* Email Draft */}
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900">Email Draft</h3>
-                    <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setIsEditingEmail(!isEditingEmail)}
-                      >
-                        <Edit className="w-4 h-4 mr-1" />
-                        {isEditingEmail ? "Save" : "Edit"}
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {isEditingEmail ? (
-                    <div className="space-y-4">
-                      <Textarea
-                        value={emailDraft}
-                        onChange={(e) => setEmailDraft(e.target.value)}
-                        className="min-h-[120px]"
-                        placeholder="Edit your email draft..."
-                      />
-                      <div className="flex space-x-2">
-                        <Select value={selectedEmailTone} onValueChange={setSelectedEmailTone}>
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Improve with AI" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="confident">More Confident</SelectItem>
-                            <SelectItem value="concise">More Concise</SelectItem>
-                            <SelectItem value="friendly">Friendlier</SelectItem>
-                            <SelectItem value="professional">Professional</SelectItem>
-                            <SelectItem value="personalized">Personalized</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={handleImproveEmail}
-                          disabled={!selectedEmailTone || improveEmailMutation.isPending}
-                        >
-                          <RefreshCw className={`w-4 h-4 mr-1 ${improveEmailMutation.isPending ? 'animate-spin' : ''}`} />
-                          {improveEmailMutation.isPending ? 'Improving...' : 'Improve'}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-50 p-4 rounded-lg">
-                      <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
-                        {emailDraft}
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="mt-4">
-                    <Button 
-                      onClick={() => copyToClipboard(emailDraft, "Email draft")}
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Email Draft
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* LinkedIn Message */}
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900">LinkedIn Message</h3>
-                    <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setIsEditingLinkedin(!isEditingLinkedin)}
-                      >
-                        <Edit className="w-4 h-4 mr-1" />
-                        {isEditingLinkedin ? "Save" : "Edit"}
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {isEditingLinkedin ? (
-                    <div className="space-y-4">
-                      <Textarea
-                        value={linkedinMessage}
-                        onChange={(e) => setLinkedinMessage(e.target.value)}
-                        className="min-h-[120px]"
-                        placeholder="Edit your LinkedIn message..."
-                      />
-                      <div className="flex space-x-2">
-                        <Select value={selectedLinkedinTone} onValueChange={setSelectedLinkedinTone}>
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Improve with AI" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="confident">More Confident</SelectItem>
-                            <SelectItem value="concise">More Concise</SelectItem>
-                            <SelectItem value="friendly">Friendlier</SelectItem>
-                            <SelectItem value="professional">Professional</SelectItem>
-                            <SelectItem value="personalized">Personalized</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={handleImproveLinkedin}
-                          disabled={!selectedLinkedinTone || improveLinkedinMutation.isPending}
-                        >
-                          <RefreshCw className={`w-4 h-4 mr-1 ${improveLinkedinMutation.isPending ? 'animate-spin' : ''}`} />
-                          {improveLinkedinMutation.isPending ? 'Improving...' : 'Improve'}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-50 p-4 rounded-lg">
-                      <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
-                        {linkedinMessage}
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="mt-4">
-                    <Button 
-                      onClick={() => copyToClipboard(linkedinMessage, "LinkedIn message")}
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy LinkedIn Message
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </div>
       </div>
