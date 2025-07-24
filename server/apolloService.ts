@@ -122,8 +122,7 @@ class ApolloService {
           "talent sourcer",
           "people business partner",
           "hr business partner"
-        ],
-        person_seniorities: ["individual_contributor", "manager", "director", "head", "vp", "c_suite"]
+        ]
       };
 
       console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
