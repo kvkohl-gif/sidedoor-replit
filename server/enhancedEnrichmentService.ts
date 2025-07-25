@@ -153,9 +153,9 @@ export class EnhancedEnrichmentService {
     const enrichedContacts: EnrichedContact[] = [];
     
     if (apolloContacts.length > 0) {
-      // Filter out placeholder emails before verification  
+      // Get emails for verification (Apollo enrichment should now provide real emails)
       const emailsToVerify = apolloContacts
-        .filter(contact => contact.email && !this.isPlaceholderEmail(contact.email)) // Has real email, not placeholder
+        .filter(contact => contact.email) // Has email
         .map(contact => contact.email!);
 
       console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with real emails`);
@@ -175,19 +175,17 @@ export class EnhancedEnrichmentService {
 
       // Step 3: Process and filter contacts
       for (const contact of apolloContacts) {
-        // Check for placeholder emails and handle them differently
-        const hasRealEmail = contact.email && !this.isPlaceholderEmail(contact.email);
-        const verificationResult = hasRealEmail ? verificationResults.get(contact.email!) ?? null : null;
-        const verificationStatus = verifierService.getVerificationStatus(verificationResult, hasRealEmail ? contact.email : undefined);
+        const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
+        const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${hasRealEmail ? contact.email : 'Placeholder/None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!hasRealEmail || verificationStatus.should_include}`);
+        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
         
-        // Include contacts with LinkedIn URL OR verified emails (excluding placeholder emails)
-        if (!hasRealEmail || verificationStatus.should_include || contact.linkedin_url) {
+        // Include contacts with LinkedIn URL OR verified emails 
+        if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
           const enrichedContact: EnrichedContact = {
             name: contact.full_name,
             title: contact.title,
-            email: hasRealEmail ? contact.email : undefined, // Don't include placeholder emails
+            email: contact.email,
             linkedinUrl: contact.linkedin_url,
             confidenceScore: contact.recruiter_confidence,
             source: "Apollo + AI",

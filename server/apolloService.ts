@@ -602,10 +602,11 @@ class ApolloService {
     }
 
     try {
-      console.log(`Enriching contact by profile: ${contact.name}`);
+      console.log(`Enriching contact by profile: ${contact.name} at ${contact.organization_name}`);
 
       const matchPayload: any = {
-        reveal_personal_emails: true
+        reveal_personal_emails: true,
+        reveal_phone_number: true
       };
 
       // Use multiple identifiers for better matching
@@ -615,7 +616,9 @@ class ApolloService {
       } else if (contact.name) {
         const nameParts = contact.name.split(' ');
         matchPayload.first_name = nameParts[0];
-        matchPayload.last_name = nameParts.slice(1).join(' ');
+        if (nameParts.length > 1) {
+          matchPayload.last_name = nameParts.slice(1).join(' ');
+        }
       }
 
       if (contact.organization_name) {
@@ -625,6 +628,13 @@ class ApolloService {
       if (contact.linkedin_url) {
         matchPayload.linkedin_url = contact.linkedin_url;
       }
+
+      // Add title for better matching
+      if (contact.title) {
+        matchPayload.title = contact.title;
+      }
+
+      console.log(`Enrichment payload:`, JSON.stringify(matchPayload, null, 2));
 
       const response = await fetch(`${this.baseUrl}/people/match`, {
         method: "POST",
@@ -637,13 +647,21 @@ class ApolloService {
       });
 
       if (!response.ok) {
-        console.error(`Apollo profile enrichment failed for ${contact.name}: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Apollo profile enrichment failed for ${contact.name}: ${response.status} - ${errorText}`);
         return null;
       }
 
       const data = await response.json();
-      console.log(`Enrichment result for ${contact.name}: ${data.person?.email ? 'Email found' : 'No email'}`);
-      return data.person || null;
+      
+      if (data.person && data.person.email) {
+        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${data.person.email}`);
+        return data.person;
+      } else {
+        console.log(`⚠️ Enrichment result for ${contact.name}: No email found in response`);
+        console.log(`Response structure:`, JSON.stringify(data, null, 2));
+        return data.person || null;
+      }
 
     } catch (error) {
       console.error(`Apollo profile enrichment error for ${contact.name}:`, error);
