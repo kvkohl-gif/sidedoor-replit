@@ -93,27 +93,58 @@ export class EnhancedEnrichmentService {
       console.log(`Apollo API connection test result: ${connectionTest}`);
     }
 
-    // Step 2: Search Apollo for contacts (prioritizing specific recruiter if found)
-    let apolloContacts: ProcessedContact[] = [];
+    // Step 2: Search Apollo using two-bucket approach (2 recruiters + 2 department leads)
+    let recruiterContacts: ProcessedContact[] = [];
+    let departmentLeadContacts: ProcessedContact[] = [];
+    
     if (apolloService.isConfigured()) {
       try {
-        apolloContacts = await apolloService.searchContacts({
+        // Search for recruiting contacts (2 contacts)
+        console.log("Searching for recruiting contacts...");
+        recruiterContacts = await apolloService.searchRecruitingContacts({
           company_name: request.company_name,
           job_title: request.job_title,
           location: request.location,
-          departments: request.departments,
           specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
           job_country: request.job_country,
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
-          remote_hiring_countries: request.remote_hiring_countries
+          remote_hiring_countries: request.remote_hiring_countries,
+          per_page: 2 // Get 2 recruiting contacts
         });
+        
+        // Search for department lead contacts (2 contacts)
+        console.log("Searching for department lead contacts...");
+        departmentLeadContacts = await apolloService.searchDepartmentLeads({
+          company_name: request.company_name,
+          job_title: request.job_title,
+          location: request.location,
+          department: twoBucketTargets.department_lead_contacts.primary_department,
+          titles: twoBucketTargets.department_lead_contacts.titles,
+          seniorities: twoBucketTargets.department_lead_contacts.seniorities,
+          job_country: request.job_country,
+          job_region: request.job_region,
+          company_hq_country: request.company_hq_country,
+          remote_hiring_countries: request.remote_hiring_countries,
+          per_page: 2 // Get 2 department leads
+        });
+        
+        // Combine contacts
+        const apolloContacts = [...recruiterContacts, ...departmentLeadContacts];
         searchMetadata.apollo_results = apolloContacts.length;
-        console.log(`Apollo returned ${apolloContacts.length} contacts`);
+        console.log(`Apollo returned ${recruiterContacts.length} recruiting contacts + ${departmentLeadContacts.length} department leads = ${apolloContacts.length} total`);
+        
+        // Process all contacts (keeping the original flow)
+        
       } catch (error) {
         console.error("Apollo search failed:", error);
       }
+    } else {
+      console.warn("Apollo API not configured - skipping Apollo search");
     }
+
+    // Combine all contacts for processing
+    const apolloContacts = [...recruiterContacts, ...departmentLeadContacts];
 
     // Step 3: Handle case where Apollo doesn't have specific recruiter's email
     let inferredEmails: InferredEmail[] = [];
@@ -178,7 +209,13 @@ export class EnhancedEnrichmentService {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
         const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
+        // Determine outreach bucket and department info
+        const isRecruiter = recruiterContacts.includes(contact);
+        const outreachBucket = isRecruiter ? "recruiter" : "department_lead";
+        const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
+        const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
+        
+        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
         
         // Include contacts with LinkedIn URL OR verified emails 
         if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
@@ -195,9 +232,9 @@ export class EnhancedEnrichmentService {
             recruiterConfidence: contact.recruiter_confidence,
             verificationData: verificationResult || undefined,
             verificationStatusInfo: verificationStatus,
-            outreachBucket: "recruiter", // Default to recruiter bucket for now
-            department: undefined,
-            seniority: undefined
+            outreachBucket,
+            department,
+            seniority
           };
 
           enrichedContacts.push(enrichedContact);
@@ -317,6 +354,25 @@ export class EnhancedEnrichmentService {
       department_lead_contacts: [],
       searchMetadata
     };
+  }
+
+  /**
+   * Extract seniority level from job title
+   */
+  private extractSeniority(title: string): string | undefined {
+    const titleLower = title.toLowerCase();
+    
+    if (titleLower.includes('director') || titleLower.includes('vp') || titleLower.includes('vice president')) {
+      return 'Director';
+    } else if (titleLower.includes('senior') || titleLower.includes('sr.') || titleLower.includes('lead')) {
+      return 'Senior';
+    } else if (titleLower.includes('manager') || titleLower.includes('head')) {
+      return 'Manager';
+    } else if (titleLower.includes('junior') || titleLower.includes('jr.') || titleLower.includes('associate')) {
+      return 'Junior';
+    }
+    
+    return undefined;
   }
 
   /**

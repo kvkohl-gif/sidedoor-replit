@@ -605,8 +605,8 @@ class ApolloService {
       console.log(`Enriching contact by profile: ${contact.name} at ${contact.organization_name}`);
 
       const matchPayload: any = {
-        reveal_personal_emails: true,
-        reveal_phone_number: true
+        reveal_personal_emails: true
+        // Note: reveal_phone_number requires webhook_url, so we'll skip it for now
       };
 
       // Use multiple identifiers for better matching
@@ -666,6 +666,83 @@ class ApolloService {
     } catch (error) {
       console.error(`Apollo profile enrichment error for ${contact.name}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Search specifically for recruiting contacts (2 contacts)
+   */
+  async searchRecruitingContacts(params: RecruiterSearchParams & { per_page?: number }): Promise<ProcessedContact[]> {
+    if (!this.apiKey) {
+      throw new Error("Apollo API key is required");
+    }
+
+    try {
+      const searchPayload: any = {
+        q_organization_name: params.company_name,
+        person_titles: RECRUITER_TITLES,
+        page: 1,
+        per_page: params.per_page || 2
+      };
+
+      // Add geographic filtering if available
+      if (params.job_country) {
+        searchPayload.person_locations = [params.job_country];
+      }
+
+      console.log(`Searching for recruiting contacts:`, JSON.stringify(searchPayload, null, 2));
+
+      const result = await this.executeApolloSearch(searchPayload);
+      return await this.enrichContactsList(result.contacts);
+
+    } catch (error) {
+      console.error("Apollo recruiting search error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Search specifically for department lead contacts (2 contacts)
+   */
+  async searchDepartmentLeads(params: {
+    company_name: string;
+    job_title?: string;
+    location?: string;
+    department: string;
+    titles: string[];
+    seniorities: string[];
+    job_country?: string;
+    job_region?: string;
+    company_hq_country?: string;
+    remote_hiring_countries?: string[];
+    per_page?: number;
+  }): Promise<ProcessedContact[]> {
+    if (!this.apiKey) {
+      throw new Error("Apollo API key is required");
+    }
+
+    try {
+      const searchPayload: any = {
+        q_organization_name: params.company_name,
+        person_titles: params.titles,
+        person_seniorities: params.seniorities,
+        page: 1,
+        per_page: params.per_page || 2
+      };
+
+      // Add geographic filtering if available
+      if (params.job_country) {
+        searchPayload.person_locations = [params.job_country];
+      }
+
+      console.log(`Searching for ${params.department} department leads:`, JSON.stringify(searchPayload, null, 2));
+
+      const result = await this.executeApolloSearch(searchPayload);
+      return await this.enrichContactsList(result.contacts);
+
+    } catch (error) {
+      console.error("Apollo department lead search error:", error);
+      return [];
     }
   }
 
