@@ -237,8 +237,8 @@ export default function Results() {
           )}
         </div>
 
-        {/* Standardized Job Information Display */}
-        {enhancedJobData?.hasEnhancedData && enhancedJobData.enhancedData && (
+        {/* Enhanced Job Information Display */}
+        {enhancedJobData?.hasEnhancedData && enhancedJobData.enhancedData ? (
           <JobDetailCard 
             jobData={{
               job_title: enhancedJobData.enhancedData.job_title || "Not specified",
@@ -253,10 +253,8 @@ export default function Results() {
             }}
             className="mb-8"
           />
-        )}
-
-        {/* Fallback job info if no enhanced data */}
-        {!enhancedJobData?.hasEnhancedData && (
+        ) : (
+          /* Fallback job info if no enhanced data */
           <Collapsible open={jobSummaryExpanded} onOpenChange={setJobSummaryExpanded} className="mb-8">
             <Card>
               <CardContent className="p-6">
