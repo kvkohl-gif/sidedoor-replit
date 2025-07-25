@@ -119,12 +119,17 @@ export async function extractApolloSearchParams(content: string): Promise<{
   person_titles: string[];
   person_seniorities: string[];
   organization_locations: string[];
+  job_country?: string;
+  job_region?: string;
+  company_hq_country?: string;
+  remote_hiring_countries?: string[];
+  is_remote_job?: boolean;
 }> {
-  const systemPrompt = `You are a data extraction AI that helps prepare accurate and structured inputs for an Apollo People Search query.
+  const systemPrompt = `You are a data extraction AI that helps prepare accurate and structured inputs for an Apollo People Search query with geographic filtering capabilities.
 Only extract clearly stated facts from the provided job description or URL content.
 Do not guess or infer — if a value is not explicitly mentioned, return null.
 
-Your job is to extract Apollo search parameters in this exact format:
+Your job is to extract Apollo search parameters with geographic context in this exact format:
 
 {
   "job_title": "[Exact role title from the listing]",
@@ -141,7 +146,12 @@ Your job is to extract Apollo search parameters in this exact format:
     "People Operations Manager"
   ],
   "person_seniorities": ["manager", "head", "director", "vp", "c_suite"],
-  "organization_locations": ["[If present, use HQ city or country]"]
+  "organization_locations": ["[If present, use HQ city or country]"],
+  "job_country": "[Country where the job is located]",
+  "job_region": "[State/region/province where job is located]",
+  "company_hq_country": "[Country where company is headquartered]",
+  "remote_hiring_countries": ["[Countries where company hires remotely]"],
+  "is_remote_job": true/false
 }
 
 Do not return any names or emails. Do not make assumptions.
@@ -174,7 +184,12 @@ Return the extracted data in the JSON format specified.`;
       relevant_departments: Array.isArray(result.relevant_departments) ? result.relevant_departments : [],
       person_titles: Array.isArray(result.person_titles) ? result.person_titles : [],
       person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : [],
-      organization_locations: Array.isArray(result.organization_locations) ? result.organization_locations : []
+      organization_locations: Array.isArray(result.organization_locations) ? result.organization_locations : [],
+      job_country: result.job_country || null,
+      job_region: result.job_region || null,
+      company_hq_country: result.company_hq_country || null,
+      remote_hiring_countries: Array.isArray(result.remote_hiring_countries) ? result.remote_hiring_countries : [],
+      is_remote_job: Boolean(result.is_remote_job)
     };
   } catch (error) {
     console.error("OpenAI Apollo params extraction error:", error);
@@ -186,7 +201,12 @@ Return the extracted data in the JSON format specified.`;
       relevant_departments: [],
       person_titles: [],
       person_seniorities: [],
-      organization_locations: []
+      organization_locations: [],
+      job_country: null,
+      job_region: null,
+      company_hq_country: null,
+      remote_hiring_countries: [],
+      is_remote_job: false
     };
   }
 }

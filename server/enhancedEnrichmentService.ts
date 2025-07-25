@@ -11,6 +11,10 @@ export interface ContactSearchRequest {
   location?: string;
   departments?: string[];
   job_content?: string; // New: for extracting recruiter names from job descriptions
+  job_country?: string; // New: country where job is located
+  job_region?: string; // New: state/region where job is located  
+  company_hq_country?: string; // New: company headquarters country
+  remote_hiring_countries?: string[]; // New: countries where company hires remotely
 }
 
 export interface EnrichedContact {
@@ -88,7 +92,11 @@ export class EnhancedEnrichmentService {
           job_title: request.job_title,
           location: request.location,
           departments: request.departments,
-          specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined
+          specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
+          job_country: request.job_country,
+          job_region: request.job_region,
+          company_hq_country: request.company_hq_country,
+          remote_hiring_countries: request.remote_hiring_countries
         });
         searchMetadata.apollo_results = apolloContacts.length;
         console.log(`Apollo returned ${apolloContacts.length} contacts`);

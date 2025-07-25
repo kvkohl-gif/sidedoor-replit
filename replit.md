@@ -148,3 +148,11 @@ The enrichment service is structured to easily integrate with:
 - Full UI support for verification status display with icons and detailed tooltips
 - Database schema with Apollo ID tracking and verification data storage
 - Message editing with AI-powered tone improvement (Confident, Concise, Friendly, Professional, Personalized)
+- **NEW: Geographic filtering system (Jan 2025)**: Apollo search now prioritizes recruiters by location hierarchy:
+  1. Job country (highest priority)
+  2. Job region/state if available  
+  3. Remote hiring countries (for remote jobs)
+  4. Company HQ country
+  5. English-speaking regions fallback (US, Canada, UK, Australia)
+- **NEW: Enhanced recruiter name extraction**: Extracts specific recruiter names from job descriptions and prioritizes them in Apollo search
+- **NEW: Email pattern inference**: When Apollo doesn't have verified emails, system analyzes company email patterns and generates likely email addresses with verification

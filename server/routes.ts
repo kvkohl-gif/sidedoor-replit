@@ -100,7 +100,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           job_title: apolloParams.job_title || jobTitle,
           location: apolloParams.location || jobDataExtraction?.location,
           departments: apolloParams.relevant_departments || jobDataExtraction?.likely_departments,
-          job_content: jobContent // Pass job content for recruiter name extraction
+          job_content: jobContent, // Pass job content for recruiter name extraction
+          job_country: apolloParams.job_country,
+          job_region: apolloParams.job_region,
+          company_hq_country: apolloParams.company_hq_country,
+          remote_hiring_countries: apolloParams.remote_hiring_countries
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);

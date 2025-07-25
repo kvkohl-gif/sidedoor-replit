@@ -32,6 +32,10 @@ export interface RecruiterSearchParams {
   location?: string;
   departments?: string[];
   specific_recruiter_name?: string; // New: for searching specific recruiters found in job descriptions
+  job_country?: string; // New: country where job is located
+  job_region?: string; // New: state/region where job is located  
+  company_hq_country?: string; // New: company headquarters country
+  remote_hiring_countries?: string[]; // New: countries where company hires remotely
 }
 
 export interface ProcessedContact {
@@ -263,151 +267,217 @@ class ApolloService {
 
   private async searchGeneralRecruiters(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
     try {
-      // Try a very basic search to test if Apollo API is working
-      const companyDomain = this.extractDomain(params.company_name);
+      // Implement geographic filtering strategy
+      const locationStrategies = this.buildLocationStrategies(params);
       
-      // Try multiple search approaches to test Apollo API
-      let searchPayload: any = {};
-      
-      // First try: organization name with recruiter title filtering
-      if (params.company_name) {
-        searchPayload = {
-          q_organization_name: params.company_name,
-          person_titles: RECRUITER_TITLES,
-          page: 1,
-          per_page: 10
-        };
+      for (const strategy of locationStrategies) {
+        console.log(`Trying location strategy: ${strategy.name} with location: ${strategy.location}`);
+        
+        const contacts = await this.searchWithLocationStrategy(params, strategy);
+        
+        if (contacts.length > 0) {
+          console.log(`Found ${contacts.length} contacts using strategy: ${strategy.name}`);
+          return contacts;
+        }
       }
       
-      // If that fails, try with domain and title filtering
-      if (companyDomain && Object.keys(searchPayload).length === 0) {
-        searchPayload = {
+      console.log("No contacts found with any geographic strategy, trying fallback search");
+      return await this.searchFallback(params);
+    } catch (error) {
+      console.error("Error in searchGeneralRecruiters:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Build prioritized list of location search strategies
+   */
+  private buildLocationStrategies(params: RecruiterSearchParams): Array<{name: string, location: string | null}> {
+    const strategies: Array<{name: string, location: string | null}> = [];
+    
+    // Strategy 1: Job country (highest priority)
+    if (params.job_country) {
+      strategies.push({
+        name: `Job Country (${params.job_country})`,
+        location: params.job_country
+      });
+    }
+    
+    // Strategy 2: Job region/state if available
+    if (params.job_region && params.job_country) {
+      strategies.push({
+        name: `Job Region (${params.job_region}, ${params.job_country})`,
+        location: `${params.job_region}, ${params.job_country}`
+      });
+    }
+    
+    // Strategy 3: Remote hiring countries (for remote jobs)
+    if (params.remote_hiring_countries && params.remote_hiring_countries.length > 0) {
+      for (const country of params.remote_hiring_countries) {
+        strategies.push({
+          name: `Remote Hiring (${country})`,
+          location: country
+        });
+      }
+    }
+    
+    // Strategy 4: Company HQ country
+    if (params.company_hq_country && params.company_hq_country !== params.job_country) {
+      strategies.push({
+        name: `Company HQ (${params.company_hq_country})`,
+        location: params.company_hq_country
+      });
+    }
+    
+    // Strategy 5: English-speaking regions fallback
+    const englishSpeakingRegions = ['United States', 'Canada', 'United Kingdom', 'Australia'];
+    for (const region of englishSpeakingRegions) {
+      if (!strategies.some(s => s.location === region)) {
+        strategies.push({
+          name: `English-speaking Fallback (${region})`,
+          location: region
+        });
+      }
+    }
+    
+    return strategies;
+  }
+
+  /**
+   * Search with a specific location strategy
+   */
+  private async searchWithLocationStrategy(
+    params: RecruiterSearchParams, 
+    strategy: {name: string, location: string | null}
+  ): Promise<ProcessedContact[]> {
+    try {
+      const companyDomain = this.extractDomain(params.company_name);
+      
+      // Build search payload with location filtering
+      let searchPayload: any = {
+        q_organization_name: params.company_name,
+        person_titles: RECRUITER_TITLES,
+        page: 1,
+        per_page: 10
+      };
+      
+      // Add location filtering
+      if (strategy.location) {
+        searchPayload.person_locations = [strategy.location];
+      }
+      
+      // Alternative: try with domain if organization name fails
+      if (companyDomain) {
+        const domainPayload = {
           q_organization_domains: [companyDomain],
           person_titles: RECRUITER_TITLES,
           page: 1,
           per_page: 10
         };
+        
+        if (strategy.location) {
+          (domainPayload as any)['person_locations'] = [strategy.location];
+        }
+        
+        console.log(`Trying domain search with location for ${strategy.name}:`, domainPayload);
+        
+        const domainResponse = await this.executeApolloSearch(domainPayload);
+        if (domainResponse.contacts.length > 0) {
+          return await this.enrichContactsList(domainResponse.contacts);
+        }
       }
       
-      // Fallback: try a test company we know should have data
-      if (Object.keys(searchPayload).length === 0) {
-        searchPayload = {
-          q_organization_name: "Google",
-          page: 1,
-          per_page: 5
+      console.log(`Searching Apollo for ${strategy.name}:`, JSON.stringify(searchPayload, null, 2));
+      
+      const result = await this.executeApolloSearch(searchPayload);
+      return await this.enrichContactsList(result.contacts);
+    } catch (error) {
+      console.error(`Error in location strategy ${strategy.name}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Execute Apollo search and process results
+   */
+  private async executeApolloSearch(searchPayload: any): Promise<{contacts: ProcessedContact[], searchPayload: any}> {
+    // Remove undefined fields
+    Object.keys(searchPayload).forEach(key => {
+      if ((searchPayload as any)[key] === undefined) {
+        delete (searchPayload as any)[key];
+      }
+    });
+
+    const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "x-api-key": this.apiKey
+      },
+      body: JSON.stringify(searchPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Apollo API error (${response.status}):`, errorText);
+      return { contacts: [], searchPayload };
+    }
+
+    const data: ApolloSearchResponse = await response.json();
+    const contacts = data.people || data.contacts || [];
+    
+    if (!contacts || contacts.length === 0) {
+      return { contacts: [], searchPayload };
+    }
+
+    // Process and rank contacts by recruiter likelihood
+    const processedContacts = contacts
+      .filter(contact => contact.name && contact.title)
+      .map(contact => {
+        const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
+        
+        return {
+          apolloContact: contact,
+          full_name: contact.name,
+          title: contact.title,
+          email: contact.email,
+          linkedin_url: contact.linkedin_url,
+          company_name: contact.organization_name || 'Unknown',
+          is_recruiter_likely: isRecruiter,
+          recruiter_confidence: confidence
         };
-      }
+      })
+      .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
+      .slice(0, 3); // Take top 3 candidates for enrichment
+
+    return { contacts: processedContacts, searchPayload };
+  }
+
+  /**
+   * Fallback search without location filtering
+   */
+  private async searchFallback(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
+    try {
+      const searchPayload: any = {
+        q_organization_name: params.company_name,
+        person_titles: RECRUITER_TITLES,
+        page: 1,
+        per_page: 10
+      };
+
+      console.log(`Fallback search without location filtering:`, searchPayload);
       
-      // Remove undefined fields
-      Object.keys(searchPayload).forEach(key => {
-        if ((searchPayload as any)[key] === undefined) {
-          delete (searchPayload as any)[key];
-        }
-      });
+      const result = await this.executeApolloSearch(searchPayload);
+      const candidateContacts = result.contacts;
 
-      console.log(`Searching Apollo for contacts at ${params.company_name} with payload:`, JSON.stringify(searchPayload, null, 2));
-
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          "x-api-key": this.apiKey  // Use lowercase x-api-key as per Apollo docs
-        },
-        body: JSON.stringify(searchPayload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Apollo API error (${response.status}):`, errorText);
-        console.error(`Apollo API response headers:`, Object.fromEntries(response.headers.entries()));
-        
-        // If no results, try a broader search
-        if (response.status === 200 || response.status === 404) {
-          console.log("Trying broader Apollo search...");
-          return await this.tryBroaderSearch(params.company_name);
-        }
-        
-        throw new Error(`Apollo API request failed: ${response.status} ${response.statusText}`);
+      if (candidateContacts.length === 0) {
+        console.log("No contacts found in fallback search");
+        return [];
       }
 
-      const data: ApolloSearchResponse = await response.json();
-      console.log(`Apollo API response:`, JSON.stringify(data, null, 2));
-      
-      // Apollo returns data in 'people' array, not 'contacts'
-      const contacts = data.people || data.contacts || [];
-      console.log(`Apollo returned ${contacts.length} contacts`);
-
-      if (!contacts || contacts.length === 0) {
-        console.log("No contacts found with title filtering, trying without title filters...");
-        return await this.searchWithoutTitleFilter(params);
-      }
-
-      // Process and rank contacts by recruiter likelihood
-      const candidateContacts = contacts
-        .filter(contact => contact.name && contact.title)
-        .map(contact => {
-          const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
-          
-          return {
-            apolloContact: contact,
-            full_name: contact.name,
-            title: contact.title,
-            email: contact.email,
-            linkedin_url: contact.linkedin_url,
-            company_name: contact.organization_name || params.company_name,
-            is_recruiter_likely: isRecruiter,
-            recruiter_confidence: confidence
-          };
-        })
-        .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
-        .slice(0, 3); // Take top 3 candidates for enrichment (testing mode)
-
-      console.log(`Found ${candidateContacts.length} candidate contacts, enriching emails...`);
-
-      // Step 2: Enrich contacts to get real email addresses
-      const enrichedContacts: ProcessedContact[] = [];
-      
-      for (const candidate of candidateContacts) {
-        try {
-          // Try to enrich the contact to get real email
-          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
-          
-          const processedContact: ProcessedContact = {
-            full_name: candidate.full_name,
-            title: candidate.title,
-            email: enrichedContact?.email || undefined,
-            linkedin_url: candidate.linkedin_url,
-            company_name: candidate.company_name,
-            is_recruiter_likely: candidate.is_recruiter_likely,
-            recruiter_confidence: candidate.recruiter_confidence
-          };
-          
-          enrichedContacts.push(processedContact);
-          
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-        } catch (error) {
-          console.error(`Enrichment failed for ${candidate.full_name}:`, error);
-          
-          // Include contact without email if enrichment fails
-          const processedContact: ProcessedContact = {
-            full_name: candidate.full_name,
-            title: candidate.title,
-            email: undefined,
-            linkedin_url: candidate.linkedin_url,
-            company_name: candidate.company_name,
-            is_recruiter_likely: candidate.is_recruiter_likely,
-            recruiter_confidence: candidate.recruiter_confidence
-          };
-          
-          enrichedContacts.push(processedContact);
-        }
-      }
-
-      console.log(`Processed ${enrichedContacts.length} recruiter contacts with enrichment`);
-      return enrichedContacts;
+      console.log(`Found ${candidateContacts.length} candidate contacts in fallback, enriching emails...`);
+      return await this.enrichContactsList(candidateContacts);
 
     } catch (error) {
       console.error("Apollo search error:", error);
@@ -416,6 +486,63 @@ class ApolloService {
       }
       throw new Error("Failed to search Apollo contacts");
     }
+  }
+
+  /**
+   * Enrich a list of processed contacts with email information
+   */
+  private async enrichContactsList(contacts: Array<{
+    apolloContact: ApolloContact;
+    full_name: string;
+    title: string;
+    email: string | undefined;
+    linkedin_url: string | undefined;
+    company_name: string;
+    is_recruiter_likely: boolean;
+    recruiter_confidence: number;
+  }>): Promise<ProcessedContact[]> {
+    const enrichedContacts: ProcessedContact[] = [];
+    
+    for (const candidate of contacts) {
+      try {
+        // Try to enrich the contact to get real email
+        const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
+        
+        const processedContact: ProcessedContact = {
+          full_name: candidate.full_name,
+          title: candidate.title,
+          email: enrichedContact?.email || undefined,
+          linkedin_url: candidate.linkedin_url,
+          company_name: candidate.company_name,
+          is_recruiter_likely: candidate.is_recruiter_likely,
+          recruiter_confidence: candidate.recruiter_confidence
+        };
+        
+        enrichedContacts.push(processedContact);
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.error(`Enrichment failed for ${candidate.full_name}:`, error);
+        
+        // Include contact without email if enrichment fails
+        const processedContact: ProcessedContact = {
+          full_name: candidate.full_name,
+          title: candidate.title,
+          email: undefined,
+          linkedin_url: candidate.linkedin_url,
+          company_name: candidate.company_name,
+          is_recruiter_likely: candidate.is_recruiter_likely,
+          recruiter_confidence: candidate.recruiter_confidence
+        };
+        
+        enrichedContacts.push(processedContact);
+      }
+    }
+
+    console.log(`Processed ${enrichedContacts.length} recruiter contacts with enrichment`);
+    return enrichedContacts;
   }
 
   async enrichContact(email: string): Promise<ApolloContact | null> {
