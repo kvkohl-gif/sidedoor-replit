@@ -34,6 +34,79 @@ export interface RecruiterExtraction {
   linkedin_message: string;
 }
 
+export interface RecruiterNameExtraction {
+  recruiter_name: string | null;
+  title: string | null;
+  source_type: "job_description" | "job_url";
+  company_name: string | null;
+  contact_info?: {
+    email?: string;
+    phone?: string;
+    linkedin?: string;
+  };
+}
+
+/**
+ * Extract recruiter name explicitly mentioned in job description
+ */
+export async function extractRecruiterName(content: string): Promise<RecruiterNameExtraction> {
+  const systemPrompt = `You are a job contact extractor. From a job description or webpage HTML, extract the name of any recruiter or hiring contact explicitly listed. 
+
+Look for phrases like:
+- "Contact [Name]"
+- "Apply to [Name]" 
+- "Questions? Reach out to [Name]"
+- "Recruiter: [Name]"
+- "Hiring Manager: [Name]"
+- "For more information, contact [Name]"
+
+Your output should be in this exact JSON format:
+{
+  "recruiter_name": "Christopher Graham",
+  "title": "Lead Recruiter", 
+  "source_type": "job_description",
+  "company_name": "SprintFWD",
+  "contact_info": {
+    "email": "chris@sprintfwd.com",
+    "phone": "+1-555-123-4567",
+    "linkedin": "https://linkedin.com/in/christophergraham"
+  }
+}
+
+If no recruiter name is explicitly mentioned, return:
+{
+  "recruiter_name": null,
+  "title": null,
+  "source_type": "job_description", 
+  "company_name": null
+}
+
+Only extract names that are clearly identified as recruiters, hiring managers, or contact persons. Do not guess or infer names from general company information.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: content }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+
+    const extraction = JSON.parse(response.choices[0].message.content || "{}");
+    return extraction as RecruiterNameExtraction;
+  } catch (error) {
+    console.error("Error extracting recruiter name:", error);
+    return {
+      recruiter_name: null,
+      title: null,
+      source_type: "job_description",
+      company_name: null
+    };
+  }
+}
+
 /**
  * Extract Apollo search parameters from job content
  */

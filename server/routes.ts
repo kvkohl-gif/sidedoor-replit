@@ -99,7 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           company_name: apolloParams.company_name || companyName,
           job_title: apolloParams.job_title || jobTitle,
           location: apolloParams.location || jobDataExtraction?.location,
-          departments: apolloParams.relevant_departments || jobDataExtraction?.likely_departments
+          departments: apolloParams.relevant_departments || jobDataExtraction?.likely_departments,
+          job_content: jobContent // Pass job content for recruiter name extraction
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);

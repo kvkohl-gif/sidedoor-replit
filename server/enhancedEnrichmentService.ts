@@ -1,6 +1,8 @@
 import { apolloService, type ProcessedContact } from "./apolloService";
 import { verifierService, type EmailVerificationResult, type VerificationStatus } from "./verifierService";
 import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult } from "./emailPatternService";
+import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
+import { extractRecruiterName, type RecruiterNameExtraction } from "./openai";
 import type { InsertRecruiterContact } from "@shared/schema";
 
 export interface ContactSearchRequest {
@@ -8,6 +10,7 @@ export interface ContactSearchRequest {
   job_title?: string;
   location?: string;
   departments?: string[];
+  job_content?: string; // New: for extracting recruiter names from job descriptions
 }
 
 export interface EnrichedContact {
@@ -24,6 +27,8 @@ export interface EnrichedContact {
   recruiterConfidence: number;
   verificationData?: EmailVerificationResult;
   verificationStatusInfo?: VerificationStatus;
+  isPrimaryRecruiter?: boolean; // New: indicates if this is the recruiter mentioned in job description
+  inferredEmail?: InferredEmail; // New: for inferred emails using pattern analysis
 }
 
 export interface ContactSearchResult {
@@ -56,6 +61,17 @@ export class EnhancedEnrichmentService {
       verified_emails: 0
     };
 
+    // Step 1: Extract recruiter name mentioned in job description
+    let recruiterFromJobDescription: RecruiterNameExtraction | null = null;
+    if (request.job_content) {
+      console.log("Extracting recruiter name from job description...");
+      recruiterFromJobDescription = await extractRecruiterName(request.job_content);
+      
+      if (recruiterFromJobDescription.recruiter_name) {
+        console.log(`Found recruiter in job description: ${recruiterFromJobDescription.recruiter_name} (${recruiterFromJobDescription.title})`);
+      }
+    }
+
     // Step 1: Test Apollo API connection first
     if (apolloService.isConfigured()) {
       console.log("Testing Apollo API connection...");
@@ -63,7 +79,7 @@ export class EnhancedEnrichmentService {
       console.log(`Apollo API connection test result: ${connectionTest}`);
     }
 
-    // Step 2: Search Apollo for contacts
+    // Step 2: Search Apollo for contacts (prioritizing specific recruiter if found)
     let apolloContacts: ProcessedContact[] = [];
     if (apolloService.isConfigured()) {
       try {
@@ -71,12 +87,45 @@ export class EnhancedEnrichmentService {
           company_name: request.company_name,
           job_title: request.job_title,
           location: request.location,
-          departments: request.departments
+          departments: request.departments,
+          specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined
         });
         searchMetadata.apollo_results = apolloContacts.length;
         console.log(`Apollo returned ${apolloContacts.length} contacts`);
       } catch (error) {
         console.error("Apollo search failed:", error);
+      }
+    }
+
+    // Step 3: Handle case where Apollo doesn't have specific recruiter's email
+    let inferredEmails: InferredEmail[] = [];
+    if (recruiterFromJobDescription?.recruiter_name && apolloContacts.length > 0) {
+      // Check if any Apollo contact matches the recruiter from job description
+      const primaryRecruiterContact = apolloContacts.find(contact => 
+        contact.full_name.toLowerCase().includes(recruiterFromJobDescription!.recruiter_name!.toLowerCase())
+      );
+
+      // If we found the recruiter but they don't have a verified email, try to infer it
+      if (primaryRecruiterContact && !primaryRecruiterContact.email) {
+        console.log(`Primary recruiter found but no email - attempting pattern inference for ${primaryRecruiterContact.full_name}`);
+        
+        // Analyze email patterns from other contacts at the company
+        const companyEmails = apolloContacts
+          .filter(c => c.email && c.company_name === request.company_name)
+          .map(c => c.email!);
+        
+        const companyDomain = this.extractCompanyDomain(request.company_name, companyEmails);
+        
+        if (companyDomain) {
+          const emailPatterns = await emailPatternInference.analyzeEmailPatterns(companyEmails, companyDomain);
+          inferredEmails = await emailPatternInference.inferRecruiterEmail(
+            primaryRecruiterContact.full_name,
+            companyDomain,
+            emailPatterns
+          );
+          
+          console.log(`Inferred ${inferredEmails.length} possible emails for ${primaryRecruiterContact.full_name}`);
+        }
       }
     } else {
       console.warn("Apollo API not configured - skipping Apollo search");
@@ -253,6 +302,38 @@ export class EnhancedEnrichmentService {
       neverbounce_configured: verifierService.isConfigured(),
       services_available: apolloService.isConfigured() || verifierService.isConfigured()
     };
+  }
+
+  /**
+   * Extract company domain from company name or existing emails
+   */
+  private extractCompanyDomain(companyName: string, existingEmails: string[]): string | null {
+    // First try to extract from existing emails
+    if (existingEmails.length > 0) {
+      const domainCounts: { [key: string]: number } = {};
+      
+      for (const email of existingEmails) {
+        const domain = email.split('@')[1];
+        if (domain) {
+          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        }
+      }
+      
+      // Return most common domain
+      const sortedDomains = Object.entries(domainCounts)
+        .sort(([,a], [,b]) => b - a);
+      
+      if (sortedDomains.length > 0) {
+        return sortedDomains[0][0];
+      }
+    }
+    
+    // Fallback: try to guess domain from company name
+    const cleanName = companyName.toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[^a-z0-9]/g, '');
+    
+    return `${cleanName}.com`;
   }
 }
 

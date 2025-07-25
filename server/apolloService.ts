@@ -31,6 +31,7 @@ export interface RecruiterSearchParams {
   job_title?: string;
   location?: string;
   departments?: string[];
+  specific_recruiter_name?: string; // New: for searching specific recruiters found in job descriptions
 }
 
 export interface ProcessedContact {
@@ -168,11 +169,99 @@ class ApolloService {
     }
   }
 
+  /**
+   * Search for a specific recruiter by name at a company
+   */
+  async searchSpecificRecruiter(params: {
+    company_name: string;
+    recruiter_name: string;
+  }): Promise<ProcessedContact[]> {
+    if (!this.apiKey) {
+      return [];
+    }
+
+    try {
+      const nameParts = params.recruiter_name.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+
+      const searchPayload: any = {
+        q_organization_name: params.company_name,
+        page: 1,
+        per_page: 5
+      };
+
+      // Add name filters
+      if (firstName) searchPayload.person_first_names = [firstName];
+      if (lastName) searchPayload.person_last_names = [lastName];
+
+      console.log(`Searching Apollo for specific recruiter: ${params.recruiter_name} at ${params.company_name}`);
+
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(searchPayload)
+      });
+
+      if (!response.ok) {
+        console.error(`Apollo API error searching for specific recruiter: ${response.status}`);
+        return [];
+      }
+
+      const data: ApolloSearchResponse = await response.json();
+      const contacts = data.people || data.contacts || [];
+
+      return contacts
+        .filter(contact => contact.name && contact.title)
+        .map(contact => ({
+          full_name: contact.name,
+          title: contact.title,
+          email: contact.email,
+          linkedin_url: contact.linkedin_url,
+          company_name: contact.organization_name || params.company_name,
+          is_recruiter_likely: true, // Assume true since found in job description
+          recruiter_confidence: 100 // High confidence since explicitly mentioned
+        }));
+    } catch (error) {
+      console.error("Error searching for specific recruiter:", error);
+      return [];
+    }
+  }
+
   async searchContacts(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required. Please add APOLLO_API_KEY to your environment variables.");
     }
 
+    try {
+      // First, if we have a specific recruiter name, search for them directly
+      if (params.specific_recruiter_name) {
+        console.log(`Prioritizing specific recruiter: ${params.specific_recruiter_name}`);
+        const specificContacts = await this.searchSpecificRecruiter({
+          company_name: params.company_name,
+          recruiter_name: params.specific_recruiter_name
+        });
+        
+        if (specificContacts.length > 0) {
+          console.log(`Found ${specificContacts.length} matches for specific recruiter`);
+          // Still search for additional contacts, but prioritize the specific one
+          const generalContacts = await this.searchGeneralRecruiters(params);
+          return [...specificContacts, ...generalContacts];
+        }
+      }
+
+      return await this.searchGeneralRecruiters(params);
+    } catch (error) {
+      console.error("Error in searchContacts:", error);
+      return [];
+    }
+  }
+
+  private async searchGeneralRecruiters(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
     try {
       // Try a very basic search to test if Apollo API is working
       const companyDomain = this.extractDomain(params.company_name);
