@@ -305,10 +305,18 @@ export default function Results() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left side: Contacts */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Recruiter contacts */}
             {submission.recruiters && submission.recruiters.length > 0 ? (
-              <div className="space-y-4">
-                {submission.recruiters.map((recruiter) => {
+              <>
+                {/* Recruiting Contacts Bucket */}
+                {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-xl font-bold text-slate-900">🎯 Recruiting Contacts</h2>
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).length} contacts
+                      </Badge>
+                    </div>
+                    {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).map((recruiter) => {
                   const confidenceBadge = getConfidenceBadge(recruiter.confidenceScore);
                   const verificationBadge = getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified);
                   return (
@@ -412,7 +420,112 @@ export default function Results() {
                     </TooltipProvider>
                   );
                 })}
-              </div>
+                  </div>
+                )}
+
+                {/* Department Lead Contacts Bucket */}
+                {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-xl font-bold text-slate-900">🏢 Department Lead Contacts</h2>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").length} contacts
+                      </Badge>
+                    </div>
+                    {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").map((recruiter) => {
+                      const confidenceBadge = getConfidenceBadge(recruiter.confidenceScore);
+                      const verificationBadge = getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified);
+                      return (
+                        <TooltipProvider key={recruiter.id}>
+                          <Card>
+                            <CardContent className="p-6">
+                              <div className="flex justify-between items-start mb-4">
+                                <div>
+                                  <h3 className="text-lg font-semibold text-slate-900">
+                                    {recruiter.name || "Unknown Contact"}
+                                  </h3>
+                                  <p className="text-slate-600">
+                                    {recruiter.title || "Unknown Title"}
+                                  </p>
+                                  {(recruiter as any).department && (
+                                    <p className="text-sm text-slate-500 mt-1">
+                                      📂 {(recruiter as any).department} Department
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right space-y-2">
+                                  <div>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge 
+                                          variant={verificationBadge.variant}
+                                          className={verificationBadge.className}
+                                        >
+                                          {verificationBadge.text}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-sm">
+                                          {verificationBadge.tooltip}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                {recruiter.email && (
+                                  <div className="flex items-center space-x-3">
+                                    <Mail className="w-5 h-5 text-slate-400" />
+                                    <span className="text-slate-700">{recruiter.email}</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyEmail(recruiter.email!)}
+                                      className="text-primary hover:text-blue-700 p-1"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {!recruiter.email && recruiter.linkedinUrl && (
+                                  <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                                    No verified email found. Use LinkedIn to connect.
+                                  </div>
+                                )}
+
+                                {recruiter.linkedinUrl && (
+                                  <div className="flex items-center space-x-3">
+                                    <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                    </svg>
+                                    <a
+                                      href={recruiter.linkedinUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:text-blue-700 flex items-center"
+                                    >
+                                      LinkedIn Profile
+                                      <ExternalLink className="w-4 h-4 ml-1" />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Per-Contact Message Generation */}
+                              <div className="mt-4 pt-4 border-t">
+                                <RecruiterMessageCard recruiter={recruiter} />
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </TooltipProvider>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             ) : (
               <Card>
                 <CardContent className="p-6 text-center">
