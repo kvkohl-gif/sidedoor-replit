@@ -173,8 +173,6 @@ export class EnhancedEnrichmentService {
           console.log(`Inferred ${inferredEmails.length} possible emails for ${primaryRecruiterContact.full_name}`);
         }
       }
-    } else {
-      console.warn("Apollo API not configured - skipping Apollo search");
     }
 
     // Step 2: Verify emails with NeverBounce (only real emails, not placeholders)
