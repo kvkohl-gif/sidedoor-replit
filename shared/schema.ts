@@ -74,6 +74,10 @@ export const recruiterContacts = pgTable("recruiter_contacts", {
   contactStatus: varchar("contact_status").default("not_contacted"), // not_contacted, email_sent, awaiting_reply, follow_up_needed, rejected, interview_scheduled
   lastContactedAt: timestamp("last_contacted_at"), // When this specific contact was last reached out to
   notes: text("notes"), // Contact-specific notes
+  // New fields for two-bucket outreach system
+  outreachBucket: varchar("outreach_bucket").default("recruiter"), // "recruiter" or "department_lead"
+  department: varchar("department"), // Department for department_lead bucket
+  seniority: varchar("seniority"), // Seniority level for department_lead bucket
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

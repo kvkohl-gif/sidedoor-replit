@@ -2,7 +2,7 @@ import { apolloService, type ProcessedContact } from "./apolloService";
 import { verifierService, type EmailVerificationResult, type VerificationStatus } from "./verifierService";
 import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult } from "./emailPatternService";
 import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
-import { extractRecruiterName, type RecruiterNameExtraction } from "./openai";
+import { extractRecruiterName, generateTwoBucketTargets, type RecruiterNameExtraction, type TwoBucketTargets } from "./openai";
 import type { InsertRecruiterContact } from "@shared/schema";
 
 export interface ContactSearchRequest {
@@ -33,10 +33,15 @@ export interface EnrichedContact {
   verificationStatusInfo?: VerificationStatus;
   isPrimaryRecruiter?: boolean; // New: indicates if this is the recruiter mentioned in job description
   inferredEmail?: InferredEmail; // New: for inferred emails using pattern analysis
+  outreachBucket: "recruiter" | "department_lead"; // New: two-bucket classification
+  department?: string; // New: department for department_lead bucket
+  seniority?: string; // New: seniority level for department_lead bucket
 }
 
 export interface ContactSearchResult {
   contacts: EnrichedContact[];
+  recruiter_contacts: EnrichedContact[];
+  department_lead_contacts: EnrichedContact[];
   searchMetadata: {
     query: string;
     results_found: number;
@@ -44,6 +49,7 @@ export interface ContactSearchResult {
     neverbounce_configured: boolean;
     apollo_results: number;
     verified_emails: number;
+    two_bucket_strategy: TwoBucketTargets;
   };
   emailPatterns?: PatternAnalysisResult;
 }
@@ -51,18 +57,22 @@ export interface ContactSearchResult {
 export class EnhancedEnrichmentService {
   
   /**
-   * Main function to search and enrich recruiter contacts using Apollo + NeverBounce
+   * Main function to search and enrich contacts using two-bucket approach
    */
   async searchAndEnrichContacts(request: ContactSearchRequest): Promise<ContactSearchResult> {
     console.log(`Starting enhanced contact search for ${request.company_name}`);
     
+    // Generate two-bucket targets based on job title
+    const twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
+    
     const searchMetadata = {
-      query: `${request.company_name} recruiters`,
+      query: `${request.company_name} recruiters and department leads`,
       results_found: 0,
       apollo_configured: apolloService.isConfigured(),
       neverbounce_configured: verifierService.isConfigured(),
       apollo_results: 0,
-      verified_emails: 0
+      verified_emails: 0,
+      two_bucket_strategy: twoBucketTargets
     };
 
     // Step 1: Extract recruiter name mentioned in job description
@@ -184,7 +194,10 @@ export class EnhancedEnrichmentService {
             sourcePlatform: "apollo",
             recruiterConfidence: contact.recruiter_confidence,
             verificationData: verificationResult || undefined,
-            verificationStatusInfo: verificationStatus
+            verificationStatusInfo: verificationStatus,
+            outreachBucket: "recruiter", // Default to recruiter bucket for now
+            department: undefined,
+            seniority: undefined
           };
 
           enrichedContacts.push(enrichedContact);
@@ -236,8 +249,14 @@ export class EnhancedEnrichmentService {
         }
       }
       
+      // Split contacts into two buckets
+      const recruiterContacts = topContacts.filter(c => c.outreachBucket === "recruiter");
+      const departmentLeadContacts = topContacts.filter(c => c.outreachBucket === "department_lead");
+      
       return {
         contacts: topContacts,
+        recruiter_contacts: recruiterContacts,
+        department_lead_contacts: departmentLeadContacts,
         searchMetadata,
         emailPatterns
       };
@@ -247,6 +266,8 @@ export class EnhancedEnrichmentService {
     console.log("No contacts found from Apollo search");
     return {
       contacts: [],
+      recruiter_contacts: [],
+      department_lead_contacts: [],
       searchMetadata
     };
   }
@@ -297,8 +318,60 @@ export class EnhancedEnrichmentService {
         verificationData: contact.verificationData ? JSON.stringify(contact.verificationData) : null,
         suggestedEmail: suggestion?.suggested_email || null,
         emailSuggestionReasoning: suggestion?.confidence_reasoning || null,
+        outreachBucket: contact.outreachBucket,
+        department: contact.department,
+        seniority: contact.seniority,
       };
     });
+  }
+
+  /**
+   * Extract seniority level from job title
+   */
+  private extractSeniority(title: string): string {
+    const titleLower = title.toLowerCase();
+    
+    if (titleLower.includes('ceo') || titleLower.includes('cto') || titleLower.includes('cfo') || titleLower.includes('cmo') || titleLower.includes('chief')) {
+      return 'c_suite';
+    }
+    if (titleLower.includes('vp') || titleLower.includes('vice president')) {
+      return 'vp';
+    }
+    if (titleLower.includes('head') || titleLower.includes('director')) {
+      return 'director';
+    }
+    if (titleLower.includes('manager') || titleLower.includes('lead')) {
+      return 'manager';
+    }
+    
+    return 'individual_contributor';
+  }
+
+  /**
+   * Extract company domain from company name or existing emails
+   */
+  private extractCompanyDomain(companyName: string, existingEmails: string[]): string | null {
+    // Try to get domain from existing emails first
+    if (existingEmails.length > 0) {
+      const emailDomains = existingEmails.map(email => email.split('@')[1]).filter(Boolean);
+      if (emailDomains.length > 0) {
+        // Return the most common domain
+        const domainCounts: Record<string, number> = {};
+        emailDomains.forEach(domain => {
+          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        });
+        
+        return Object.entries(domainCounts)
+          .sort(([, a], [, b]) => b - a)[0][0];
+      }
+    }
+    
+    // Fallback: guess domain from company name
+    const cleanName = companyName.toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[^a-z0-9]/g, '');
+    
+    return `${cleanName}.com`;
   }
 
   /**
@@ -312,37 +385,7 @@ export class EnhancedEnrichmentService {
     };
   }
 
-  /**
-   * Extract company domain from company name or existing emails
-   */
-  private extractCompanyDomain(companyName: string, existingEmails: string[]): string | null {
-    // First try to extract from existing emails
-    if (existingEmails.length > 0) {
-      const domainCounts: { [key: string]: number } = {};
-      
-      for (const email of existingEmails) {
-        const domain = email.split('@')[1];
-        if (domain) {
-          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
-        }
-      }
-      
-      // Return most common domain
-      const sortedDomains = Object.entries(domainCounts)
-        .sort(([,a], [,b]) => b - a);
-      
-      if (sortedDomains.length > 0) {
-        return sortedDomains[0][0];
-      }
-    }
-    
-    // Fallback: try to guess domain from company name
-    const cleanName = companyName.toLowerCase()
-      .replace(/\s+/g, '')
-      .replace(/[^a-z0-9]/g, '');
-    
-    return `${cleanName}.com`;
-  }
+
 }
 
 export const enhancedEnrichmentService = new EnhancedEnrichmentService();

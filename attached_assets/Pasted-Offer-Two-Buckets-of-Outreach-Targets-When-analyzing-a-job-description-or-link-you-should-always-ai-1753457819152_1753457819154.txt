@@ -1,0 +1,70 @@
+Offer Two Buckets of Outreach Targets
+When analyzing a job description or link, you should always aim to generate two sets of contacts:
+
+1. Recruiter Outreach
+Based on exact titles like:
+
+Recruiter, Technical Recruiter, Talent Acquisition, People Ops
+
+These are your default/priority for outreach if present in the JD.
+
+Use the parsed name from the job post if available — as you mentioned earlier — and validate via Apollo (or suggest based on email format).
+
+2. Department Lead Outreach
+Based on the actual job title, infer one primary department to query in Apollo (no guesses or hallucinations).
+
+From there, source decision-makers like:
+
+“Head of X”, “VP of X”, “Director of X”, or senior ICs
+
+🧠 How to Choose the Right Department (Programmatically)
+Here’s a simple deterministic logic tree you can use:
+
+Job Title Includes…	Department to Use in Apollo
+“Product Manager”	Product Management
+“Software Engineer”	Engineering or Technology
+“UX/UI Designer”, “Design”	Design
+“Marketing Manager”	Marketing
+“Customer Support”, “CX”	Customer Experience
+“Operations”, “Chief of Staff”	Operations
+“Data Scientist”, “ML”	Data
+“Sales”, “Account Executive”	Sales
+“HR”, “People”	Human Resources
+“Finance”, “Controller”	Finance
+
+Only pass 1 exact match to Apollo. You can still list 2–3 likely departments in the UI, but your API query should be strict and aligned.
+
+🧩 Example UX: Output Structure
+Recommended Contacts
+
+🎯 Recruiter Contact:
+Christopher Graham — Lead Recruiter
+[Verified Email] [Generate Email]
+
+👤 Product Department Lead:
+Sarah Patel — Director of Product Management
+[Suggested Email] [Generate Email]
+
+This creates credibility + optionality. Users can choose to reach out to both depending on what they’re optimizing for (recruiter pipeline vs decision-maker influence).
+
+⚙️ Implementation Flow
+Parse Job Title
+
+Use OpenAI or regex to extract the title from the JD or LinkedIn snippet.
+
+Map to Department
+
+Match title to department using lookup table like above (stored in code or DB).
+
+Apollo Query (x2)
+
+Recruiter: pull based on strict title filters.
+
+Department Lead: pull based on exact department match.
+
+Display Both on UI
+
+Show them in separate sections with distinct icons or headers.
+
+Option to generate custom email for each.
+

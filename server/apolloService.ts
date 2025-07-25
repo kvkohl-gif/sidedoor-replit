@@ -38,6 +38,17 @@ export interface RecruiterSearchParams {
   remote_hiring_countries?: string[]; // New: countries where company hires remotely
 }
 
+export interface DepartmentLeadSearchParams {
+  company_name: string;
+  department: string;
+  titles: string[];
+  seniorities: string[];
+  job_country?: string;
+  job_region?: string;
+  company_hq_country?: string;
+  remote_hiring_countries?: string[];
+}
+
 export interface ProcessedContact {
   full_name: string;
   title: string;
@@ -46,6 +57,8 @@ export interface ProcessedContact {
   company_name: string;
   is_recruiter_likely: boolean;
   recruiter_confidence: number;
+  apolloId?: string;
+  apolloContact?: ApolloContact; // Optional for enrichment compatibility
 }
 
 // Predefined recruiter titles for Apollo filtering
@@ -445,7 +458,8 @@ class ApolloService {
           linkedin_url: contact.linkedin_url,
           company_name: contact.organization_name || 'Unknown',
           is_recruiter_likely: isRecruiter,
-          recruiter_confidence: confidence
+          recruiter_confidence: confidence,
+          apolloId: contact.id
         };
       })
       .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
@@ -515,7 +529,8 @@ class ApolloService {
           linkedin_url: candidate.linkedin_url,
           company_name: candidate.company_name,
           is_recruiter_likely: candidate.is_recruiter_likely,
-          recruiter_confidence: candidate.recruiter_confidence
+          recruiter_confidence: candidate.recruiter_confidence,
+          apolloId: candidate.apolloContact.id
         };
         
         enrichedContacts.push(processedContact);
@@ -534,7 +549,8 @@ class ApolloService {
           linkedin_url: candidate.linkedin_url,
           company_name: candidate.company_name,
           is_recruiter_likely: candidate.is_recruiter_likely,
-          recruiter_confidence: candidate.recruiter_confidence
+          recruiter_confidence: candidate.recruiter_confidence,
+          apolloId: candidate.apolloContact.id
         };
         
         enrichedContacts.push(processedContact);
@@ -725,7 +741,8 @@ class ApolloService {
             linkedin_url: candidate.linkedin_url,
             company_name: candidate.company_name,
             is_recruiter_likely: candidate.is_recruiter_likely,
-            recruiter_confidence: candidate.recruiter_confidence
+            recruiter_confidence: candidate.recruiter_confidence,
+            apolloId: candidate.apolloContact.id
           };
           
           enrichedContacts.push(processedContact);
@@ -896,6 +913,166 @@ class ApolloService {
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  /**
+   * Search for department lead contacts using two-bucket approach
+   */
+  async searchDepartmentLeads(params: DepartmentLeadSearchParams): Promise<ProcessedContact[]> {
+    if (!this.apiKey) {
+      console.log("Apollo API key not configured - skipping department lead search");
+      return [];
+    }
+
+    try {
+      console.log(`Searching for ${params.department} department leads at ${params.company_name}`);
+      
+      // Create search payload for department leads
+      const searchPayload: any = {
+        q_organization_name: params.company_name,
+        person_titles: params.titles,
+        person_seniorities: params.seniorities,
+        page: 1,
+        per_page: 10
+      };
+
+      // Add location filtering with priority hierarchy
+      const locationStrategy = this.createLocationStrategy({
+        company_name: params.company_name,
+        job_country: params.job_country,
+        job_region: params.job_region,
+        company_hq_country: params.company_hq_country,
+        remote_hiring_countries: params.remote_hiring_countries
+      });
+
+      if (locationStrategy.length > 0) {
+        const strategy = locationStrategy[0]; // Use highest priority location
+        if (strategy.location) {
+          searchPayload.person_locations = [strategy.location];
+        }
+      }
+
+      console.log(`Department lead search payload:`, searchPayload);
+
+      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(searchPayload)
+      });
+
+      if (!response.ok) {
+        console.error(`Apollo department lead search failed: ${response.status}`);
+        return [];
+      }
+
+      const data: ApolloSearchResponse = await response.json();
+      const contacts = data.people || data.contacts || [];
+
+      if (!contacts || contacts.length === 0) {
+        console.log("No department lead contacts found");
+        return [];
+      }
+
+      // Process contacts and calculate confidence scores
+      const processedContacts = contacts
+        .filter(contact => contact.name && contact.title)
+        .map(contact => {
+          const confidenceScore = this.calculateDepartmentLeadConfidence(contact.title, params.department);
+          
+          return {
+            full_name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            linkedin_url: contact.linkedin_url,
+            company_name: contact.organization_name || params.company_name,
+            is_recruiter_likely: false, // These are department leads, not recruiters
+            recruiter_confidence: 0.0,
+            apolloId: contact.id,
+            apolloContact: contact
+          };
+        })
+        .sort((a, b) => this.calculateDepartmentLeadConfidence(b.title, params.department) - 
+                        this.calculateDepartmentLeadConfidence(a.title, params.department))
+        .slice(0, 3); // Take top 3 department leads
+
+      console.log(`Found ${processedContacts.length} department lead contacts, enriching emails...`);
+
+      // Enrich contacts to get real email addresses
+      const enrichedContacts: ProcessedContact[] = [];
+      
+      for (const candidate of processedContacts) {
+        try {
+          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact!);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: enrichedContact?.email || undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence,
+            apolloId: candidate.apolloId
+          };
+          
+          enrichedContacts.push(processedContact);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (error) {
+          console.error(`Enrichment failed for ${candidate.full_name}:`, error);
+          
+          const processedContact: ProcessedContact = {
+            full_name: candidate.full_name,
+            title: candidate.title,
+            email: undefined,
+            linkedin_url: candidate.linkedin_url,
+            company_name: candidate.company_name,
+            is_recruiter_likely: candidate.is_recruiter_likely,
+            recruiter_confidence: candidate.recruiter_confidence,
+            apolloId: candidate.apolloId
+          };
+          
+          enrichedContacts.push(processedContact);
+        }
+      }
+
+      console.log(`Department lead search returned ${enrichedContacts.length} enriched contacts`);
+      return enrichedContacts;
+
+    } catch (error) {
+      console.error("Apollo department lead search error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate confidence score for department lead based on title and department
+   */
+  private calculateDepartmentLeadConfidence(title: string, department: string): number {
+    const titleLower = title.toLowerCase();
+    const departmentLower = department.toLowerCase();
+    
+    // Higher scores for exact department matches
+    if (titleLower.includes(departmentLower)) {
+      if (titleLower.includes('head') || titleLower.includes('director')) return 0.95;
+      if (titleLower.includes('manager') || titleLower.includes('lead')) return 0.90;
+      if (titleLower.includes('vp') || titleLower.includes('vice president')) return 0.98;
+      if (titleLower.includes('cto') || titleLower.includes('cfo') || titleLower.includes('cmo')) return 0.99;
+      return 0.85;
+    }
+    
+    // Medium scores for leadership roles in any department
+    if (titleLower.includes('director') || titleLower.includes('head')) return 0.75;
+    if (titleLower.includes('manager') || titleLower.includes('lead')) return 0.70;
+    if (titleLower.includes('vp') || titleLower.includes('vice president')) return 0.80;
+    if (titleLower.includes('chief') || titleLower.includes('ceo') || titleLower.includes('president')) return 0.85;
+    
+    // Lower scores for non-leadership roles
+    return 0.50;
   }
 }
 

@@ -48,6 +48,129 @@ export interface RecruiterNameExtraction {
   };
 }
 
+// Department mapping for two-bucket outreach system
+export interface DepartmentTarget {
+  department: string;
+  titles: string[];
+  seniorities: string[];
+}
+
+export interface TwoBucketTargets {
+  recruiter_contacts: {
+    titles: string[];
+    priority: boolean;
+  };
+  department_lead_contacts: {
+    primary_department: string;
+    titles: string[];
+    seniorities: string[];
+    job_title_match: string;
+  };
+}
+
+/**
+ * Deterministic department mapping based on job title
+ */
+export function mapJobTitleToDepartment(jobTitle: string): DepartmentTarget | null {
+  const titleLower = jobTitle.toLowerCase();
+  
+  // Department mapping logic as specified in requirements
+  const departmentMappings: Record<string, DepartmentTarget> = {
+    "product": {
+      department: "Product Management",
+      titles: ["Head of Product", "VP of Product", "Director of Product", "Chief Product Officer", "Product Lead"],
+      seniorities: ["director", "vp", "head", "c_suite"]
+    },
+    "engineering": {
+      department: "Engineering",
+      titles: ["Head of Engineering", "VP of Engineering", "Director of Engineering", "CTO", "Engineering Manager", "Staff Engineer"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "design": {
+      department: "Design", 
+      titles: ["Head of Design", "VP of Design", "Director of Design", "Chief Design Officer", "Design Lead"],
+      seniorities: ["director", "vp", "head", "c_suite"]
+    },
+    "marketing": {
+      department: "Marketing",
+      titles: ["Head of Marketing", "VP of Marketing", "Director of Marketing", "CMO", "Marketing Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "sales": {
+      department: "Sales",
+      titles: ["Head of Sales", "VP of Sales", "Director of Sales", "Chief Revenue Officer", "Sales Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "data": {
+      department: "Data",
+      titles: ["Head of Data", "VP of Data", "Director of Data Science", "Chief Data Officer", "Data Science Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "operations": {
+      department: "Operations",
+      titles: ["Head of Operations", "VP of Operations", "Director of Operations", "COO", "Operations Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "customer": {
+      department: "Customer Experience",
+      titles: ["Head of Customer Success", "VP of Customer Experience", "Director of Customer Support", "Customer Success Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "people": {
+      department: "Human Resources",
+      titles: ["Head of People", "VP of Human Resources", "Director of HR", "CHRO", "People Operations Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    },
+    "finance": {
+      department: "Finance",
+      titles: ["Head of Finance", "VP of Finance", "Director of Finance", "CFO", "Finance Manager"],
+      seniorities: ["manager", "director", "vp", "head", "c_suite"]
+    }
+  };
+
+  // Check for exact matches
+  for (const [keyword, department] of Object.entries(departmentMappings)) {
+    if (titleLower.includes(keyword)) {
+      return department;
+    }
+  }
+
+  // Additional specific mappings
+  if (titleLower.includes("software engineer") || titleLower.includes("developer") || titleLower.includes("tech")) {
+    return departmentMappings["engineering"];
+  }
+  
+  if (titleLower.includes("ux") || titleLower.includes("ui")) {
+    return departmentMappings["design"];
+  }
+  
+  if (titleLower.includes("ml") || titleLower.includes("machine learning") || titleLower.includes("data scientist")) {
+    return departmentMappings["data"];
+  }
+  
+  if (titleLower.includes("account executive") || titleLower.includes("business development")) {
+    return departmentMappings["sales"];
+  }
+  
+  if (titleLower.includes("customer support") || titleLower.includes("cx")) {
+    return departmentMappings["customer"];
+  }
+  
+  if (titleLower.includes("chief of staff")) {
+    return departmentMappings["operations"];
+  }
+  
+  if (titleLower.includes("hr") || titleLower.includes("people")) {
+    return departmentMappings["people"];
+  }
+  
+  if (titleLower.includes("controller")) {
+    return departmentMappings["finance"];
+  }
+
+  return null; // No clear department match
+}
+
 /**
  * Extract recruiter name explicitly mentioned in job description
  */
@@ -113,10 +236,10 @@ Only extract names that are clearly identified as recruiters, hiring managers, o
  * Extract Apollo search parameters from job content
  */
 export async function extractApolloSearchParams(content: string): Promise<{
-  job_title: string | null;
-  domain: string | null;
-  company_name: string | null;
-  location: string | null;
+  job_title: string | undefined;
+  domain: string | undefined;
+  company_name: string | undefined;
+  location: string | undefined;
   relevant_departments: string[];
   person_titles: string[];
   person_seniorities: string[];
@@ -179,10 +302,10 @@ Return the extracted data in the JSON format specified.`;
     const result = JSON.parse(response.choices[0].message.content || "{}");
     
     return {
-      job_title: result.job_title || null,
-      domain: result.domain || null,
-      company_name: result.company_name || null,
-      location: result.location || null,
+      job_title: result.job_title || undefined,
+      domain: result.domain || undefined,
+      company_name: result.company_name || undefined,
+      location: result.location || undefined,
       relevant_departments: Array.isArray(result.relevant_departments) ? result.relevant_departments : [],
       person_titles: Array.isArray(result.person_titles) ? result.person_titles : [],
       person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : [],
@@ -196,17 +319,17 @@ Return the extracted data in the JSON format specified.`;
   } catch (error) {
     console.error("OpenAI Apollo params extraction error:", error);
     return {
-      job_title: null,
-      domain: null,
-      company_name: null,
-      location: null,
+      job_title: undefined,
+      domain: undefined,
+      company_name: undefined,
+      location: undefined,
       relevant_departments: [],
       person_titles: [],
       person_seniorities: [],
       organization_locations: [],
-      job_country: null,
-      job_region: null,
-      company_hq_country: null,
+      job_country: undefined,
+      job_region: undefined,
+      company_hq_country: undefined,
       remote_hiring_countries: [],
       is_remote_job: false
     };
@@ -344,5 +467,108 @@ Instructions:
   } catch (error) {
     console.error("OpenAI API error:", error);
     throw new Error("Failed to extract job information. Please try again.");
+  }
+}
+
+/**
+ * Generate two-bucket outreach targets based on job title
+ */
+export async function generateTwoBucketTargets(jobTitle: string): Promise<TwoBucketTargets> {
+  // First try deterministic mapping
+  const deterministicMapping = mapJobTitleToDepartment(jobTitle);
+  
+  if (deterministicMapping) {
+    return {
+      recruiter_contacts: {
+        titles: [
+          "recruiter", "technical recruiter", "talent acquisition specialist",
+          "talent acquisition manager", "recruiting manager", "people partner"
+        ],
+        priority: true
+      },
+      department_lead_contacts: {
+        primary_department: deterministicMapping.department,
+        titles: deterministicMapping.titles,
+        seniorities: deterministicMapping.seniorities,
+        job_title_match: jobTitle
+      }
+    };
+  }
+
+  // If no deterministic mapping, use AI to generate targets
+  try {
+    const systemPrompt = `You are analyzing job titles to create a two-bucket outreach strategy for job seekers.
+
+Given a job title, determine:
+1. Recruiting contacts - always prioritize these for direct hiring pipeline access
+2. Department lead contacts - decision makers who could influence hiring
+
+Return JSON in this exact format:
+{
+  "recruiter_contacts": {
+    "titles": ["recruiter", "talent acquisition specialist", "recruiting manager"],
+    "priority": true
+  },
+  "department_lead_contacts": {
+    "primary_department": "Engineering",
+    "titles": ["engineering manager", "head of engineering", "vp engineering"],
+    "seniorities": ["manager", "director", "vp", "c_suite"],
+    "job_title_match": "software engineer"
+  }
+}
+
+Choose primary_department from: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other`;
+
+    const userPrompt = `Analyze this job title for two-bucket outreach strategy: "${jobTitle}"
+
+Return the targeting strategy in the specified JSON format.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      recruiter_contacts: {
+        titles: Array.isArray(result.recruiter_contacts?.titles) 
+          ? result.recruiter_contacts.titles 
+          : ["recruiter", "talent acquisition specialist"],
+        priority: result.recruiter_contacts?.priority ?? true
+      },
+      department_lead_contacts: {
+        primary_department: result.department_lead_contacts?.primary_department || "Other",
+        titles: Array.isArray(result.department_lead_contacts?.titles)
+          ? result.department_lead_contacts.titles
+          : ["manager", "director"],
+        seniorities: Array.isArray(result.department_lead_contacts?.seniorities)
+          ? result.department_lead_contacts.seniorities
+          : ["manager", "director"],
+        job_title_match: result.department_lead_contacts?.job_title_match || jobTitle
+      }
+    };
+
+  } catch (error) {
+    console.error("OpenAI two-bucket target generation error:", error);
+    
+    // Return safe defaults
+    return {
+      recruiter_contacts: {
+        titles: ["recruiter", "talent acquisition specialist", "recruiting manager"],
+        priority: true
+      },
+      department_lead_contacts: {
+        primary_department: "Other",
+        titles: ["manager", "director", "head"],
+        seniorities: ["manager", "director"],
+        job_title_match: jobTitle
+      }
+    };
   }
 }
