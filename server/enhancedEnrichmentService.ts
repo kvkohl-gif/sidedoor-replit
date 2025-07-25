@@ -204,8 +204,9 @@ export class EnhancedEnrichmentService {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
         const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
         
-        // Determine outreach bucket and department info
-        const isRecruiter = recruiterContacts.some(rc => rc.full_name === contact.full_name);
+        // Simplify outreach bucket determination - use title-based detection
+        const titleLower = contact.title.toLowerCase();
+        const isRecruiter = titleLower.includes('recruiter') || titleLower.includes('talent acquisition') || titleLower.includes('talent sourcing') || titleLower.includes('recruiting');
         const outreachBucket = isRecruiter ? "recruiter" : "department_lead";
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
