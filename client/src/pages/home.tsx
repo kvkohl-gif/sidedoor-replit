@@ -19,6 +19,8 @@ export default function Home() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [autoSwitchMessage, setAutoSwitchMessage] = useState("");
+  const [unsupportedUrlError, setUnsupportedUrlError] = useState("");
+  const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,10 +50,21 @@ export default function Home() {
   });
 
   // Smart content detection
+  const unsupportedDomains = ["linkedin.com", "wellfound.com"];
+  
   const isValidUrl = (text: string): boolean => {
     try {
       const url = new URL(text);
       return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const isUnsupportedDomain = (text: string): boolean => {
+    try {
+      const url = new URL(text);
+      return unsupportedDomains.some(domain => url.hostname.includes(domain));
     } catch {
       return false;
     }
@@ -72,14 +85,25 @@ export default function Home() {
   const handleInputChange = (value: string) => {
     setJobInput(value);
     setAutoSwitchMessage("");
+    setUnsupportedUrlError("");
+    setIsButtonDisabled(false);
 
-    // Smart auto-switching logic
-    if (inputType === "url" && value.length > 50 && !isValidUrl(value) && looksLikeJobDescription(value)) {
-      setAutoSwitchMessage("This looks like a full job description. Switching to the right input field…");
-      setTimeout(() => {
-        setInputType("text");
-        setAutoSwitchMessage("");
-      }, 1500);
+    if (inputType === "url" && value.trim()) {
+      // Check for unsupported domains first
+      if (isValidUrl(value) && isUnsupportedDomain(value)) {
+        setUnsupportedUrlError("This URL is not supported. Please paste the full job description instead.");
+        setIsButtonDisabled(true);
+        return;
+      }
+
+      // Smart auto-switching logic for job descriptions in URL field
+      if (value.length > 50 && !isValidUrl(value) && looksLikeJobDescription(value)) {
+        setAutoSwitchMessage("This looks like a full job description. Switching to the right input field…");
+        setTimeout(() => {
+          setInputType("text");
+          setAutoSwitchMessage("");
+        }, 1500);
+      }
     }
   };
 
@@ -185,6 +209,8 @@ export default function Home() {
                   onClick={() => {
                     setInputType("url");
                     setAutoSwitchMessage("");
+                    setUnsupportedUrlError("");
+                    setIsButtonDisabled(false);
                   }}
                   className={inputType === "url" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
                 >
@@ -196,6 +222,8 @@ export default function Home() {
                   onClick={() => {
                     setInputType("text");
                     setAutoSwitchMessage("");
+                    setUnsupportedUrlError("");
+                    setIsButtonDisabled(false);
                   }}
                   className={inputType === "text" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
                 >
@@ -233,14 +261,20 @@ export default function Home() {
                       <Input
                         ref={inputRef}
                         type="url"
-                        placeholder="Paste the job listing URL (e.g., LinkedIn, Greenhouse, Lever)"
+                        placeholder="Paste the job listing URL (e.g., Greenhouse, Lever, company career pages)"
                         value={jobInput}
                         onChange={(e) => handleInputChange(e.target.value)}
-                        className="text-base"
+                        className={`text-base ${unsupportedUrlError ? 'border-red-300 focus:border-red-500' : ''}`}
                       />
-                      <p className="text-xs text-slate-500 mt-1">
-                        We'll automatically fetch and analyze the job details from the URL
-                      </p>
+                      {unsupportedUrlError ? (
+                        <p className="text-sm text-red-600 mt-2">
+                          {unsupportedUrlError}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-500 mt-1">
+                          We'll automatically fetch and analyze the job details from the URL
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div>
@@ -265,17 +299,24 @@ export default function Home() {
               {/* Submit Button - Hidden during loading */}
               {!submitMutation.isPending && (
                 <div className="text-center">
-                  <Button 
-                    onClick={handleSubmit}
-                    className="bg-primary text-white hover:bg-blue-700 px-8 py-3"
-                    size="lg"
-                    disabled={!jobInput.trim()}
-                  >
-                    {inputType === "url" ? "Analyze Job & Find Recruiters" : "Find Recruiters & Generate Messages"}
-                    <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                    </svg>
-                  </Button>
+                  <div className="relative group">
+                    <Button 
+                      onClick={handleSubmit}
+                      className="bg-primary text-white hover:bg-blue-700 px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                      size="lg"
+                      disabled={!jobInput.trim() || isButtonDisabled}
+                    >
+                      {inputType === "url" ? "Analyze Job & Find Recruiters" : "Find Recruiters & Generate Messages"}
+                      <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                      </svg>
+                    </Button>
+                    {isButtonDisabled && (
+                      <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                        Unsupported link. Paste full job description instead.
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
