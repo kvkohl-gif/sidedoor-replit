@@ -153,9 +153,9 @@ export class EnhancedEnrichmentService {
     const enrichedContacts: EnrichedContact[] = [];
     
     if (apolloContacts.length > 0) {
-      // Filter out placeholder emails before verification
+      // Filter out placeholder emails before verification  
       const emailsToVerify = apolloContacts
-        .filter(contact => contact.email) // Has email
+        .filter(contact => contact.email && !this.isPlaceholderEmail(contact.email)) // Has real email, not placeholder
         .map(contact => contact.email!);
 
       console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with real emails`);
@@ -175,17 +175,19 @@ export class EnhancedEnrichmentService {
 
       // Step 3: Process and filter contacts
       for (const contact of apolloContacts) {
-        const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
-        const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
+        // Check for placeholder emails and handle them differently
+        const hasRealEmail = contact.email && !this.isPlaceholderEmail(contact.email);
+        const verificationResult = hasRealEmail ? verificationResults.get(contact.email!) ?? null : null;
+        const verificationStatus = verifierService.getVerificationStatus(verificationResult, hasRealEmail ? contact.email : undefined);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
+        console.log(`Processing contact: ${contact.full_name} - Email: ${hasRealEmail ? contact.email : 'Placeholder/None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Status: ${verificationStatus.status_label} - Should include: ${!hasRealEmail || verificationStatus.should_include}`);
         
-        // Include contacts with LinkedIn URL OR verified emails 
-        if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
+        // Include contacts with LinkedIn URL OR verified emails (excluding placeholder emails)
+        if (!hasRealEmail || verificationStatus.should_include || contact.linkedin_url) {
           const enrichedContact: EnrichedContact = {
             name: contact.full_name,
             title: contact.title,
-            email: contact.email,
+            email: hasRealEmail ? contact.email : undefined, // Don't include placeholder emails
             linkedinUrl: contact.linkedin_url,
             confidenceScore: contact.recruiter_confidence,
             source: "Apollo + AI",
@@ -225,7 +227,54 @@ export class EnhancedEnrichmentService {
       
       console.log(`Returning ${topContacts.length} enriched contacts (${searchMetadata.verified_emails} with verified emails)`);
       
-      // Step 4: Analyze email patterns for suggestions
+      // Step 4: Try email pattern inference for contacts without real emails
+      const contactsWithoutEmails = topContacts.filter(c => !c.email);
+      
+      if (contactsWithoutEmails.length > 0) {
+        console.log(`Found ${contactsWithoutEmails.length} contacts without real emails - attempting email pattern inference`);
+        
+        // Extract company domain from company name or website
+        const companyDomain = this.extractCompanyDomain(request.company_name, []);
+        
+        if (companyDomain) {
+          for (const contact of contactsWithoutEmails) {
+            try {
+              // Use email pattern inference to suggest emails
+              const emailPatterns = await emailPatternInference.analyzeEmailPatterns([], companyDomain);
+              const inferredEmails = await emailPatternInference.inferRecruiterEmail(
+                contact.name,
+                companyDomain,
+                emailPatterns
+              );
+              
+              if (inferredEmails.length > 0) {
+                const bestInferredEmail = inferredEmails[0];
+                console.log(`Inferred email for ${contact.name}: ${bestInferredEmail.email} (confidence: ${bestInferredEmail.confidence})`);
+                
+                // Add the inferred email to the contact
+                contact.email = bestInferredEmail.email;
+                contact.inferredEmail = bestInferredEmail;
+                contact.source = "Apollo + Email Pattern Inference";
+                
+                // Verify the inferred email
+                if (verifierService.isConfigured()) {
+                  const verificationResult = await verifierService.verifyEmail(bestInferredEmail.email);
+                  const verificationStatus = verifierService.getVerificationStatus(verificationResult, bestInferredEmail.email);
+                  
+                  contact.emailVerified = verificationStatus.is_valid;
+                  contact.verificationStatus = this.mapVerificationStatus(verificationStatus.status_label);
+                  contact.verificationData = verificationResult || undefined;
+                  contact.verificationStatusInfo = verificationStatus;
+                }
+              }
+            } catch (error) {
+              console.error(`Email pattern inference failed for ${contact.name}:`, error);
+            }
+          }
+        }
+      }
+
+      // Step 5: Analyze email patterns for suggestions
       let emailPatterns: PatternAnalysisResult | undefined;
       
       if (topContacts.length > 0) {
@@ -270,6 +319,21 @@ export class EnhancedEnrichmentService {
       department_lead_contacts: [],
       searchMetadata
     };
+  }
+
+  /**
+   * Check if an email is a placeholder from Apollo API
+   */
+  private isPlaceholderEmail(email: string): boolean {
+    const placeholderPatterns = [
+      'email_not_unlocked@domain.com',
+      'email_not_unlocked@',
+      'placeholder@',
+      'noemail@',
+      'hidden@'
+    ];
+    
+    return placeholderPatterns.some(pattern => email.includes(pattern));
   }
 
   /**
