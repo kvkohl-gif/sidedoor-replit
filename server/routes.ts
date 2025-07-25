@@ -44,7 +44,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let jobContent = submissionData.jobInput;
       let jobDataExtraction = null;
 
-      // If URL, scrape the content first
+      // Extract structured job data for both URL and text inputs
       if (submissionData.inputType === "url") {
         console.log(`Scraping URL: ${submissionData.jobInput}`);
         const scrapedData = await urlScrapingService.scrapeJobURL(submissionData.jobInput);
@@ -59,9 +59,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobContent = scrapedData.cleanedContent;
         console.log(`Scraped content length: ${jobContent.length} characters`);
         
-        // Extract structured job data using enhanced prompt
-        jobDataExtraction = await extractJobData(jobContent);
+        // Extract structured job data using standardized prompt format
+        jobDataExtraction = await extractJobData(jobContent, submissionData.jobInput);
         console.log(`Extracted job data:`, jobDataExtraction);
+      } else {
+        // For text input, also extract structured job data
+        console.log(`Processing text input for structured data extraction`);
+        jobDataExtraction = await extractJobData(jobContent);
+        console.log(`Extracted job data from text:`, jobDataExtraction);
       }
 
       // Extract recruiter information using OpenAI

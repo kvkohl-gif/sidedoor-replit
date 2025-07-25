@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { RecruiterMessageCard } from "@/components/ui/recruiter-message-card";
+import { JobDetailCard } from "@/components/ui/job-detail-card";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
@@ -55,19 +56,20 @@ export default function Results() {
     },
   });
 
-  // Fetch enhanced job data
+  // Fetch enhanced job data with standardized format
   const { data: enhancedJobData } = useQuery<{
     submissionId: number;
     enhancedData?: {
-      company_name?: string;
       job_title?: string;
+      company_name?: string;
+      job_url?: string;
+      company_website?: string;
       location?: string;
-      experience_level?: string;
-      department?: string;
-      likely_departments?: string[];
+      job_description?: string;
+      key_responsibilities?: string[];
       requirements?: string[];
-      responsibilities?: string[];
-      benefits?: string[];
+      likely_departments?: string[];
+      linkedin_keywords?: string[];
     };
     hasEnhancedData: boolean;
   }>({
@@ -235,103 +237,77 @@ export default function Results() {
           )}
         </div>
 
-        {/* Job URL and Description Summary */}
-        <Collapsible open={jobSummaryExpanded} onOpenChange={setJobSummaryExpanded} className="mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-                <h2 className="text-lg font-semibold text-slate-900">Job Information</h2>
-                {jobSummaryExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-slate-500" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-slate-500" />
-                )}
-              </CollapsibleTrigger>
-              
-              <CollapsibleContent className="mt-4 space-y-4">
-                {/* Job URL - Display first */}
-                {submission.inputType === "url" && (
-                  <div>
-                    <h3 className="font-medium text-slate-900 mb-2">Job URL</h3>
-                    <a 
-                      href={submission.jobInput} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:text-blue-700 break-all text-sm flex items-center"
-                    >
-                      {submission.jobInput}
-                      <ExternalLink className="w-4 h-4 ml-2 flex-shrink-0" />
-                    </a>
-                  </div>
-                )}
+        {/* Standardized Job Information Display */}
+        {enhancedJobData?.hasEnhancedData && enhancedJobData.enhancedData && (
+          <JobDetailCard 
+            jobData={{
+              job_title: enhancedJobData.enhancedData.job_title || "Not specified",
+              company_name: enhancedJobData.enhancedData.company_name || "Not specified",
+              job_url: enhancedJobData.enhancedData.job_url || (submission.inputType === "url" ? submission.jobInput : "Not specified"),
+              company_website: enhancedJobData.enhancedData.company_website || "Not specified",
+              location: enhancedJobData.enhancedData.location || "Not specified",
+              job_description: enhancedJobData.enhancedData.job_description || "Not specified",
+              key_responsibilities: enhancedJobData.enhancedData.key_responsibilities || ["Not specified"],
+              requirements: enhancedJobData.enhancedData.requirements || ["Not specified"],
+              likely_departments: enhancedJobData.enhancedData.likely_departments || ["Other"],
+            }}
+            className="mb-8"
+          />
+        )}
 
-                {/* Job Description Summary - Display second */}
-                {(enhancedJobData?.enhancedData?.job_description || submission.inputType === "text") && (
-                  <div>
-                    <h3 className="font-medium text-slate-900 mb-2">Job Description</h3>
-                    <p className="text-slate-700 text-sm leading-relaxed">
-                      {enhancedJobData?.enhancedData?.job_description || 
-                       (submission.inputType === "text" ? submission.jobInput.substring(0, 500) + "..." : "")}
-                    </p>
-                  </div>
-                )}
-
-                {/* Enhanced Job Details */}
-                {enhancedJobData?.enhancedData && (
-                  <div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-slate-200">
-                    {enhancedJobData?.enhancedData?.responsibilities && enhancedJobData?.enhancedData?.responsibilities.length > 0 && (
-                      <div>
-                        <h3 className="font-medium text-slate-900 mb-2">Key Responsibilities</h3>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          {enhancedJobData?.enhancedData?.responsibilities.map((item: string, index: number) => (
-                            <li key={index} className="flex items-start">
-                              <span className="text-primary mr-2">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {enhancedJobData?.enhancedData?.requirements && enhancedJobData?.enhancedData?.requirements.length > 0 && (
-                      <div>
-                        <h3 className="font-medium text-slate-900 mb-2">Requirements</h3>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          {enhancedJobData?.enhancedData?.requirements.map((item: string, index: number) => (
-                            <li key={index} className="flex items-start">
-                              <span className="text-primary mr-2">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {enhancedJobData?.enhancedData?.likely_departments && enhancedJobData?.enhancedData?.likely_departments.length > 0 && (
-                  <div className="pt-4 border-t border-slate-200">
-                    <h3 className="font-medium text-slate-900 mb-2">Likely Departments</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {enhancedJobData?.enhancedData?.likely_departments.map((dept: string, index: number) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {dept}
-                        </Badge>
-                      ))}
+        {/* Fallback job info if no enhanced data */}
+        {!enhancedJobData?.hasEnhancedData && (
+          <Collapsible open={jobSummaryExpanded} onOpenChange={setJobSummaryExpanded} className="mb-8">
+            <Card>
+              <CardContent className="p-6">
+                <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+                  <h2 className="text-lg font-semibold text-slate-900">Job Information</h2>
+                  {jobSummaryExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-slate-500" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-500" />
+                  )}
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent className="mt-4 space-y-4">
+                  {/* Job URL - Display first */}
+                  {submission?.inputType === "url" && (
+                    <div>
+                      <h3 className="font-medium text-slate-900 mb-2">Job URL</h3>
+                      <a 
+                        href={submission.jobInput} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-blue-700 break-all text-sm flex items-center"
+                      >
+                        {submission.jobInput}
+                        <ExternalLink className="w-4 h-4 ml-2 flex-shrink-0" />
+                      </a>
                     </div>
-                  </div>
-                )}
-              </CollapsibleContent>
-            </CardContent>
-          </Card>
-        </Collapsible>
+                  )}
 
-        {/* Recruiters and Messages Layout */}
-        <div className="space-y-8">
-          {/* Recruiters Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900 mb-6">Recruiter Contacts</h2>
-            
+                  {/* Job Description Summary - Display second */}
+                  {submission?.inputType === "text" && (
+                    <div>
+                      <h3 className="font-medium text-slate-900 mb-2">Job Description</h3>
+                      <p className="text-slate-700 text-sm leading-relaxed">
+                        {submission.jobInput && submission.jobInput.length > 500 
+                          ? `${submission.jobInput.substring(0, 500)}...`
+                          : submission.jobInput
+                        }
+                      </p>
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </CardContent>
+            </Card>
+          </Collapsible>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left side: Contacts */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Recruiter contacts */}
             {submission.recruiters && submission.recruiters.length > 0 ? (
               <div className="space-y-4">
                 {submission.recruiters.map((recruiter) => {
@@ -446,6 +422,24 @@ export default function Results() {
                 </CardContent>
               </Card>
             )}
+          </div>
+
+          {/* Right sidebar: Actions and Notes */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h3>
+                <div className="space-y-3">
+                  <Button 
+                    onClick={handleBackToDashboard} 
+                    variant="outline" 
+                    className="w-full"
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

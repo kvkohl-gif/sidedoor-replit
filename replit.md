@@ -156,3 +156,10 @@ The enrichment service is structured to easily integrate with:
   5. English-speaking regions fallback (US, Canada, UK, Australia)
 - **NEW: Enhanced recruiter name extraction**: Extracts specific recruiter names from job descriptions and prioritizes them in Apollo search
 - **NEW: Email pattern inference**: When Apollo doesn't have verified emails, system analyzes company email patterns and generates likely email addresses with verification
+- **NEW: Standardized job information extraction (Jan 2025)**: Implements structured job data format with required fields:
+  * Job Title, Company, Job URL, Company Website, Location
+  * Job Description (3-5 sentence summary)
+  * Key Responsibilities and Requirements (bullet points)
+  * Likely Departments (from predefined list)
+  * All fields default to "Not specified" if missing
+  * Enhanced UI with JobDetailCard component for consistent display
