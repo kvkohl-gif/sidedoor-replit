@@ -129,12 +129,7 @@ export class EnhancedEnrichmentService {
           per_page: 2 // Get 2 department leads
         });
         
-        // Combine contacts
-        const apolloContacts = [...recruiterContacts, ...departmentLeadContacts];
-        searchMetadata.apollo_results = apolloContacts.length;
-        console.log(`Apollo returned ${recruiterContacts.length} recruiting contacts + ${departmentLeadContacts.length} department leads = ${apolloContacts.length} total`);
-        
-        // Process all contacts (keeping the original flow)
+        // Process all contacts from both searches
         
       } catch (error) {
         console.error("Apollo search failed:", error);
@@ -145,6 +140,8 @@ export class EnhancedEnrichmentService {
 
     // Combine all contacts for processing
     const apolloContacts = [...recruiterContacts, ...departmentLeadContacts];
+    searchMetadata.apollo_results = apolloContacts.length;
+    console.log(`Apollo returned ${recruiterContacts.length} recruiting contacts + ${departmentLeadContacts.length} department leads = ${apolloContacts.length} total`);
 
     // Step 3: Handle case where Apollo doesn't have specific recruiter's email
     let inferredEmails: InferredEmail[] = [];

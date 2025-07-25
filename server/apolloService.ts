@@ -1031,20 +1031,9 @@ class ApolloService {
         per_page: 10
       };
 
-      // Add location filtering with priority hierarchy
-      const locationStrategy = this.createLocationStrategy({
-        company_name: params.company_name,
-        job_country: params.job_country,
-        job_region: params.job_region,
-        company_hq_country: params.company_hq_country,
-        remote_hiring_countries: params.remote_hiring_countries
-      });
-
-      if (locationStrategy.length > 0) {
-        const strategy = locationStrategy[0]; // Use highest priority location
-        if (strategy.location) {
-          searchPayload.person_locations = [strategy.location];
-        }
+      // Add geographic filtering if available
+      if (params.job_country) {
+        searchPayload.person_locations = [params.job_country];
       }
 
       console.log(`Department lead search payload:`, searchPayload);
