@@ -163,3 +163,8 @@ The enrichment service is structured to easily integrate with:
   * Likely Departments (from predefined list)
   * All fields default to "Not specified" if missing
   * Enhanced UI with JobDetailCard component for consistent display
+- **MAJOR SUCCESS: Apollo enrichment working with real emails (Jan 25, 2025)**: Fixed Apollo people/match endpoint integration:
+  * Successfully getting real verified emails: mackenziecyr@dropbox.com, cbontia@dropbox.com, mila@dropbox.com
+  * Two-bucket system operational: 2 recruiting contacts + 3 department leads per search
+  * NeverBounce email verification fully functional (valid/catchall/invalid detection)
+  * Removed webhook requirement that was blocking enrichment
