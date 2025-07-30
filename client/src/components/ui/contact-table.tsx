@@ -354,32 +354,40 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
 
                     {/* Actions */}
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          onClick={() => handleGenerateMessages(contact)}
-                          disabled={isGenerating || !contact.email}
-                          size="sm"
-                          className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                          title="Generate outreach messages"
-                        >
-                          {isGenerating ? (
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
-                          ) : (
-                            <Zap className="h-3 w-3" />
-                          )}
-                        </Button>
-                        {hasMessages && (
+                      <div className="flex items-center gap-2">
+                        {!hasMessages ? (
                           <Button
-                            variant="ghost"
+                            onClick={() => handleGenerateMessages(contact)}
+                            disabled={isGenerating || !contact.email}
                             size="sm"
-                            onClick={() => toggleMessageView(contact.id)}
-                            className="h-8 w-8 p-0"
-                            title="View messages"
+                            className="h-8 px-4 text-xs bg-green-600 hover:bg-green-700 text-white font-medium"
+                            title="Generate outreach email and LinkedIn message"
                           >
-                            <ChevronDown 
-                              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                            />
+                            {isGenerating ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                                Generating...
+                              </>
+                            ) : (
+                              "Generate"
+                            )}
                           </Button>
+                        ) : (
+                          <Button
+                            onClick={() => toggleMessageView(contact.id)}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-4 text-xs border-blue-200 text-blue-700 hover:bg-blue-50 font-medium"
+                            title="View and edit generated messages"
+                          >
+                            {isExpanded ? "Hide Messages" : "View Messages"}
+                          </Button>
+                        )}
+                        {hasMessages && !isExpanded && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full" title="Messages generated"></div>
+                            <span className="text-xs text-gray-500">Ready</span>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -388,49 +396,122 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
                   {/* Generated Messages Dropdown */}
                   {hasMessages && (
                     <tr className={isExpanded ? '' : 'hidden'}>
-                      <td colSpan={10} className="px-4 py-4 bg-gray-50/60 border-t border-gray-200">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          {contact.emailDraft && (
-                            <Card className="border-gray-200">
-                              <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="font-medium text-gray-900 text-sm">Email Draft</h4>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => copyToClipboard(contact.emailDraft!, "Email draft")}
-                                    className="h-7 px-2 text-xs"
-                                  >
-                                    <Copy className="h-3 w-3 mr-1" />
-                                    Copy
-                                  </Button>
-                                </div>
-                                <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
-                                  {contact.emailDraft}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                          {contact.linkedinMessage && (
-                            <Card className="border-gray-200">
-                              <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h4 className="font-medium text-gray-900 text-sm">LinkedIn Message</h4>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => copyToClipboard(contact.linkedinMessage!, "LinkedIn message")}
-                                    className="h-7 px-2 text-xs"
-                                  >
-                                    <Copy className="h-3 w-3 mr-1" />
-                                    Copy
-                                  </Button>
-                                </div>
-                                <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
-                                  {contact.linkedinMessage}
-                                </div>
-                              </CardContent>
-                            </Card>
+                      <td colSpan={10} className="px-4 py-6 bg-blue-50/30 border-t border-blue-200">
+                        <div className="max-w-6xl mx-auto">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Generated Outreach Messages</h3>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleGenerateMessages(contact)}
+                                disabled={isGenerating}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-3 text-xs"
+                                title="Regenerate messages"
+                              >
+                                {isGenerating ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600" />
+                                ) : (
+                                  "Regenerate"
+                                )}
+                              </Button>
+                              <Button
+                                onClick={() => toggleMessageView(contact.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-3 text-xs"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {contact.emailDraft && (
+                              <Card className="border-gray-200 shadow-sm">
+                                <CardContent className="p-5">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-semibold text-gray-900">Email Draft</h4>
+                                      <Badge variant="outline" className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200">
+                                        Ready to send
+                                      </Badge>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(contact.emailDraft!, "Email draft")}
+                                      className="h-8 px-3 text-xs hover:bg-blue-100"
+                                    >
+                                      <Copy className="h-3 w-3 mr-1" />
+                                      Copy
+                                    </Button>
+                                  </div>
+                                  <Textarea
+                                    value={contact.emailDraft}
+                                    onChange={(e) => {
+                                      // Handle email edit here
+                                      updateContactMutation.mutate({
+                                        contactId: contact.id,
+                                        updates: { emailDraft: e.target.value }
+                                      });
+                                    }}
+                                    className="min-h-[200px] text-sm resize-none border-gray-300 focus:border-blue-500"
+                                    placeholder="Email content will appear here..."
+                                  />
+                                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                                    <span>Click to edit • Auto-saves changes</span>
+                                    <span>{contact.emailDraft.length} characters</span>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+                            
+                            {contact.linkedinMessage && (
+                              <Card className="border-gray-200 shadow-sm">
+                                <CardContent className="p-5">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-semibold text-gray-900">LinkedIn Message</h4>
+                                      <Badge variant="outline" className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200">
+                                        Ready to send
+                                      </Badge>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(contact.linkedinMessage!, "LinkedIn message")}
+                                      className="h-8 px-3 text-xs hover:bg-blue-100"
+                                    >
+                                      <Copy className="h-3 w-3 mr-1" />
+                                      Copy
+                                    </Button>
+                                  </div>
+                                  <Textarea
+                                    value={contact.linkedinMessage}
+                                    onChange={(e) => {
+                                      // Handle LinkedIn message edit here
+                                      updateContactMutation.mutate({
+                                        contactId: contact.id,
+                                        updates: { linkedinMessage: e.target.value }
+                                      });
+                                    }}
+                                    className="min-h-[150px] text-sm resize-none border-gray-300 focus:border-blue-500"
+                                    placeholder="LinkedIn message content will appear here..."
+                                  />
+                                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                                    <span>Click to edit • Auto-saves changes</span>
+                                    <span>{contact.linkedinMessage.length} characters</span>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+                          </div>
+                          
+                          {(!contact.emailDraft && !contact.linkedinMessage) && (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No messages generated yet. Click "Generate" to create outreach messages.</p>
+                            </div>
                           )}
                         </div>
                       </td>
