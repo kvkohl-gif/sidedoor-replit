@@ -54,11 +54,7 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
   // Update contact mutation
   const updateContactMutation = useMutation({
     mutationFn: async ({ contactId, updates }: { contactId: number; updates: any }) => {
-      return await apiRequest(`/api/contacts/${contactId}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-        headers: { "Content-Type": "application/json" },
-      });
+      return await apiRequest(`/api/contacts/${contactId}`, "PATCH", updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId.toString()] });
@@ -68,11 +64,7 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
   // Generate message mutation
   const generateMessageMutation = useMutation({
     mutationFn: async ({ contactId, messageType, tone }: { contactId: number; messageType: string; tone: string }) => {
-      return await apiRequest(`/api/contacts/${contactId}/generate-message`, {
-        method: "POST",
-        body: JSON.stringify({ messageType, tone }),
-        headers: { "Content-Type": "application/json" },
-      });
+      return await apiRequest(`/api/contacts/${contactId}/generate-message`, "POST", { messageType, tone });
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId.toString()] });
@@ -177,25 +169,45 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       {/* Scrollable Container */}
       <div className="overflow-x-auto">
-        <div className="min-w-[1200px]">
+        <table className="w-full min-w-[1400px] table-fixed">
           {/* Table Header */}
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-            <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">
-              <div className="col-span-2 sticky left-0 bg-gray-50 z-20">Name</div>
-              <div className="col-span-2 sticky left-[200px] bg-gray-50 z-20">Title</div>
-              <div className="col-span-1">Type</div>
-              <div className="col-span-1">Department</div>
-              <div className="col-span-1">Confidence</div>
-              <div className="col-span-2">Email</div>
-              <div className="col-span-1">Status</div>
-              <div className="col-span-1">Source</div>
-              <div className="col-span-2">Notes</div>
-              <div className="col-span-1">Actions</div>
-            </div>
-          </div>
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+            <tr>
+              <th className="w-[180px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide sticky left-0 bg-gray-50 z-20 border-r border-gray-200">
+                Name
+              </th>
+              <th className="w-[200px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide sticky left-[180px] bg-gray-50 z-20 border-r border-gray-200">
+                Title
+              </th>
+              <th className="w-[120px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Type
+              </th>
+              <th className="w-[120px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Department
+              </th>
+              <th className="w-[100px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Confidence
+              </th>
+              <th className="w-[220px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Email
+              </th>
+              <th className="w-[100px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Status
+              </th>
+              <th className="w-[100px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Source
+              </th>
+              <th className="w-[200px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Notes
+              </th>
+              <th className="w-[120px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Actions
+              </th>
+            </tr>
+          </thead>
 
           {/* Table Body */}
-          <div className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
             {contacts.map((contact) => {
               const verificationBadge = getVerificationBadge(contact.verificationStatus, contact.emailVerified);
               const confidenceBadge = getConfidenceBadge(contact.confidence);
@@ -205,234 +217,230 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
               const isExpanded = expandedMessages.has(contact.id);
 
               return (
-                <div key={contact.id}>
+                <>
                   {/* Main Row */}
-                  <div className="px-6 py-4 hover:bg-blue-50/30 transition-all duration-200">
-                    <div className="grid grid-cols-12 gap-4 items-center text-sm">
-                      {/* Name - Sticky */}
-                      <div className="col-span-2 sticky left-0 bg-white hover:bg-blue-50/30 z-10 py-2 -my-2">
-                        <div className="font-semibold text-gray-900">{contact.name}</div>
-                        {contact.linkedinUrl && (
-                          <a
-                            href={contact.linkedinUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-xs text-blue-600 hover:text-blue-700 mt-1"
-                            title="View LinkedIn Profile"
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            LinkedIn
-                          </a>
-                        )}
-                      </div>
+                  <tr key={contact.id} className="hover:bg-blue-50/30 transition-all duration-200">
+                    {/* Name - Sticky */}
+                    <td className="px-4 py-4 sticky left-0 bg-white hover:bg-blue-50/30 z-10 border-r border-gray-200">
+                      <div className="font-semibold text-gray-900 text-sm">{contact.name}</div>
+                      {contact.linkedinUrl && (
+                        <a
+                          href={contact.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-xs text-blue-600 hover:text-blue-700 mt-1"
+                          title="View LinkedIn Profile"
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          LinkedIn
+                        </a>
+                      )}
+                    </td>
 
-                      {/* Title - Sticky */}
-                      <div className="col-span-2 sticky left-[200px] bg-white hover:bg-blue-50/30 z-10 py-2 -my-2">
-                        <div className="font-medium text-gray-900">{contact.title}</div>
-                      </div>
+                    {/* Title - Sticky */}
+                    <td className="px-4 py-4 sticky left-[180px] bg-white hover:bg-blue-50/30 z-10 border-r border-gray-200">
+                      <div className="font-medium text-gray-900 text-sm">{contact.title}</div>
+                    </td>
 
-                      {/* Contact Type */}
-                      <div className="col-span-1">
-                        <Badge variant={contactTypeBadge.variant} className={`text-xs px-2 py-1 ${contactTypeBadge.className}`}>
-                          {contactTypeBadge.text}
+                    {/* Contact Type */}
+                    <td className="px-4 py-4">
+                      <Badge variant={contactTypeBadge.variant} className={`text-xs px-2 py-1 ${contactTypeBadge.className}`}>
+                        {contactTypeBadge.text}
+                      </Badge>
+                    </td>
+
+                    {/* Department */}
+                    <td className="px-4 py-4">
+                      <span className="text-gray-600 text-sm">{contact.department}</span>
+                    </td>
+
+                    {/* Confidence */}
+                    <td className="px-4 py-4">
+                      <div className="space-y-1">
+                        <Badge variant={confidenceBadge.variant} className={`text-xs px-2 py-0.5 ${confidenceBadge.className}`}>
+                          {confidenceBadge.text}
                         </Badge>
+                        <div className="text-xs text-gray-500 font-mono">{contact.confidence}%</div>
                       </div>
+                    </td>
 
-                      {/* Department */}
-                      <div className="col-span-1">
-                        <span className="text-gray-600">{contact.department}</span>
-                      </div>
+                    {/* Email */}
+                    <td className="px-4 py-4">
+                      {contact.email ? (
+                        <button
+                          onClick={() => copyToClipboard(contact.email, "Email")}
+                          className="text-blue-600 hover:text-blue-700 font-mono bg-blue-50 px-2 py-1 rounded border hover:bg-blue-100 transition-colors w-full text-left truncate text-sm"
+                          title={`Copy ${contact.email}`}
+                        >
+                          {contact.email}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No email</span>
+                      )}
+                    </td>
 
-                      {/* Confidence */}
-                      <div className="col-span-1">
-                        <div className="flex flex-col gap-1">
-                          <Badge variant={confidenceBadge.variant} className={`text-xs px-2 py-0.5 ${confidenceBadge.className}`}>
-                            {confidenceBadge.text}
-                          </Badge>
-                          <span className="text-xs text-gray-500 font-mono">{contact.confidence}%</span>
-                        </div>
-                      </div>
+                    {/* Email Status */}
+                    <td className="px-4 py-4">
+                      <Badge variant={verificationBadge.variant} className={`text-xs px-2 py-0.5 ${verificationBadge.className}`}>
+                        {verificationBadge.icon}
+                      </Badge>
+                    </td>
 
-                      {/* Email */}
-                      <div className="col-span-2">
-                        {contact.email ? (
-                          <button
-                            onClick={() => copyToClipboard(contact.email, "Email")}
-                            className="text-blue-600 hover:text-blue-700 font-mono bg-blue-50 px-2 py-1 rounded border hover:bg-blue-100 transition-colors w-full text-left truncate"
-                            title={`Copy ${contact.email}`}
-                          >
-                            {contact.email}
-                          </button>
-                        ) : (
-                          <span className="text-gray-400">No email</span>
-                        )}
-                      </div>
+                    {/* Source */}
+                    <td className="px-4 py-4">
+                      <div className="text-gray-600 capitalize text-sm">{contact.sourcePlatform}</div>
+                      {contact.apolloId && (
+                        <div className="text-xs text-gray-400">#{contact.apolloId}</div>
+                      )}
+                    </td>
 
-                      {/* Email Status */}
-                      <div className="col-span-1">
-                        <Badge variant={verificationBadge.variant} className={`text-xs px-2 py-0.5 ${verificationBadge.className}`}>
-                          {verificationBadge.icon}
-                        </Badge>
-                      </div>
-
-                      {/* Source */}
-                      <div className="col-span-1">
-                        <div className="text-gray-600 capitalize text-xs">{contact.sourcePlatform}</div>
-                        {contact.apolloId && (
-                          <div className="text-xs text-gray-400">#{contact.apolloId}</div>
-                        )}
-                      </div>
-
-                      {/* Notes */}
-                      <div className="col-span-2">
-                        {editingNotes === contact.id ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={notesValue}
-                              onChange={(e) => setNotesValue(e.target.value)}
-                              placeholder="Add notes..."
-                              className="min-h-[60px] text-xs resize-none"
-                            />
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSaveNotes(contact)}
-                                disabled={updateContactMutation.isPending}
-                                className="h-6 px-2 text-xs"
-                              >
-                                <Save className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingNotes(null);
-                                  setNotesValue("");
-                                }}
-                                className="h-6 px-2 text-xs"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <div className="text-xs text-gray-600 truncate flex-1">
-                              {contact.notes ? (
-                                <span className="bg-amber-50 text-amber-800 px-2 py-1 rounded border border-amber-200">
-                                  {contact.notes.length > 30 ? `${contact.notes.substring(0, 30)}...` : contact.notes}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 italic">No notes</span>
-                              )}
-                            </div>
+                    {/* Notes */}
+                    <td className="px-4 py-4">
+                      {editingNotes === contact.id ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={notesValue}
+                            onChange={(e) => setNotesValue(e.target.value)}
+                            placeholder="Add notes..."
+                            className="min-h-[60px] text-xs resize-none w-full"
+                          />
+                          <div className="flex gap-1">
                             <Button
-                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSaveNotes(contact)}
+                              disabled={updateContactMutation.isPending}
+                              className="h-6 px-2 text-xs"
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => {
-                                setEditingNotes(contact.id);
-                                setNotesValue(contact.notes || "");
+                                setEditingNotes(null);
+                                setNotesValue("");
                               }}
-                              className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                              className="h-6 px-2 text-xs"
                             >
-                              <Edit3 className="h-3 w-3" />
+                              <X className="h-3 w-3" />
                             </Button>
                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <div className="text-xs text-gray-600 truncate flex-1">
+                            {contact.notes ? (
+                              <span className="bg-amber-50 text-amber-800 px-2 py-1 rounded border border-amber-200">
+                                {contact.notes.length > 25 ? `${contact.notes.substring(0, 25)}...` : contact.notes}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic">No notes</span>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingNotes(contact.id);
+                              setNotesValue(contact.notes || "");
+                            }}
+                            className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                          >
+                            <Edit3 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          onClick={() => handleGenerateMessages(contact)}
+                          disabled={isGenerating || !contact.email}
+                          size="sm"
+                          className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                          title="Generate outreach messages"
+                        >
+                          {isGenerating ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                          ) : (
+                            <Zap className="h-3 w-3" />
+                          )}
+                        </Button>
+                        {hasMessages && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleMessageView(contact.id)}
+                            className="h-8 w-8 p-0"
+                            title="View messages"
+                          >
+                            <ChevronDown 
+                              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                            />
+                          </Button>
                         )}
                       </div>
-
-                      {/* Actions */}
-                      <div className="col-span-1">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            onClick={() => handleGenerateMessages(contact)}
-                            disabled={isGenerating || !contact.email}
-                            size="sm"
-                            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                            title="Generate outreach messages"
-                          >
-                            {isGenerating ? (
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
-                            ) : (
-                              <Zap className="h-3 w-3" />
-                            )}
-                          </Button>
-                          {hasMessages && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleMessageView(contact.id)}
-                              className="h-8 w-8 p-0"
-                              title="View messages"
-                            >
-                              <ChevronDown 
-                                className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                              />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
 
                   {/* Generated Messages Dropdown */}
                   {hasMessages && (
-                    <Collapsible open={isExpanded}>
-                      <CollapsibleContent>
-                        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-200">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {contact.emailDraft && (
-                              <Card className="border-gray-200">
-                                <CardContent className="p-4">
-                                  <div className="flex items-center justify-between mb-3">
-                                    <h4 className="font-medium text-gray-900 text-sm">Email Draft</h4>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => copyToClipboard(contact.emailDraft!, "Email draft")}
-                                      className="h-7 px-2 text-xs"
-                                    >
-                                      <Copy className="h-3 w-3 mr-1" />
-                                      Copy
-                                    </Button>
-                                  </div>
-                                  <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
-                                    {contact.emailDraft}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            )}
-                            {contact.linkedinMessage && (
-                              <Card className="border-gray-200">
-                                <CardContent className="p-4">
-                                  <div className="flex items-center justify-between mb-3">
-                                    <h4 className="font-medium text-gray-900 text-sm">LinkedIn Message</h4>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => copyToClipboard(contact.linkedinMessage!, "LinkedIn message")}
-                                      className="h-7 px-2 text-xs"
-                                    >
-                                      <Copy className="h-3 w-3 mr-1" />
-                                      Copy
-                                    </Button>
-                                  </div>
-                                  <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
-                                    {contact.linkedinMessage}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            )}
-                          </div>
+                    <tr className={isExpanded ? '' : 'hidden'}>
+                      <td colSpan={10} className="px-4 py-4 bg-gray-50/60 border-t border-gray-200">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {contact.emailDraft && (
+                            <Card className="border-gray-200">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-medium text-gray-900 text-sm">Email Draft</h4>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => copyToClipboard(contact.emailDraft!, "Email draft")}
+                                    className="h-7 px-2 text-xs"
+                                  >
+                                    <Copy className="h-3 w-3 mr-1" />
+                                    Copy
+                                  </Button>
+                                </div>
+                                <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
+                                  {contact.emailDraft}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                          {contact.linkedinMessage && (
+                            <Card className="border-gray-200">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-medium text-gray-900 text-sm">LinkedIn Message</h4>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => copyToClipboard(contact.linkedinMessage!, "LinkedIn message")}
+                                    className="h-7 px-2 text-xs"
+                                  >
+                                    <Copy className="h-3 w-3 mr-1" />
+                                    Copy
+                                  </Button>
+                                </div>
+                                <div className="bg-white border rounded-md p-3 text-sm whitespace-pre-wrap">
+                                  {contact.linkedinMessage}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
                         </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+                      </td>
+                    </tr>
                   )}
-                </div>
+                </>
               );
             })}
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
 
       {contacts.length === 0 && (
