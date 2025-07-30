@@ -28,7 +28,7 @@ export default function Search() {
         description: "Your job has been submitted for processing. Redirecting to results...",
       });
       setTimeout(() => {
-        setLocation(`/submissions/${data.id}`);
+        setLocation(`/submissions/${data.submission.id}`);
       }, 1000);
     },
     onError: (error: any) => {

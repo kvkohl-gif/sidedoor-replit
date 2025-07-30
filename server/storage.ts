@@ -224,7 +224,7 @@ export class DatabaseStorage implements IStorage {
         notes: recruiterContacts.notes,
         createdAt: recruiterContacts.createdAt,
         jobSubmissionId: recruiterContacts.jobSubmissionId,
-        userId: recruiterContacts.userId,
+        // userId: recruiterContacts.userId, // This field doesn't exist in schema
         apolloId: recruiterContacts.apolloId,
         jobTitle: jobSubmissions.jobTitle,
         companyName: jobSubmissions.companyName,
@@ -232,7 +232,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(recruiterContacts)
       .leftJoin(jobSubmissions, eq(recruiterContacts.jobSubmissionId, jobSubmissions.id))
-      .where(eq(recruiterContacts.userId, userId))
+      .where(eq(jobSubmissions.userId, userId))
       .orderBy(desc(recruiterContacts.createdAt));
 
     // Transform to include job submission details
@@ -250,7 +250,13 @@ export class DatabaseStorage implements IStorage {
       .from(recruiterContacts)
       .where(eq(recruiterContacts.id, contactId));
 
-    if (!contact || contact.userId !== userId) {
+    // Get the associated job submission to check user ownership
+    const [jobSub] = await db
+      .select()
+      .from(jobSubmissions)
+      .where(eq(jobSubmissions.id, contact.jobSubmissionId));
+    
+    if (!contact || !jobSub || jobSub.userId !== userId) {
       throw new Error("Contact not found or access denied");
     }
 
@@ -278,7 +284,10 @@ export class DatabaseStorage implements IStorage {
     const contact = contactQuery[0].recruiter_contacts;
     const jobSubmission = contactQuery[0].job_submissions;
 
-    if (contact.userId !== userId) {
+    // Get the associated job submission to check user ownership
+    const jobSub = contactQuery[0].job_submissions;
+    
+    if (!jobSub || jobSub.userId !== userId) {
       throw new Error("Access denied");
     }
 

@@ -180,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Return the complete submission with recruiters
         const completeSubmission = await storage.getJobSubmissionById(jobSubmission.id);
-        res.json(completeSubmission);
+        res.json({ submission: completeSubmission });
 
       } catch (openaiError) {
         console.error("OpenAI extraction error:", openaiError);
