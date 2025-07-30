@@ -139,7 +139,7 @@ export class DatabaseStorage implements IStorage {
     return contact;
   }
 
-  async updateContact(id: number, updates: Partial<RecruiterContact>): Promise<RecruiterContact> {
+  async updateRecruiterContact(id: number, updates: Partial<RecruiterContact>): Promise<RecruiterContact> {
     const [updated] = await db
       .update(recruiterContacts)
       .set(updates)
@@ -209,29 +209,29 @@ export class DatabaseStorage implements IStorage {
 
   // Extended contact operations for global contacts page
   async getAllUserContacts(userId: string): Promise<any[]> {
-    const contactsWithJobs = await db.query.recruiterContacts.findMany({
-      where: eq(recruiterContacts.userId, userId),
-      orderBy: [desc(recruiterContacts.createdAt)],
-      with: {
-        jobSubmission: true,
-      },
-    });
+    const contacts = await db
+      .select()
+      .from(recruiterContacts)
+      .leftJoin(jobSubmissions, eq(recruiterContacts.jobSubmissionId, jobSubmissions.id))
+      .where(eq(recruiterContacts.userId, userId))
+      .orderBy(desc(recruiterContacts.createdAt));
 
     // Transform to include job submission details
-    return contactsWithJobs.map(contact => ({
-      ...contact,
-      submissionId: contact.jobSubmissionId,
-      jobTitle: contact.jobSubmission?.jobTitle,
-      companyName: contact.jobSubmission?.companyName,
-      jobUrl: contact.jobSubmission?.jobInput,
+    return contacts.map(row => ({
+      ...row.recruiter_contacts,
+      submissionId: row.recruiter_contacts.jobSubmissionId,
+      jobTitle: row.job_submissions?.jobTitle,
+      companyName: row.job_submissions?.companyName,
+      jobUrl: row.job_submissions?.jobInput,
     }));
   }
 
   async updateContact(contactId: number, userId: string, updates: any): Promise<any> {
     // First verify the contact belongs to the user
-    const contact = await db.query.recruiterContacts.findFirst({
-      where: eq(recruiterContacts.id, contactId),
-    });
+    const [contact] = await db
+      .select()
+      .from(recruiterContacts)
+      .where(eq(recruiterContacts.id, contactId));
 
     if (!contact || contact.userId !== userId) {
       throw new Error("Contact not found or access denied");
@@ -247,34 +247,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async generateContactMessage(contactId: number, userId: string, messageType: string, tone: string): Promise<any> {
-    // First verify the contact belongs to the user
-    const contact = await db.query.recruiterContacts.findFirst({
-      where: eq(recruiterContacts.id, contactId),
-      with: {
-        jobSubmission: true,
-      },
-    });
+    // First verify the contact belongs to the user  
+    const contactQuery = await db
+      .select()
+      .from(recruiterContacts)
+      .leftJoin(jobSubmissions, eq(recruiterContacts.jobSubmissionId, jobSubmissions.id))
+      .where(eq(recruiterContacts.id, contactId));
 
-    if (!contact || contact.userId !== userId) {
-      throw new Error("Contact not found or access denied");
+    if (contactQuery.length === 0) {
+      throw new Error("Contact not found");
+    }
+
+    const contact = contactQuery[0].recruiter_contacts;
+    const jobSubmission = contactQuery[0].job_submissions;
+
+    if (contact.userId !== userId) {
+      throw new Error("Access denied");
     }
 
     // For now, return placeholder messages - you can integrate with OpenAI later
-    const emailDraft = `Hi ${contact.name},\n\nI hope this email finds you well. I recently came across the ${contact.jobSubmission?.jobTitle || 'position'} opening at ${contact.jobSubmission?.companyName || 'your company'} and I'm very interested in learning more about this opportunity.\n\nI believe my background would be a great fit for this role. Would you be available for a brief call to discuss how I can contribute to your team?\n\nBest regards,\n[Your Name]`;
+    const emailDraft = `Hi ${contact.name},\n\nI hope this email finds you well. I recently came across the ${jobSubmission?.jobTitle || 'position'} opening at ${jobSubmission?.companyName || 'your company'} and I'm very interested in learning more about this opportunity.\n\nI believe my background would be a great fit for this role. Would you be available for a brief call to discuss how I can contribute to your team?\n\nBest regards,\n[Your Name]`;
     
-    const linkedinMessage = `Hi ${contact.name}, I'm interested in the ${contact.jobSubmission?.jobTitle || 'position'} at ${contact.jobSubmission?.companyName || 'your company'}. Would love to connect and learn more about this opportunity!`;
+    const linkedinMessage = `Hi ${contact.name}, I'm interested in the ${jobSubmission?.jobTitle || 'position'} at ${jobSubmission?.companyName || 'your company'}. Would love to connect and learn more about this opportunity!`;
 
     // Update the contact with generated messages
     const [updated] = await db
       .update(recruiterContacts)
       .set({
-        emailDraft,
-        linkedinMessage,
+        notes: contact.notes || "",
       })
       .where(eq(recruiterContacts.id, contactId))
       .returning();
 
-    return updated;
+    return { ...updated, emailDraft, linkedinMessage };
   }
 }
 

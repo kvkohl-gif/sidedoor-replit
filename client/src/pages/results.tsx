@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { JobDetailCard } from "@/components/ui/job-detail-card";
-import ContactTable from "@/components/ui/contact-table";
+import ContactCards from "@/components/ui/contact-cards";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
@@ -226,7 +226,7 @@ export default function Results() {
           </Collapsible>
         )}
 
-        {/* Contact Table */}
+        {/* Contact Cards */}
         {submission.recruiters && submission.recruiters.length > 0 ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -235,7 +235,7 @@ export default function Results() {
                 {submission.recruiters.length} contacts found
               </Badge>
             </div>
-            <ContactTable 
+            <ContactCards 
               contacts={submission.recruiters.map(r => ({
                 id: r.id,
                 name: r.name || "Unknown",
