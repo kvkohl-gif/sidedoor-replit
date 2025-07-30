@@ -46,7 +46,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   // Update contact mutation
   const updateContactMutation = useMutation({
     mutationFn: async ({ contactId, updates }: { contactId: number; updates: any }) => {
-      return await apiRequest(`/api/contacts/${contactId}`, "PATCH", updates);
+      return await apiRequest("PATCH", `/api/contacts/${contactId}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/submissions/${submissionId}`] });
@@ -56,7 +56,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   // Generate message mutation
   const generateMessageMutation = useMutation({
     mutationFn: async ({ contactId, messageType, tone }: { contactId: number; messageType: string; tone: string }) => {
-      return await apiRequest(`/api/contacts/${contactId}/generate-message`, "POST", { messageType, tone });
+      return await apiRequest("POST", `/api/contacts/${contactId}/generate-message`, { messageType, tone });
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/submissions/${submissionId}`] });
@@ -135,12 +135,13 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   };
 
   const getConfidenceBadge = (confidence: number) => {
-    if (confidence >= 90) {
-      return { variant: "default" as const, className: "bg-green-50 text-green-700 border-green-200", text: "High Confidence", description: `${confidence}% - Very likely to be accurate` };
-    } else if (confidence >= 70) {
-      return { variant: "outline" as const, className: "bg-yellow-50 text-yellow-600 border-yellow-300", text: "Medium Confidence", description: `${confidence}% - Moderately confident` };
+    const conf = confidence || 0;
+    if (conf >= 90) {
+      return { variant: "default" as const, className: "bg-green-50 text-green-700 border-green-200", text: "High", description: `${conf}% - Very likely to be accurate` };
+    } else if (conf >= 70) {
+      return { variant: "outline" as const, className: "bg-yellow-50 text-yellow-600 border-yellow-300", text: "Medium", description: `${conf}% - Moderately confident` };
     } else {
-      return { variant: "secondary" as const, className: "bg-gray-50 text-gray-600 border-gray-200", text: "Low Confidence", description: `${confidence}% - Lower confidence level` };
+      return { variant: "secondary" as const, className: "bg-gray-50 text-gray-600 border-gray-200", text: "Low", description: `${conf}% - Lower confidence level` };
     }
   };
 
@@ -168,36 +169,48 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
   return (
     <TooltipProvider>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-4">
         {contacts.map((contact) => {
           const isExpanded = expandedCards.has(contact.id);
           const isGenerating = generatingMessages.has(contact.id);
           const hasMessages = contact.emailDraft || contact.linkedinMessage;
           const verificationBadge = getVerificationBadge(contact.verificationStatus, contact.emailVerified);
-          const confidenceBadge = getConfidenceBadge(contact.confidence);
+          const confidenceBadge = getConfidenceBadge(contact.recruiterConfidence || contact.confidenceScore);
           const contactTypeBadge = getContactTypeBadge(contact);
 
           return (
-            <Card key={contact.id} className="border-gray-200 hover:shadow-lg transition-all duration-200">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
+            <Card key={contact.id} className="border-gray-200 hover:shadow-md transition-all duration-200">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg font-semibold text-gray-900 truncate">
-                      {contact.name}
-                    </CardTitle>
-                    <p className="text-sm text-gray-600 mt-1 truncate" title={contact.title}>
+                    <div className="flex items-center gap-3">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        {contact.name}
+                      </CardTitle>
+                      <Badge variant={contactTypeBadge.variant} className={`text-xs px-2 py-0.5 ${contactTypeBadge.className}`}>
+                        {contactTypeBadge.text}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1" title={contact.title}>
                       {contact.title}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-1 ml-2">
-                    <Badge variant={contactTypeBadge.variant} className={`text-xs px-2 py-0.5 ${contactTypeBadge.className}`}>
-                      {contactTypeBadge.text}
-                    </Badge>
+                  <div className="flex items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant={confidenceBadge.variant} className={`text-xs px-2 py-0.5 ${confidenceBadge.className} cursor-help`}>
+                          {confidenceBadge.text}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{confidenceBadge.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
-                {/* Contact Details */}
-                <div className="space-y-2 mt-3">
+                {/* Contact Details Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                   {/* Email */}
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -227,9 +240,9 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                   </div>
 
                   {/* LinkedIn */}
-                  {contact.linkedinUrl && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    {contact.linkedinUrl ? (
                       <a
                         href={contact.linkedinUrl}
                         target="_blank"
@@ -239,31 +252,15 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                         <span>LinkedIn Profile</span>
                         <ExternalLink className="h-3 w-3" />
                       </a>
-                    </div>
-                  )}
-
-                  {/* Department & Confidence */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-600 text-sm">{contact.department}</span>
-                    </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge variant={confidenceBadge.variant} className={`text-xs px-2 py-0.5 ${confidenceBadge.className} cursor-help`}>
-                          {confidenceBadge.text.split(' ')[0]}
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{confidenceBadge.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No LinkedIn</span>
+                    )}
                   </div>
 
                   {/* Source */}
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <span className="text-gray-600 text-sm capitalize">{contact.sourcePlatform}</span>
+                    <span className="text-gray-600 text-sm capitalize">{contact.sourcePlatform || 'Apollo'}</span>
                     {contact.apolloId && (
                       <span className="text-xs text-gray-400">#{contact.apolloId}</span>
                     )}
@@ -272,6 +269,27 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
               </CardHeader>
 
               <CardContent className="pt-0">
+                {/* Action Button */}
+                <div className="flex justify-between items-center mb-4">
+                  <Button
+                    onClick={() => handleGenerateMessages(contact)}
+                    disabled={isGenerating}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Generate Messages
+                      </>
+                    )}
+                  </Button>
+                </div>
+
                 {/* Notes Section */}
                 <div className="mb-4">
                   {editingNotes === contact.id ? (
