@@ -45,6 +45,11 @@ export interface IStorage {
   getMessageTemplateById(id: number): Promise<MessageTemplate | undefined>;
   updateMessageTemplate(id: number, updates: Partial<MessageTemplate>): Promise<MessageTemplate>;
   getRecruiterById(id: number): Promise<RecruiterContact | undefined>;
+  
+  // Extended contact operations for global contacts page
+  getAllUserContacts(userId: string): Promise<any[]>;
+  updateContact(contactId: number, userId: string, updates: any): Promise<any>;
+  generateContactMessage(contactId: number, userId: string, messageType: string, tone: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -200,6 +205,76 @@ export class DatabaseStorage implements IStorage {
       .from(recruiterContacts)
       .where(eq(recruiterContacts.id, id));
     return recruiter;
+  }
+
+  // Extended contact operations for global contacts page
+  async getAllUserContacts(userId: string): Promise<any[]> {
+    const contactsWithJobs = await db.query.recruiterContacts.findMany({
+      where: eq(recruiterContacts.userId, userId),
+      orderBy: [desc(recruiterContacts.createdAt)],
+      with: {
+        jobSubmission: true,
+      },
+    });
+
+    // Transform to include job submission details
+    return contactsWithJobs.map(contact => ({
+      ...contact,
+      submissionId: contact.jobSubmissionId,
+      jobTitle: contact.jobSubmission?.jobTitle,
+      companyName: contact.jobSubmission?.companyName,
+      jobUrl: contact.jobSubmission?.jobInput,
+    }));
+  }
+
+  async updateContact(contactId: number, userId: string, updates: any): Promise<any> {
+    // First verify the contact belongs to the user
+    const contact = await db.query.recruiterContacts.findFirst({
+      where: eq(recruiterContacts.id, contactId),
+    });
+
+    if (!contact || contact.userId !== userId) {
+      throw new Error("Contact not found or access denied");
+    }
+
+    const [updated] = await db
+      .update(recruiterContacts)
+      .set(updates)
+      .where(eq(recruiterContacts.id, contactId))
+      .returning();
+    
+    return updated;
+  }
+
+  async generateContactMessage(contactId: number, userId: string, messageType: string, tone: string): Promise<any> {
+    // First verify the contact belongs to the user
+    const contact = await db.query.recruiterContacts.findFirst({
+      where: eq(recruiterContacts.id, contactId),
+      with: {
+        jobSubmission: true,
+      },
+    });
+
+    if (!contact || contact.userId !== userId) {
+      throw new Error("Contact not found or access denied");
+    }
+
+    // For now, return placeholder messages - you can integrate with OpenAI later
+    const emailDraft = `Hi ${contact.name},\n\nI hope this email finds you well. I recently came across the ${contact.jobSubmission?.jobTitle || 'position'} opening at ${contact.jobSubmission?.companyName || 'your company'} and I'm very interested in learning more about this opportunity.\n\nI believe my background would be a great fit for this role. Would you be available for a brief call to discuss how I can contribute to your team?\n\nBest regards,\n[Your Name]`;
+    
+    const linkedinMessage = `Hi ${contact.name}, I'm interested in the ${contact.jobSubmission?.jobTitle || 'position'} at ${contact.jobSubmission?.companyName || 'your company'}. Would love to connect and learn more about this opportunity!`;
+
+    // Update the contact with generated messages
+    const [updated] = await db
+      .update(recruiterContacts)
+      .set({
+        emailDraft,
+        linkedinMessage,
+      })
+      .where(eq(recruiterContacts.id, contactId))
+      .returning();
+
+    return updated;
   }
 }
 

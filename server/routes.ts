@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { registerContactRoutes } from "./routes/contacts";
 import OpenAI from "openai";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
@@ -696,6 +697,9 @@ LinkedIn message tone: ${tone}`;
       res.status(500).json({ message: "Failed to generate message" });
     }
   });
+
+  // Register contact routes
+  registerContactRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;
