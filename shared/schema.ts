@@ -80,6 +80,11 @@ export const recruiterContacts = pgTable("recruiter_contacts", {
   outreachBucket: varchar("outreach_bucket").default("recruiter"), // "recruiter" or "department_lead"
   department: varchar("department"), // Department for department_lead bucket
   seniority: varchar("seniority"), // Seniority level for department_lead bucket
+  // Generated message fields
+  generatedEmailMessage: text("generated_email_message"), // AI-generated email content
+  generatedLinkedInMessage: text("generated_linkedin_message"), // AI-generated LinkedIn content
+  emailDraft: text("email_draft"), // Alternative email field name
+  linkedinMessage: text("linkedin_message"), // Alternative LinkedIn field name
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

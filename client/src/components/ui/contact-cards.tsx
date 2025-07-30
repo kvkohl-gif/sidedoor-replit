@@ -85,25 +85,6 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/submissions/${submissionId}`] });
-      
-      // Only remove from generating and expand if this is the last message type
-      setTimeout(() => {
-        setGeneratingMessages(prev => {
-          const next = new Set(Array.from(prev));
-          next.delete(variables.contactId);
-          return next;
-        });
-        setExpandedCards(prev => {
-          const next = new Set(Array.from(prev));
-          next.add(variables.contactId);
-          return next;
-        });
-      }, 1000); // Small delay to allow both messages to be generated
-      
-      toast({
-        title: "Message Generated",
-        description: `${variables.messageType === 'email' ? 'Email' : 'LinkedIn'} message has been generated`,
-      });
     },
     onError: (error, variables) => {
       setGeneratingMessages(prev => {
@@ -127,27 +108,47 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
     },
   });
 
-  const handleGenerateMessages = (contact: any) => {
+  const handleGenerateMessages = async (contact: any) => {
     setGeneratingMessages(prev => new Set(Array.from(prev).concat([contact.id])));
     
-    // Generate both email and LinkedIn messages
-    Promise.all([
-      generateMessageMutation.mutateAsync({
+    try {
+      // Generate both email and LinkedIn messages sequentially
+      await generateMessageMutation.mutateAsync({
         contactId: contact.id,
         messageType: 'email',
-      }),
-      generateMessageMutation.mutateAsync({
+      });
+      
+      await generateMessageMutation.mutateAsync({
         contactId: contact.id,
         messageType: 'linkedin',
-      })
-    ]).catch(error => {
+      });
+      
+      // Auto-expand the card to show messages
+      setExpandedCards(prev => {
+        const next = new Set(Array.from(prev));
+        next.add(contact.id);
+        return next;
+      });
+      
+      toast({
+        title: "Messages Generated",
+        description: "Both email and LinkedIn messages have been created",
+      });
+      
+    } catch (error) {
       console.error('Error generating messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate messages. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setGeneratingMessages(prev => {
         const next = new Set(Array.from(prev));
         next.delete(contact.id);
         return next;
       });
-    });
+    }
   };
 
   const toggleCardExpansion = (contactId: number) => {

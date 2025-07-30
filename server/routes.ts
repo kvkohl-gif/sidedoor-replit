@@ -698,7 +698,7 @@ LinkedIn message tone: ${tone}`;
         updateFields.linkedinMessage = generatedMessage;
       }
       
-      await storage.updateContact(contactId, userId, updateFields);
+      await storage.updateContact(contactId, req.user?.claims?.sub, updateFields);
 
       res.json({ message: generatedMessage });
     } catch (error) {
