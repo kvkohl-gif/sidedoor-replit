@@ -168,3 +168,9 @@ The enrichment service is structured to easily integrate with:
   * Two-bucket system operational: 2 recruiting contacts + 3 department leads per search
   * NeverBounce email verification fully functional (valid/catchall/invalid detection)
   * Removed webhook requirement that was blocking enrichment
+- **NEW: Enhanced OpenAI prompts with Department Strategy Builder (Jan 30, 2025)**:
+  * Added sophisticated Apollo search parameter extraction with confidence scoring
+  * Implemented Department Strategy Bucket Builder for customized two-bucket outreach
+  * Enhanced geographic filtering with job country/region prioritization
+  * Added structured department classification and title targeting with confidence levels
+  * Fallback strategy implementation for failed searches

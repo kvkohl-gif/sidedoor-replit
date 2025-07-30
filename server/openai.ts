@@ -524,7 +524,107 @@ Instructions:
 }
 
 /**
- * Generate two-bucket outreach targets based on job title
+ * Department Strategy Bucket Builder - Customizes two-bucket outreach strategy
+ */
+export async function generateDepartmentStrategyBuckets(jobTitle: string, jobDescription?: string): Promise<{
+  recruiter_contacts: {
+    titles: string[];
+    priority: boolean;
+  };
+  department_lead_contacts: {
+    primary_department: string;
+    titles: string[];
+    seniorities: string[];
+    job_title_match: string;
+  };
+}> {
+  const systemPrompt = `You are analyzing job titles to determine a two-bucket contact strategy using Apollo's search API.
+
+Given a job title, return the following:
+
+{
+  "recruiter_contacts": {
+    "titles": [
+      "recruiter", 
+      "talent acquisition specialist", 
+      "recruiting manager", 
+      "technical recruiter", 
+      "senior recruiter"
+    ],
+    "priority": true
+  },
+  "department_lead_contacts": {
+    "primary_department": "[Choose one of: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other]",
+    "titles": [
+      "[Relevant team leads – e.g. 'engineering manager', 'head of product']"
+    ],
+    "seniorities": ["manager", "director", "vp", "c_suite"],
+    "job_title_match": "[Return the job title matched to this department]"
+  }
+}
+
+Rules:
+- Use only the job title and job description as input.
+- Do not return names or emails.
+- The goal is to create structured titles and seniority filters to find likely hiring managers for the candidate's role.`;
+
+  const userPrompt = `Analyze this job title to create a two-bucket contact strategy:
+
+Job Title: ${jobTitle}
+${jobDescription ? `Job Description: ${jobDescription}` : ''}
+
+Return the structured contact strategy in the exact JSON format specified.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      recruiter_contacts: {
+        titles: Array.isArray(result.recruiter_contacts?.titles) ? result.recruiter_contacts.titles : [
+          "recruiter", "talent acquisition specialist", "recruiting manager", "technical recruiter", "senior recruiter"
+        ],
+        priority: Boolean(result.recruiter_contacts?.priority !== undefined ? result.recruiter_contacts.priority : true)
+      },
+      department_lead_contacts: {
+        primary_department: result.department_lead_contacts?.primary_department || "Other",
+        titles: Array.isArray(result.department_lead_contacts?.titles) ? result.department_lead_contacts.titles : [
+          "manager", "director", "head"
+        ],
+        seniorities: Array.isArray(result.department_lead_contacts?.seniorities) ? result.department_lead_contacts.seniorities : [
+          "manager", "director", "vp", "c_suite"
+        ],
+        job_title_match: result.department_lead_contacts?.job_title_match || jobTitle
+      }
+    };
+  } catch (error) {
+    console.error("OpenAI Department Strategy Builder error:", error);
+    return {
+      recruiter_contacts: {
+        titles: ["recruiter", "talent acquisition specialist", "recruiting manager", "technical recruiter", "senior recruiter"],
+        priority: true
+      },
+      department_lead_contacts: {
+        primary_department: "Other",
+        titles: ["manager", "director", "head"],
+        seniorities: ["manager", "director", "vp", "c_suite"],
+        job_title_match: jobTitle
+      }
+    };
+  }
+}
+
+/**
+ * Generate two-bucket outreach targets based on job title (legacy function - now enhanced)
  */
 export async function generateTwoBucketTargets(jobTitle: string): Promise<TwoBucketTargets> {
   // First try deterministic mapping
