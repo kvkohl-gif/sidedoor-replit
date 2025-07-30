@@ -688,8 +688,17 @@ LinkedIn message tone: ${tone}`;
       const generatedMessage = response.choices[0].message.content;
 
       // Update contact with generated message
-      const updateField = messageType === "email" ? "emailDraft" : "linkedinMessage";
-      await storage.updateContact(contactId, { [updateField]: generatedMessage });
+      const updateFields: any = {};
+      
+      if (messageType === "email") {
+        updateFields.generatedEmailMessage = generatedMessage;
+        updateFields.emailDraft = generatedMessage;
+      } else {
+        updateFields.generatedLinkedInMessage = generatedMessage;
+        updateFields.linkedinMessage = generatedMessage;
+      }
+      
+      await storage.updateContact(contactId, userId, updateFields);
 
       res.json({ message: generatedMessage });
     } catch (error) {

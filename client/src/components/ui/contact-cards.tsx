@@ -85,19 +85,24 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/submissions/${submissionId}`] });
-      setGeneratingMessages(prev => {
-        const next = new Set(Array.from(prev));
-        next.delete(variables.contactId);
-        return next;
-      });
-      setExpandedCards(prev => {
-        const next = new Set(Array.from(prev));
-        next.add(variables.contactId);
-        return next;
-      });
+      
+      // Only remove from generating and expand if this is the last message type
+      setTimeout(() => {
+        setGeneratingMessages(prev => {
+          const next = new Set(Array.from(prev));
+          next.delete(variables.contactId);
+          return next;
+        });
+        setExpandedCards(prev => {
+          const next = new Set(Array.from(prev));
+          next.add(variables.contactId);
+          return next;
+        });
+      }, 1000); // Small delay to allow both messages to be generated
+      
       toast({
-        title: "Messages Generated",
-        description: "Email and LinkedIn messages have been generated",
+        title: "Message Generated",
+        description: `${variables.messageType === 'email' ? 'Email' : 'LinkedIn'} message has been generated`,
       });
     },
     onError: (error, variables) => {
@@ -124,9 +129,24 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
   const handleGenerateMessages = (contact: any) => {
     setGeneratingMessages(prev => new Set(Array.from(prev).concat([contact.id])));
-    generateMessageMutation.mutate({
-      contactId: contact.id,
-      messageType: 'email',
+    
+    // Generate both email and LinkedIn messages
+    Promise.all([
+      generateMessageMutation.mutateAsync({
+        contactId: contact.id,
+        messageType: 'email',
+      }),
+      generateMessageMutation.mutateAsync({
+        contactId: contact.id,
+        messageType: 'linkedin',
+      })
+    ]).catch(error => {
+      console.error('Error generating messages:', error);
+      setGeneratingMessages(prev => {
+        const next = new Set(Array.from(prev));
+        next.delete(contact.id);
+        return next;
+      });
     });
   };
 
@@ -162,7 +182,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
       {contacts.map((contact) => {
         const isGenerating = generatingMessages.has(contact.id);
         const isExpanded = expandedCards.has(contact.id);
-        const hasMessages = contact.generatedEmailMessage || contact.generatedLinkedInMessage;
+        const hasMessages = contact.generatedEmailMessage || contact.generatedLinkedInMessage || contact.emailDraft || contact.linkedinMessage;
         const verificationBadge = getVerificationBadge(contact.verificationStatus);
 
         return (
@@ -269,7 +289,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
               </Button>
             </div>
 
-            {/* Expandable messages section */}
+            {/* Expandable messages section - auto-expand when messages are generated */}
             {hasMessages && (
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-3">
@@ -296,40 +316,40 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
                 {isExpanded && (
                   <div className="space-y-4">
-                    {contact.generatedEmailMessage && (
+                    {(contact.generatedEmailMessage || contact.emailDraft) && (
                       <div className="bg-blue-50 p-4 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-blue-900">Email Message</span>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => copyToClipboard(contact.generatedEmailMessage, "Email message")}
+                            onClick={() => copyToClipboard(contact.generatedEmailMessage || contact.emailDraft, "Email message")}
                           >
                             <Copy className="h-3 w-3 mr-1" />
                             Copy
                           </Button>
                         </div>
                         <div className="text-sm text-blue-800 whitespace-pre-wrap">
-                          {contact.generatedEmailMessage}
+                          {contact.generatedEmailMessage || contact.emailDraft}
                         </div>
                       </div>
                     )}
 
-                    {contact.generatedLinkedInMessage && (
+                    {(contact.generatedLinkedInMessage || contact.linkedinMessage) && (
                       <div className="bg-blue-50 p-4 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-blue-900">LinkedIn Message</span>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => copyToClipboard(contact.generatedLinkedInMessage, "LinkedIn message")}
+                            onClick={() => copyToClipboard(contact.generatedLinkedInMessage || contact.linkedinMessage, "LinkedIn message")}
                           >
                             <Copy className="h-3 w-3 mr-1" />
                             Copy
                           </Button>
                         </div>
                         <div className="text-sm text-blue-800 whitespace-pre-wrap">
-                          {contact.generatedLinkedInMessage}
+                          {contact.generatedLinkedInMessage || contact.linkedinMessage}
                         </div>
                       </div>
                     )}
