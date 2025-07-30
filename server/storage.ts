@@ -210,19 +210,36 @@ export class DatabaseStorage implements IStorage {
   // Extended contact operations for global contacts page
   async getAllUserContacts(userId: string): Promise<any[]> {
     const contacts = await db
-      .select()
+      .select({
+        id: recruiterContacts.id,
+        name: recruiterContacts.name,
+        title: recruiterContacts.title,
+        email: recruiterContacts.email,
+        linkedinUrl: recruiterContacts.linkedinUrl,
+        department: recruiterContacts.department,
+        sourcePlatform: recruiterContacts.sourcePlatform,
+        confidenceScore: recruiterContacts.confidenceScore,
+        emailVerified: recruiterContacts.emailVerified,
+        verificationStatus: recruiterContacts.verificationStatus,
+        notes: recruiterContacts.notes,
+        createdAt: recruiterContacts.createdAt,
+        jobSubmissionId: recruiterContacts.jobSubmissionId,
+        userId: recruiterContacts.userId,
+        apolloId: recruiterContacts.apolloId,
+        jobTitle: jobSubmissions.jobTitle,
+        companyName: jobSubmissions.companyName,
+        jobInput: jobSubmissions.jobInput,
+      })
       .from(recruiterContacts)
       .leftJoin(jobSubmissions, eq(recruiterContacts.jobSubmissionId, jobSubmissions.id))
       .where(eq(recruiterContacts.userId, userId))
       .orderBy(desc(recruiterContacts.createdAt));
 
     // Transform to include job submission details
-    return contacts.map(row => ({
-      ...row.recruiter_contacts,
-      submissionId: row.recruiter_contacts.jobSubmissionId,
-      jobTitle: row.job_submissions?.jobTitle,
-      companyName: row.job_submissions?.companyName,
-      jobUrl: row.job_submissions?.jobInput,
+    return contacts.map(contact => ({
+      ...contact,
+      submissionId: contact.jobSubmissionId,
+      jobUrl: contact.jobInput,
     }));
   }
 
