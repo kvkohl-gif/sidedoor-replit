@@ -174,3 +174,11 @@ The enrichment service is structured to easily integrate with:
   * Enhanced geographic filtering with job country/region prioritization
   * Added structured department classification and title targeting with confidence levels
   * Fallback strategy implementation for failed searches
+- **NEW: Redesigned Contact Table with Flattened View (Jan 30, 2025)**:
+  * Removed expandable rows in favor of comprehensive single-row view
+  * Added dedicated columns: Contact Type, Confidence Level, Email Status, Source, Notes
+  * Streamlined actions to single "Generate" button for outreach message creation
+  * Enhanced hover states and accessibility with tooltips
+  * Improved data density following modern CRM UI patterns
+  * Integrated LinkedIn links directly in name column
+  * Added collapsible message view below rows when generated
