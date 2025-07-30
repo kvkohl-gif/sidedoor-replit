@@ -16,6 +16,26 @@ export interface ApolloContact {
   }>;
 }
 
+export interface ApolloOrganization {
+  id: string;
+  name: string;
+  website_url?: string;
+  primary_domain?: string;
+  logo_url?: string;
+  description?: string;
+  industry?: string;
+  employees?: number;
+}
+
+export interface OrganizationSearchResponse {
+  organizations: ApolloOrganization[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total_entries: number;
+  };
+}
+
 export interface ApolloSearchResponse {
   contacts: ApolloContact[];
   people: ApolloContact[];
@@ -183,6 +203,115 @@ class ApolloService {
     } catch (error) {
       console.error("Apollo API connection test failed:", error);
       return false;
+    }
+  }
+
+  /**
+   * Search for organizations in Apollo to get organization_id for precise matching
+   */
+  async searchOrganizations(params: {
+    company_name?: string;
+    domain?: string;
+    fallback_query?: string;
+  }): Promise<ApolloOrganization[]> {
+    if (!this.apiKey) {
+      throw new Error("Apollo API key is required");
+    }
+
+    try {
+      // First try exact domain match if available
+      if (params.domain) {
+        console.log(`Searching Apollo organizations by domain: ${params.domain}`);
+        
+        const domainPayload = {
+          q_organization_domains_list: [params.domain],
+          page: 1,
+          per_page: 10
+        };
+
+        const domainResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "x-api-key": this.apiKey
+          },
+          body: JSON.stringify(domainPayload)
+        });
+
+        if (domainResponse.ok) {
+          const domainData: OrganizationSearchResponse = await domainResponse.json();
+          if (domainData.organizations && domainData.organizations.length > 0) {
+            console.log(`Found ${domainData.organizations.length} organizations by domain`);
+            return domainData.organizations;
+          }
+        }
+      }
+
+      // If no domain match, try company name search
+      if (params.company_name) {
+        console.log(`Searching Apollo organizations by name: ${params.company_name}`);
+        
+        const namePayload = {
+          q_organization_name: params.company_name,
+          page: 1,
+          per_page: 10
+        };
+
+        const nameResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "x-api-key": this.apiKey
+          },
+          body: JSON.stringify(namePayload)
+        });
+
+        if (nameResponse.ok) {
+          const nameData: OrganizationSearchResponse = await nameResponse.json();
+          if (nameData.organizations && nameData.organizations.length > 0) {
+            console.log(`Found ${nameData.organizations.length} organizations by name`);
+            return nameData.organizations;
+          }
+        }
+      }
+
+      // Last resort: fallback query
+      if (params.fallback_query) {
+        console.log(`Searching Apollo organizations with fallback query: ${params.fallback_query}`);
+        
+        const fallbackPayload = {
+          q_organization_name: params.fallback_query,
+          page: 1,
+          per_page: 10
+        };
+
+        const fallbackResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "x-api-key": this.apiKey
+          },
+          body: JSON.stringify(fallbackPayload)
+        });
+
+        if (fallbackResponse.ok) {
+          const fallbackData: OrganizationSearchResponse = await fallbackResponse.json();
+          if (fallbackData.organizations) {
+            console.log(`Found ${fallbackData.organizations.length} organizations with fallback query`);
+            return fallbackData.organizations;
+          }
+        }
+      }
+
+      console.log("No organizations found with any search method");
+      return [];
+
+    } catch (error) {
+      console.error("Apollo organization search error:", error);
+      return [];
     }
   }
 
@@ -670,20 +799,32 @@ class ApolloService {
   }
 
   /**
-   * Search specifically for recruiting contacts (2 contacts)
+   * Search specifically for recruiting contacts (2 contacts) - Enhanced with organization_id support
    */
-  async searchRecruitingContacts(params: RecruiterSearchParams & { per_page?: number }): Promise<ProcessedContact[]> {
+  async searchRecruitingContacts(params: RecruiterSearchParams & { 
+    per_page?: number;
+    organization_id?: string;
+  }): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required");
     }
 
     try {
       const searchPayload: any = {
-        q_organization_name: params.company_name,
         person_titles: RECRUITER_TITLES,
         page: 1,
         per_page: params.per_page || 2
       };
+
+      // Use organization_id for precise matching if available
+      if (params.organization_id) {
+        searchPayload.organization_ids = [params.organization_id];
+        console.log(`Using organization_id for recruiting search: ${params.organization_id}`);
+      } else {
+        // Fallback to name-based search
+        searchPayload.q_organization_name = params.company_name;
+        console.log(`Using company name for recruiting search: ${params.company_name}`);
+      }
 
       // Add geographic filtering if available
       if (params.job_country) {
@@ -702,7 +843,7 @@ class ApolloService {
   }
 
   /**
-   * Search specifically for department lead contacts (2 contacts)
+   * Search specifically for department lead contacts (2 contacts) - Enhanced with organization_id support
    */
   async searchDepartmentLeads(params: {
     company_name: string;
@@ -716,6 +857,7 @@ class ApolloService {
     company_hq_country?: string;
     remote_hiring_countries?: string[];
     per_page?: number;
+    organization_id?: string;
   }): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required");
@@ -723,12 +865,21 @@ class ApolloService {
 
     try {
       const searchPayload: any = {
-        q_organization_name: params.company_name,
         person_titles: params.titles,
         person_seniorities: params.seniorities,
         page: 1,
         per_page: params.per_page || 2
       };
+
+      // Use organization_id for precise matching if available
+      if (params.organization_id) {
+        searchPayload.organization_ids = [params.organization_id];
+        console.log(`Using organization_id for department lead search: ${params.organization_id}`);
+      } else {
+        // Fallback to name-based search
+        searchPayload.q_organization_name = params.company_name;
+        console.log(`Using company name for department lead search: ${params.company_name}`);
+      }
 
       // Add geographic filtering if available
       if (params.job_country) {

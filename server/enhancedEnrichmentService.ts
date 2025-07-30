@@ -15,6 +15,7 @@ export interface ContactSearchRequest {
   job_region?: string; // New: state/region where job is located  
   company_hq_country?: string; // New: company headquarters country
   remote_hiring_countries?: string[]; // New: countries where company hires remotely
+  organization_id?: string; // New: Apollo organization ID for precise matching
 }
 
 export interface EnrichedContact {
@@ -110,7 +111,8 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 2 // Get 2 recruiting contacts
+          per_page: 2, // Get 2 recruiting contacts
+          organization_id: request.organization_id
         });
         
         // Search for department lead contacts (2 contacts)
@@ -126,7 +128,8 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 2 // Get 2 department leads
+          per_page: 2, // Get 2 department leads
+          organization_id: request.organization_id
         });
         
         // Process all contacts from both searches

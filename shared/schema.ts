@@ -45,6 +45,8 @@ export const jobSubmissions = pgTable("job_submissions", {
   linkedinMessage: text("linkedin_message"),
   companyName: varchar("company_name"),
   jobTitle: varchar("job_title"),
+  organizationId: varchar("organization_id"), // Apollo organization ID for precise matching
+  companyDomain: varchar("company_domain"), // Company domain from Apollo or manual entry
   status: varchar("status").default("not_contacted"), // not_contacted, email_sent, awaiting_reply, follow_up_needed, rejected, interview_scheduled
   notes: text("notes"), // Job-level notes
   lastContactedAt: timestamp("last_contacted_at"), // When user last contacted someone for this job

@@ -1,0 +1,103 @@
+COMPANY SEARCH FLOW + ORGANIZATION ID HANDLING
+🔧 1. Company Search Prompt for OpenAI
+Purpose: Extract accurate company name and domain from job description or job URL.
+
+prompt
+Copy
+Edit
+You are a data extraction assistant helping match job postings to Apollo organizations.
+
+Your job is to extract the **company name** and **website domain** from the given job description or URL content. Be precise and do not guess.
+
+Return JSON in the following format:
+{
+  "company_name": "[Exact name of the company]",
+  "company_domain": "[company.com]",
+  "company_url": "[Company career or homepage URL if available]",
+  "fallback_query": "[Cleaned-up version of the company name to use for fuzzy search]"
+}
+
+- Only return values if explicitly mentioned.
+- Use job URL to infer domain if clearly from a company site (e.g., jobs.lever.co/notion).
+- `fallback_query` is a stripped, lowercase version of the company name for backup fuzzy matching.
+
+Do not return null values. If nothing is found, return:
+{
+  "company_name": null,
+  "company_domain": null,
+  "company_url": null,
+  "fallback_query": null
+}
+🧭 2. Company Search in Apollo
+Step 1: Search Apollo organizations using both methods (try exact match, then fuzzy):
+
+Initial query (exact domain):
+
+json
+Copy
+Edit
+{
+  "q_organization_domains_list": ["company.com"]
+}
+If no match, retry with fuzzy fallback query:
+
+json
+Copy
+Edit
+{
+  "q_organization_name": "Notion"
+}
+🖼️ 3. Modal UI for Company Confirmation
+When Apollo returns multiple organization matches:
+
+Modal Structure:
+Simple list-based modal (not card-based).
+
+Display checkbox radio buttons for each option (user can select only one).
+
+Show:
+
+✅ Company Name
+
+🌐 Domain (or company website)
+
+🖼 Logo (if available)
+
+Modal Buttons:
+“Confirm” to proceed with contact search using selected company.
+
+“None of these match” → allow user to input company domain manually (optional override).
+
+🧩 4. Store and Use organization_id
+After company is confirmed (via modal or auto-selection):
+
+✅ Save:
+
+json
+Copy
+Edit
+{
+  "organization_id": "abc123",
+  "company_name": "Dropbox",
+  "company_domain": "dropbox.com"
+}
+Then in all Apollo /mixed_people/search queries (recruiter + department searches), use:
+
+json
+Copy
+Edit
+{
+  "organization_ids": ["abc123"]
+}
+This ensures exact match of people to confirmed company and avoids mismatches.
+
+🔁 5. Optional Fallbacks
+If organization_id is missing or null:
+
+json
+Copy
+Edit
+{
+  "q_organization_name": "Dropbox",
+  "q_organization_domains_list": ["dropbox.com"]
+}

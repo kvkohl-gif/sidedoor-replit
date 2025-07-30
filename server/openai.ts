@@ -524,6 +524,75 @@ Instructions:
 }
 
 /**
+ * Extract company information for Apollo organization matching
+ */
+export async function extractCompanyInfo(content: string): Promise<{
+  company_name: string | null;
+  company_domain: string | null;
+  company_url: string | null;
+  fallback_query: string | null;
+}> {
+  const systemPrompt = `You are a data extraction assistant helping match job postings to Apollo organizations.
+
+Your job is to extract the **company name** and **website domain** from the given job description or URL content. Be precise and do not guess.
+
+Return JSON in the following format:
+{
+  "company_name": "[Exact name of the company]",
+  "company_domain": "[company.com]",
+  "company_url": "[Company career or homepage URL if available]",
+  "fallback_query": "[Cleaned-up version of the company name to use for fuzzy search]"
+}
+
+- Only return values if explicitly mentioned.
+- Use job URL to infer domain if clearly from a company site (e.g., jobs.lever.co/notion).
+- \`fallback_query\` is a stripped, lowercase version of the company name for backup fuzzy matching.
+
+Do not return null values. If nothing is found, return:
+{
+  "company_name": null,
+  "company_domain": null,
+  "company_url": null,
+  "fallback_query": null
+}`;
+
+  const userPrompt = `Extract company information from this job content:
+
+${content}
+
+Return the company data in the JSON format specified.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      company_name: result.company_name || null,
+      company_domain: result.company_domain || null,
+      company_url: result.company_url || null,
+      fallback_query: result.fallback_query || null
+    };
+  } catch (error) {
+    console.error("OpenAI company info extraction error:", error);
+    return {
+      company_name: null,
+      company_domain: null,
+      company_url: null,
+      fallback_query: null
+    };
+  }
+}
+
+/**
  * Department Strategy Bucket Builder - Customizes two-bucket outreach strategy
  */
 export async function generateDepartmentStrategyBuckets(jobTitle: string, jobDescription?: string): Promise<{

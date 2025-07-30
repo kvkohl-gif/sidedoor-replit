@@ -10,6 +10,7 @@ import { Search, MessageSquare, BarChart3, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { CompanySelectionModal, type ApolloOrganization } from "@/components/ui/company-selection-modal";
 
 export default function Home() {
   const [inputType, setInputType] = useState<"text" | "url">("url");
@@ -23,6 +24,13 @@ export default function Home() {
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Company search flow state
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [pendingJobContent, setPendingJobContent] = useState("");
+  const [organizations, setOrganizations] = useState<ApolloOrganization[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
+  const [customDomain, setCustomDomain] = useState<string>("");
 
   // Auto-focus when switching to text input after URL failure
   useEffect(() => {
@@ -31,14 +39,41 @@ export default function Home() {
     }
   }, [inputType]);
 
+  // Company search mutation
+  const companySearchMutation = useMutation({
+    mutationFn: async (jobContent: string) => {
+      const response = await apiRequest("POST", "/api/company/search", { jobContent });
+      return response.json();
+    },
+    onError: (error) => {
+      toast({
+        title: "Company Search Failed",
+        description: error.message || "Failed to search for company information",
+        variant: "destructive",
+      });
+    },
+  });
+
   const submitMutation = useMutation({
-    mutationFn: async (data: { jobInput: string; inputType: string }) => {
+    mutationFn: async (data: { 
+      jobInput: string; 
+      inputType: string; 
+      organizationId?: string;
+      companyDomain?: string;
+    }) => {
       const response = await apiRequest("POST", "/api/submissions", data);
       return response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
       setLocation(`/results/${data.id}`);
+      
+      // Reset modal state
+      setShowCompanyModal(false);
+      setPendingJobContent("");
+      setOrganizations([]);
+      setSelectedOrganizationId(null);
+      setCustomDomain("");
     },
     onError: (error) => {
       toast({
@@ -130,7 +165,21 @@ export default function Home() {
     }
 
     try {
-      await submitMutation.mutateAsync({ jobInput: jobInput.trim(), inputType });
+      // Step 1: Search for company information first
+      setPendingJobContent(jobInput.trim());
+      const companySearchResult = await companySearchMutation.mutateAsync(jobInput.trim());
+      
+      if (companySearchResult.organizations && companySearchResult.organizations.length > 0) {
+        // Show company selection modal if multiple matches found
+        setOrganizations(companySearchResult.organizations);
+        setShowCompanyModal(true);
+      } else {
+        // No company matches found, proceed with standard submission
+        await submitMutation.mutateAsync({ 
+          jobInput: jobInput.trim(), 
+          inputType 
+        });
+      }
     } catch (error: any) {
       // Handle URL parsing failures with auto-switch
       if (inputType === "url" && (
@@ -151,6 +200,19 @@ export default function Home() {
       
       // Re-throw other errors to be handled by mutation's onError
       throw error;
+    }
+  };
+
+  const handleCompanyConfirm = async (organizationId: string | null, customDomain?: string) => {
+    try {
+      await submitMutation.mutateAsync({ 
+        jobInput: pendingJobContent, 
+        inputType,
+        organizationId: organizationId || undefined,
+        companyDomain: customDomain || undefined
+      });
+    } catch (error) {
+      // Error will be handled by mutation's onError
     }
   };
 
@@ -350,6 +412,19 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Company Selection Modal */}
+      <CompanySelectionModal
+        isOpen={showCompanyModal}
+        onClose={() => {
+          setShowCompanyModal(false);
+          setPendingJobContent("");
+          setOrganizations([]);
+        }}
+        organizations={organizations}
+        onConfirm={handleCompanyConfirm}
+        isLoading={submitMutation.isPending}
+      />
     </div>
   );
 }

@@ -37,6 +37,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
       });
 
+      // Extract organization_id and company_domain from request if provided
+      const { organizationId = null, companyDomain = null } = req.body;
+
       // Create initial job submission
       const jobSubmission = await storage.createJobSubmission(submissionData);
 
@@ -80,7 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const companyName = jobDataExtraction?.company_name || extraction.company_name;
         const jobTitle = jobDataExtraction?.job_title || extraction.job_title;
 
-        // Update job submission with extracted data
+        // Update job submission with extracted data and organization info
         const updatedSubmission = await storage.updateJobSubmission(jobSubmission.id, {
           openaiResponseRaw: JSON.stringify({
             basic_extraction: extraction,
@@ -88,6 +91,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
           companyName,
           jobTitle,
+          organizationId: organizationId,
+          companyDomain: companyDomain,
           emailDraft: extraction.email_draft,
           linkedinMessage: extraction.linkedin_message,
         });
@@ -109,7 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           job_country: apolloParams.job_country,
           job_region: apolloParams.job_region,
           company_hq_country: apolloParams.company_hq_country,
-          remote_hiring_countries: apolloParams.remote_hiring_countries
+          remote_hiring_countries: apolloParams.remote_hiring_countries,
+          organization_id: organizationId
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
@@ -485,6 +491,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating messages:", error);
       res.status(500).json({ message: "Failed to generate messages" });
+    }
+  });
+
+  // Company search routes for organization ID handling
+  app.post("/api/company/search", isAuthenticated, async (req: any, res) => {
+    try {
+      const { jobContent } = req.body;
+      if (!jobContent) {
+        return res.status(400).json({ message: "Job content is required" });
+      }
+
+      // Extract company information using OpenAI
+      const { extractCompanyInfo } = await import("./openai");
+      const companyInfo = await extractCompanyInfo(jobContent);
+
+      if (!companyInfo.company_name && !companyInfo.company_domain) {
+        return res.json({
+          companyInfo: null,
+          organizations: []
+        });
+      }
+
+      // Search Apollo organizations
+      const { apolloService } = await import("./apolloService");
+      const organizations = await apolloService.searchOrganizations({
+        company_name: companyInfo.company_name,
+        domain: companyInfo.company_domain,
+        fallback_query: companyInfo.fallback_query
+      });
+
+      res.json({
+        companyInfo,
+        organizations
+      });
+    } catch (error) {
+      console.error("Company search error:", error);
+      res.status(500).json({ message: "Failed to search for company" });
     }
   });
 
