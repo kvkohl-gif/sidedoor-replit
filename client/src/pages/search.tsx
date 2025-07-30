@@ -20,9 +20,14 @@ export default function Search() {
 
   const submitJobMutation = useMutation({
     mutationFn: async (input: string) => {
-      return await apiRequest("/api/submissions", "POST", { jobInput: input });
+      const isUrl = input.trim().startsWith('http');
+      return await apiRequest("POST", "/api/submissions", { 
+        jobInput: input,
+        inputType: isUrl ? "url" : "text"
+      });
     },
-    onSuccess: (data) => {
+    onSuccess: async (response) => {
+      const data = await response.json();
       toast({
         title: "Job Submission Created",
         description: "Your job has been submitted for processing. Redirecting to results...",
