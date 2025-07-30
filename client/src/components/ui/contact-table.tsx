@@ -144,13 +144,13 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       {/* Table Header */}
-      <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
-        <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
+      <div className="bg-gray-50/80 border-b border-gray-200 px-6 py-4">
+        <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
           <div className="col-span-1"></div>
           <div className="col-span-3">Name</div>
-          <div className="col-span-2">Title</div>
+          <div className="col-span-2">Job Title</div>
           <div className="col-span-2">Department</div>
           <div className="col-span-2">Email</div>
           <div className="col-span-1">Status</div>
@@ -168,7 +168,7 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
           return (
             <div key={contact.id}>
               {/* Main Row */}
-              <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
+              <div className="px-6 py-4 hover:bg-gray-50/60 transition-all duration-200 border-l-4 border-l-transparent hover:border-l-blue-500">
                 <div className="grid grid-cols-12 gap-4 items-center">
                   {/* Expand Button */}
                   <div className="col-span-1">
@@ -188,13 +188,13 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
 
                   {/* Name */}
                   <div className="col-span-3">
-                    <div className="font-medium text-gray-900">{contact.name}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge {...confidenceBadge} className={`text-xs ${confidenceBadge.className}`}>
+                    <div className="font-semibold text-gray-900 text-sm">{contact.name}</div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Badge {...confidenceBadge} className={`text-xs px-2 py-0.5 ${confidenceBadge.className}`}>
                         {confidenceBadge.text}
                       </Badge>
                       {contact.isRecruiterRole && (
-                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge variant="outline" className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-300">
                           Recruiter
                         </Badge>
                       )}
@@ -203,7 +203,7 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
 
                   {/* Title */}
                   <div className="col-span-2">
-                    <div className="text-sm text-gray-900">{contact.title}</div>
+                    <div className="text-sm text-gray-900 font-medium leading-relaxed">{contact.title}</div>
                   </div>
 
                   {/* Department */}
