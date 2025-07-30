@@ -1,17 +1,26 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, ChevronRight, ExternalLink, Copy, Mail, Check, RefreshCw } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { 
+  ChevronDown, 
+  ChevronRight,
+  Mail, 
+  Phone, 
+  ExternalLink, 
+  Copy,
+  MessageSquare,
+  Edit3,
+  Save,
+  X
+} from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
-interface Contact {
+export interface Contact {
   id: number;
   name: string;
   title: string;
@@ -20,14 +29,14 @@ interface Contact {
   confidence: number;
   department: string;
   emailVerified: boolean;
-  verificationStatus: "valid" | "risky" | "invalid" | "unknown";
+  verificationStatus: string;
   sourcePlatform: string;
   apolloId?: string;
   isRecruiterRole: boolean;
-  contactStatus?: "not_contacted" | "email_sent" | "replied" | "follow_up_needed";
+  contactStatus?: string;
   notes?: string;
   lastContacted?: string;
-  influenceScore?: "high" | "medium" | "low";
+  influenceScore?: number;
   emailDraft?: string;
   linkedinMessage?: string;
 }
@@ -38,373 +47,373 @@ interface ContactTableProps {
 }
 
 export default function ContactTable({ contacts, submissionId }: ContactTableProps) {
-  const [expandedRow, setExpandedRow] = useState<number | null>(null);
-  const [editingMessages, setEditingMessages] = useState<{ [key: number]: { email?: string; linkedin?: string } }>({});
-  const [generatingMessage, setGeneratingMessage] = useState<number | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [editingNotes, setEditingNotes] = useState<number | null>(null);
+  const [notesValue, setNotesValue] = useState("");
+  const [editingMessages, setEditingMessages] = useState<{ [key: number]: { email?: boolean; linkedin?: boolean } }>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Utility functions
-  const getSeniorityLevel = (title: string): "VP" | "Director" | "Manager" | "Senior" | "Individual" => {
-    const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes("vp") || lowerTitle.includes("vice president")) return "VP";
-    if (lowerTitle.includes("director")) return "Director";
-    if (lowerTitle.includes("manager") || lowerTitle.includes("head of")) return "Manager";
-    if (lowerTitle.includes("senior") || lowerTitle.includes("sr.")) return "Senior";
-    return "Individual";
-  };
-
-  const getInfluenceScore = (contact: Contact): "high" | "medium" | "low" => {
-    if (contact.influenceScore) return contact.influenceScore;
-    
-    const seniority = getSeniorityLevel(contact.title);
-    const isRecruiter = contact.isRecruiterRole;
-    
-    if (isRecruiter && (seniority === "VP" || seniority === "Director")) return "high";
-    if (isRecruiter || seniority === "Manager") return "medium";
-    return "low";
-  };
-
-  const getEmailStatusBadge = (contact: Contact) => {
-    if (!contact.email) return <Badge variant="secondary">Not Found</Badge>;
-    
-    switch (contact.verificationStatus) {
-      case "valid":
-        return <Badge variant="default" className="bg-green-100 text-green-800">✅ Verified</Badge>;
-      case "risky":
-        return <Badge variant="outline" className="border-yellow-500 text-yellow-700">⚠️ Risky</Badge>;
-      case "invalid":
-        return <Badge variant="destructive">❌ Invalid</Badge>;
-      default:
-        return <Badge variant="secondary">Unverified</Badge>;
-    }
-  };
-
-  const getInfluenceScoreBadge = (score: "high" | "medium" | "low") => {
-    switch (score) {
-      case "high":
-        return <Badge className="bg-red-100 text-red-800">High</Badge>;
-      case "medium":
-        return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
-      case "low":
-        return <Badge className="bg-gray-100 text-gray-800">Low</Badge>;
-    }
-  };
-
-  // Mutations
+  // Update contact mutation
   const updateContactMutation = useMutation({
     mutationFn: async ({ contactId, updates }: { contactId: number; updates: any }) => {
-      const response = await apiRequest("PATCH", `/api/contacts/${contactId}`, updates);
-      return response.json();
+      return await apiRequest(`/api/contacts/${contactId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+        headers: { "Content-Type": "application/json" },
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId, "contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId.toString()] });
     },
   });
 
+  // Generate message mutation
   const generateMessageMutation = useMutation({
-    mutationFn: async ({ contactId, messageType, tone }: { contactId: number; messageType: "email" | "linkedin"; tone?: string }) => {
-      const response = await apiRequest("POST", `/api/contacts/${contactId}/generate-message`, { messageType, tone });
-      return response.json();
+    mutationFn: async ({ contactId, messageType, tone }: { contactId: number; messageType: string; tone: string }) => {
+      return await apiRequest(`/api/contacts/${contactId}/generate-message`, {
+        method: "POST",
+        body: JSON.stringify({ messageType, tone }),
+        headers: { "Content-Type": "application/json" },
+      });
     },
-    onSuccess: (data, variables) => {
-      setEditingMessages(prev => ({
-        ...prev,
-        [variables.contactId]: {
-          ...prev[variables.contactId],
-          [variables.messageType]: data.message
-        }
-      }));
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts", variables.contactId] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId.toString()] });
+      toast({
+        title: "Message Generated",
+        description: "New message has been generated successfully",
+      });
     },
   });
 
-  // Event handlers
-  const handleExpandRow = (contactId: number) => {
-    setExpandedRow(expandedRow === contactId ? null : contactId);
+  const toggleRow = (contactId: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(contactId)) {
+      newExpanded.delete(contactId);
+    } else {
+      newExpanded.add(contactId);
+    }
+    setExpandedRows(newExpanded);
   };
 
-  const handleStatusChange = (contactId: number, status: string) => {
+  const handleSaveNotes = (contact: Contact) => {
     updateContactMutation.mutate({
-      contactId,
-      updates: { contactStatus: status }
+      contactId: contact.id,
+      updates: { notes: notesValue },
+    });
+    setEditingNotes(null);
+    setNotesValue("");
+  };
+
+  const handleGenerateMessage = (contact: Contact, messageType: 'email' | 'linkedin', tone: string = 'professional') => {
+    generateMessageMutation.mutate({
+      contactId: contact.id,
+      messageType,
+      tone,
     });
   };
 
-  const handleNotesChange = (contactId: number, notes: string) => {
-    updateContactMutation.mutate({
-      contactId,
-      updates: { notes }
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Copied!",
+      description: `${label} copied to clipboard`,
     });
   };
 
-  const handleGenerateMessage = async (contactId: number, messageType: "email" | "linkedin", tone?: string) => {
-    setGeneratingMessage(contactId);
-    try {
-      await generateMessageMutation.mutateAsync({ contactId, messageType, tone });
-    } finally {
-      setGeneratingMessage(null);
+  const getVerificationBadge = (status: string, isVerified: boolean) => {
+    if (status === "valid" && isVerified) {
+      return { variant: "default", className: "bg-green-100 text-green-800", text: "Verified", icon: "✓" };
+    } else if (status === "risky") {
+      return { variant: "outline", className: "border-yellow-500 text-yellow-700", text: "Risky", icon: "⚠" };
+    } else if (status === "invalid") {
+      return { variant: "destructive", className: "", text: "Invalid", icon: "✗" };
+    } else {
+      return { variant: "secondary", className: "", text: "Unverified", icon: "?" };
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied to clipboard",
-      description: "Message copied successfully",
-    });
+  const getConfidenceBadge = (confidence: number) => {
+    if (confidence >= 90) {
+      return { variant: "default", className: "bg-green-50 text-green-700 border-green-200", text: "High" };
+    } else if (confidence >= 70) {
+      return { variant: "outline", className: "border-yellow-500 text-yellow-600", text: "Medium" };
+    } else {
+      return { variant: "secondary", className: "bg-gray-50 text-gray-600", text: "Low" };
+    }
   };
-
-  const openInGmail = (email: string, subject: string, body: string) => {
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(gmailUrl, '_blank');
-  };
-
-  // Sort contacts by influence score and recruiter role
-  const sortedContacts = [...contacts].sort((a, b) => {
-    const aInfluence = getInfluenceScore(a);
-    const bInfluence = getInfluenceScore(b);
-    const aScore = a.isRecruiterRole ? 3 : 0 + (aInfluence === "high" ? 2 : aInfluence === "medium" ? 1 : 0);
-    const bScore = b.isRecruiterRole ? 3 : 0 + (bInfluence === "high" ? 2 : bInfluence === "medium" ? 1 : 0);
-    return bScore - aScore;
-  });
 
   return (
-    <div className="w-full">
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader className="sticky top-0 bg-white">
-            <TableRow>
-              <TableHead className="w-8"></TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Seniority</TableHead>
-              <TableHead>Email Status</TableHead>
-              <TableHead className="w-12">LinkedIn</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Influence</TableHead>
-              <TableHead>Next Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedContacts.map((contact) => (
-              <Collapsible key={contact.id} open={expandedRow === contact.id} onOpenChange={() => handleExpandRow(contact.id)}>
-                <CollapsibleTrigger asChild>
-                  <TableRow className="cursor-pointer hover:bg-gray-50">
-                    <TableCell>
-                      {expandedRow === contact.id ? (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {/* Table Header */}
+      <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+        <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="col-span-1"></div>
+          <div className="col-span-3">Name</div>
+          <div className="col-span-2">Title</div>
+          <div className="col-span-2">Department</div>
+          <div className="col-span-2">Email</div>
+          <div className="col-span-1">Status</div>
+          <div className="col-span-1">Actions</div>
+        </div>
+      </div>
+
+      {/* Table Body */}
+      <div className="divide-y divide-gray-200">
+        {contacts.map((contact) => {
+          const isExpanded = expandedRows.has(contact.id);
+          const verificationBadge = getVerificationBadge(contact.verificationStatus, contact.emailVerified);
+          const confidenceBadge = getConfidenceBadge(contact.confidence);
+
+          return (
+            <div key={contact.id}>
+              {/* Main Row */}
+              <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div className="grid grid-cols-12 gap-4 items-center">
+                  {/* Expand Button */}
+                  <div className="col-span-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleRow(contact.id)}
+                      className="h-6 w-6 p-0"
+                    >
+                      {isExpanded ? (
                         <ChevronDown className="h-4 w-4" />
                       ) : (
                         <ChevronRight className="h-4 w-4" />
                       )}
-                    </TableCell>
-                    <TableCell className="font-medium">{contact.name}</TableCell>
-                    <TableCell>{contact.title}</TableCell>
-                    <TableCell>{contact.department}</TableCell>
-                    <TableCell>{getSeniorityLevel(contact.title)}</TableCell>
-                    <TableCell>{getEmailStatusBadge(contact)}</TableCell>
-                    <TableCell>
-                      {contact.linkedinUrl && (
-                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 text-blue-600 hover:text-blue-800" />
-                        </a>
+                    </Button>
+                  </div>
+
+                  {/* Name */}
+                  <div className="col-span-3">
+                    <div className="font-medium text-gray-900">{contact.name}</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge {...confidenceBadge} className={`text-xs ${confidenceBadge.className}`}>
+                        {confidenceBadge.text}
+                      </Badge>
+                      {contact.isRecruiterRole && (
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          Recruiter
+                        </Badge>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={contact.contactStatus || "not_contacted"}
-                        onValueChange={(value) => handleStatusChange(contact.id, value)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="not_contacted">Not Contacted</SelectItem>
-                          <SelectItem value="email_sent">Email Sent</SelectItem>
-                          <SelectItem value="replied">Replied</SelectItem>
-                          <SelectItem value="follow_up_needed">Follow-Up Needed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>{getInfluenceScoreBadge(getInfluenceScore(contact))}</TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Add note..."
-                        defaultValue={contact.notes || ""}
-                        onBlur={(e) => handleNotesChange(contact.id, e.target.value)}
-                        className="w-32"
-                      />
-                    </TableCell>
-                  </TableRow>
-                </CollapsibleTrigger>
-                <CollapsibleContent asChild>
-                  <TableRow>
-                    <TableCell colSpan={10} className="p-0">
-                      <div className="p-6 bg-gray-50 border-t">
-                        {/* Contact Info */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                          <div>
-                            <h4 className="font-semibold text-gray-900">Contact Information</h4>
-                            <p className="text-sm text-gray-600">{contact.name}</p>
-                            <p className="text-sm text-gray-600">{contact.title}</p>
-                            <p className="text-sm text-gray-600">{contact.department} • {getSeniorityLevel(contact.title)}</p>
-                            {contact.email && (
-                              <p className="text-sm text-gray-600 flex items-center gap-2">
-                                {contact.email} {getEmailStatusBadge(contact)}
-                              </p>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div className="col-span-2">
+                    <div className="text-sm text-gray-900">{contact.title}</div>
+                  </div>
+
+                  {/* Department */}
+                  <div className="col-span-2">
+                    <div className="text-sm text-gray-600">{contact.department}</div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="col-span-2">
+                    {contact.email ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyToClipboard(contact.email, "Email")}
+                          className="text-blue-600 hover:text-blue-700 p-0 h-auto font-normal text-sm"
+                        >
+                          {contact.email.length > 20 ? `${contact.email.substring(0, 20)}...` : contact.email}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No email</span>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-1">
+                    <Badge {...verificationBadge} className={`text-xs ${verificationBadge.className}`}>
+                      {verificationBadge.icon}
+                    </Badge>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="col-span-1">
+                    <div className="flex items-center gap-1">
+                      {contact.email && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleGenerateMessage(contact, 'email')}
+                          className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {contact.linkedinUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(contact.linkedinUrl, '_blank')}
+                          className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Content */}
+              <Collapsible open={isExpanded}>
+                <CollapsibleContent>
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Contact Details */}
+                      <Card>
+                        <CardContent className="p-4">
+                          <h4 className="font-medium text-gray-900 mb-3">Contact Details</h4>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="font-medium">Source:</span> {contact.sourcePlatform}</div>
+                            <div><span className="font-medium">Confidence:</span> {contact.confidence}%</div>
+                            {contact.apolloId && (
+                              <div><span className="font-medium">Apollo ID:</span> {contact.apolloId}</div>
                             )}
                             {contact.linkedinUrl && (
-                              <a 
-                                href={contact.linkedinUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                              >
-                                LinkedIn Profile <ExternalLink className="h-3 w-3" />
-                              </a>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">LinkedIn:</span>
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  onClick={() => window.open(contact.linkedinUrl, '_blank')}
+                                  className="p-0 h-auto text-blue-600"
+                                >
+                                  View Profile <ExternalLink className="h-3 w-3 ml-1" />
+                                </Button>
+                              </div>
                             )}
                           </div>
-                        </div>
+                        </CardContent>
+                      </Card>
 
-                        {/* Message Generator */}
-                        {contact.email && (
-                          <div className="space-y-4">
-                            <h4 className="font-semibold text-gray-900">Generated Messages</h4>
-                            
-                            {/* Email Message */}
+                      {/* Notes */}
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-medium text-gray-900">Notes</h4>
+                            {editingNotes !== contact.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingNotes(contact.id);
+                                  setNotesValue(contact.notes || "");
+                                }}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit3 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          {editingNotes === contact.id ? (
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-gray-700">Email Message</label>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleGenerateMessage(contact.id, "email")}
-                                    disabled={generatingMessage === contact.id}
-                                  >
-                                    {generatingMessage === contact.id ? (
-                                      <RefreshCw className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <RefreshCw className="h-3 w-3" />
-                                    )}
-                                    Regenerate
-                                  </Button>
-                                </div>
-                              </div>
                               <Textarea
-                                value={editingMessages[contact.id]?.email || contact.emailDraft || ""}
-                                onChange={(e) => setEditingMessages(prev => ({
-                                  ...prev,
-                                  [contact.id]: { ...prev[contact.id], email: e.target.value }
-                                }))}
-                                placeholder="Generated email message will appear here..."
-                                className="min-h-[120px]"
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                placeholder="Add notes about this contact..."
+                                className="min-h-[60px] text-sm"
                               />
                               <div className="flex gap-2">
                                 <Button
                                   size="sm"
-                                  variant="outline"
-                                  onClick={() => copyToClipboard(editingMessages[contact.id]?.email || contact.emailDraft || "")}
+                                  onClick={() => handleSaveNotes(contact)}
+                                  disabled={updateContactMutation.isPending}
                                 >
-                                  <Copy className="h-3 w-3 mr-1" />
-                                  Copy
+                                  <Save className="h-3 w-3 mr-1" />
+                                  Save
                                 </Button>
                                 <Button
-                                  size="sm"
                                   variant="outline"
-                                  onClick={() => openInGmail(
-                                    contact.email,
-                                    "Re: Your Recent Job Opening",
-                                    editingMessages[contact.id]?.email || contact.emailDraft || ""
-                                  )}
-                                >
-                                  <Mail className="h-3 w-3 mr-1" />
-                                  Open in Gmail
-                                </Button>
-                                <Button
                                   size="sm"
-                                  onClick={() => handleStatusChange(contact.id, "email_sent")}
+                                  onClick={() => {
+                                    setEditingNotes(null);
+                                    setNotesValue("");
+                                  }}
                                 >
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Mark as Sent
+                                  <X className="h-3 w-3 mr-1" />
+                                  Cancel
                                 </Button>
                               </div>
                             </div>
-
-                            {/* LinkedIn Message */}
-                            {contact.linkedinUrl && (
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <label className="text-sm font-medium text-gray-700">LinkedIn Message</label>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleGenerateMessage(contact.id, "linkedin")}
-                                    disabled={generatingMessage === contact.id}
-                                  >
-                                    <RefreshCw className="h-3 w-3 mr-1" />
-                                    Regenerate
-                                  </Button>
-                                </div>
-                                <Textarea
-                                  value={editingMessages[contact.id]?.linkedin || contact.linkedinMessage || ""}
-                                  onChange={(e) => setEditingMessages(prev => ({
-                                    ...prev,
-                                    [contact.id]: { ...prev[contact.id], linkedin: e.target.value }
-                                  }))}
-                                  placeholder="Generated LinkedIn message will appear here..."
-                                  className="min-h-[100px]"
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => copyToClipboard(editingMessages[contact.id]?.linkedin || contact.linkedinMessage || "")}
-                                  >
-                                    <Copy className="h-3 w-3 mr-1" />
-                                    Copy
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleStatusChange(contact.id, "email_sent")}
-                                  >
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Mark as Sent
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Notes & Activity */}
-                        <div className="mt-6 space-y-2">
-                          <label className="text-sm font-medium text-gray-700">Notes & Activity</label>
-                          {contact.lastContacted && (
-                            <p className="text-xs text-gray-500">Last contacted on {contact.lastContacted}</p>
+                          ) : (
+                            <div className="text-sm text-gray-600">
+                              {contact.notes || "No notes added"}
+                            </div>
                           )}
-                          <Textarea
-                            placeholder="Add notes about this contact..."
-                            defaultValue={contact.notes || ""}
-                            onBlur={(e) => handleNotesChange(contact.id, e.target.value)}
-                            className="min-h-[60px]"
-                          />
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                        </CardContent>
+                      </Card>
+
+                      {/* Messages */}
+                      {(contact.emailDraft || contact.linkedinMessage) && (
+                        <Card className="lg:col-span-2">
+                          <CardContent className="p-4">
+                            <h4 className="font-medium text-gray-900 mb-3">Generated Messages</h4>
+                            <div className="space-y-4">
+                              {contact.emailDraft && (
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700">Email Draft</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(contact.emailDraft!, "Email draft")}
+                                      className="h-6 px-2 text-xs"
+                                    >
+                                      <Copy className="h-3 w-3 mr-1" />
+                                      Copy
+                                    </Button>
+                                  </div>
+                                  <div className="bg-white border rounded p-3 text-sm">
+                                    {contact.emailDraft}
+                                  </div>
+                                </div>
+                              )}
+                              {contact.linkedinMessage && (
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700">LinkedIn Message</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(contact.linkedinMessage!, "LinkedIn message")}
+                                      className="h-6 px-2 text-xs"
+                                    >
+                                      <Copy className="h-3 w-3 mr-1" />
+                                      Copy
+                                    </Button>
+                                  </div>
+                                  <div className="bg-white border rounded p-3 text-sm">
+                                    {contact.linkedinMessage}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
-            ))}
-          </TableBody>
-        </Table>
+            </div>
+          );
+        })}
       </div>
 
-      {sortedContacts.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <p>No recruiter contacts found yet.</p>
-          <p className="text-sm">Try expanding search parameters or adding more departments.</p>
+      {contacts.length === 0 && (
+        <div className="px-6 py-12 text-center text-gray-500">
+          <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+          <p>No contacts found</p>
         </div>
       )}
     </div>
