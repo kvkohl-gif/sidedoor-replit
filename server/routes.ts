@@ -604,6 +604,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update contact information
+  app.patch("/api/contacts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      const updates = req.body;
+      
+      // Update the contact in the database
+      const updatedContact = await storage.updateContact(contactId, updates);
+      
+      res.json(updatedContact);
+    } catch (error) {
+      console.error("Error updating contact:", error);
+      res.status(500).json({ message: "Failed to update contact" });
+    }
+  });
+
+  // Generate message for contact
+  app.post("/api/contacts/:id/generate-message", isAuthenticated, async (req, res) => {
+    try {
+      const contactId = parseInt(req.params.id);
+      const { messageType, tone = "professional" } = req.body;
+      
+      // Get contact details
+      const contact = await storage.getContactById(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      // Get submission details for context
+      const submission = await storage.getJobSubmissionById(contact.jobSubmissionId);
+      if (!submission) {
+        return res.status(404).json({ message: "Job submission not found" });
+      }
+
+      // Generate message using OpenAI
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      const prompt = messageType === "email" 
+        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${submission.jobTitle || "position"} at ${submission.companyName || "the company"}. 
+
+Keep it concise (under 150 words), personalized, and include:
+- Brief introduction
+- Specific interest in the role
+- Relevant qualifications
+- Request for discussion
+
+Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
+Company: ${submission.companyName || "Unknown Company"}
+Job: ${submission.jobTitle || "Unknown Position"}
+
+Email tone: ${tone}`
+        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${submission.jobTitle || "position"} at ${submission.companyName || "the company"}.
+
+Keep it under 300 characters for LinkedIn limits, personalized and include:
+- Brief introduction
+- Interest in the role
+- Request to connect
+
+Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
+Company: ${submission.companyName || "Unknown Company"}
+Job: ${submission.jobTitle || "Unknown Position"}
+
+LinkedIn message tone: ${tone}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system", 
+            content: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages."
+          },
+          { 
+            role: "user", 
+            content: prompt 
+          }
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      });
+
+      const generatedMessage = response.choices[0].message.content;
+
+      // Update contact with generated message
+      const updateField = messageType === "email" ? "emailDraft" : "linkedinMessage";
+      await storage.updateContact(contactId, { [updateField]: generatedMessage });
+
+      res.json({ message: generatedMessage });
+    } catch (error) {
+      console.error("Error generating message:", error);
+      res.status(500).json({ message: "Failed to generate message" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

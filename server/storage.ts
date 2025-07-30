@@ -33,6 +33,8 @@ export interface IStorage {
   // Recruiter contact operations
   createRecruiterContact(contact: InsertRecruiterContact): Promise<RecruiterContact>;
   createRecruiterContacts(contacts: InsertRecruiterContact[]): Promise<RecruiterContact[]>;
+  getContactById(id: number): Promise<RecruiterContact | undefined>;
+  updateContact(id: number, updates: Partial<RecruiterContact>): Promise<RecruiterContact>;
   
   // Email pattern analysis operations
   createEmailPatternAnalysis(analysis: InsertEmailPatternAnalysis): Promise<EmailPatternAnalysis>;
@@ -122,6 +124,23 @@ export class DatabaseStorage implements IStorage {
       .values(contacts)
       .returning();
     return created;
+  }
+
+  async getContactById(id: number): Promise<RecruiterContact | undefined> {
+    const [contact] = await db
+      .select()
+      .from(recruiterContacts)
+      .where(eq(recruiterContacts.id, id));
+    return contact;
+  }
+
+  async updateContact(id: number, updates: Partial<RecruiterContact>): Promise<RecruiterContact> {
+    const [updated] = await db
+      .update(recruiterContacts)
+      .set(updates)
+      .where(eq(recruiterContacts.id, id))
+      .returning();
+    return updated;
   }
 
   // Email pattern analysis operations

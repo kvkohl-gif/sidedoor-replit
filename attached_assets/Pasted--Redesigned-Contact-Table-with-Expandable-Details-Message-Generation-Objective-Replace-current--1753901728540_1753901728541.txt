@@ -1,0 +1,91 @@
+: Redesigned Contact Table with Expandable Details + Message Generation
+✅ Objective
+Replace current contact card layout with a structured, sortable table view that allows users to:
+
+View and sort recruiter/lead contacts in a clean, column-based layout.
+
+Expand a row via a dropdown arrow to view contact details and generate/edit outreach messages.
+
+Track contact status (e.g., Not Contacted, Email Sent, Followed Up).
+
+Identify the best person to message using department, seniority, and email verification data.
+
+🖥️ Table Layout (Top-Level View)
+Each row should display the following fields:
+
+Field	Description
+🔽 (Expand icon)	Left-side caret to expand contact details below the row
+Name	Full name of the contact
+Title	Job title of contact
+Department	Parsed or inferred from title (e.g., Product, Recruiting)
+Seniority	Automatically inferred from title (e.g., Manager, Director, VP)
+Email Status	Badge (Verified / Risky / Not Found) with % confidence
+LinkedIn Icon	Clickable link to LinkedIn profile
+Status Dropdown	Inline editable dropdown with statuses: Not Contacted, Email Sent, Replied, Follow-Up Needed
+Influence Score	One of: High / Medium / Low — indicates impact on hiring
+Next Action	Editable note (e.g., "Follow up Thursday" or “Intro from Jane”)
+
+🔽 Expanded View on Click (One Row at a Time)
+When user clicks the dropdown caret on a row, show an inline expanded container under that row that includes:
+
+🧠 Contact Info (top)
+Full Name, Title, Department, Seniority
+
+Email Address (with verified badge)
+
+LinkedIn URL (with icon)
+
+✉️ Message Generator (middle)
+Pre-generated AI message (editable text area)
+
+"Regenerate" button
+
+"Copy to Clipboard", “Open in Gmail”, and “Mark as Sent” buttons
+
+Optional: "Tone Selector" (dropdown to change tone and regenerate)
+
+🗒️ Notes / Activity (bottom)
+“Last contacted on [DATE]”
+
+Notes input (free text)
+
+Optional: Add reminder (e.g., follow-up date)
+
+✨ Design & UX Guidelines
+Use alternating row colors or light shading for readability.
+
+Use badges (color-coded) for email status and influence score.
+
+Use sticky table headers when scrolling.
+
+Make dropdowns inline-editable.
+
+Limit to one row expanded at a time for simplicity.
+
+On mobile, fallback to a collapsible list format.
+
+🛠️ Functional Requirements
+Expanding a row should not refresh the page.
+
+All contact data is pulled from existing API (Apollo/Clay).
+
+Generated messages should still use OpenAI and be saved per contact.
+
+Users can update status manually, or it can auto-update (e.g. if message is marked sent).
+
+Allow bulk selection of rows in future update (for status changes, follow-ups, etc.).
+
+🔧 Future Enhancements (not needed now, but structure for them)
+Bulk outreach actions
+
+Sort and filter by: Status, Department, Influence, Date Added
+
+Export to CSV or Gmail sync
+
+🧪 Testing & Edge Cases
+If contact has no email → disable message gen + show "Email Not Found"
+
+If no contacts available → show empty state (“No recruiters found yet. Try expanding departments.”)
+
+Expand/collapse logic should reset on page refresh
+

@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Mail, Copy, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { apiRequest } from "@/lib/queryClient";
-import { RecruiterMessageCard } from "@/components/ui/recruiter-message-card";
 import { JobDetailCard } from "@/components/ui/job-detail-card";
+import ContactTable from "@/components/ui/contact-table";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
@@ -24,7 +21,6 @@ export default function Results() {
   const submissionId = params.id;
 
   // State for UI interactions
-  const [showSuggestions, setShowSuggestions] = useState<{[key: number]: boolean}>({});
   const [jobSummaryExpanded, setJobSummaryExpanded] = useState(true);
 
   const handleLogout = () => {
@@ -33,13 +29,6 @@ export default function Results() {
 
   const handleBackToDashboard = () => {
     setLocation("/dashboard");
-  };
-
-  const toggleSuggestion = (contactId: number) => {
-    setShowSuggestions(prev => ({
-      ...prev,
-      [contactId]: !prev[contactId]
-    }));
   };
 
   // Fetch submission data
@@ -74,99 +63,34 @@ export default function Results() {
     hasEnhancedData: boolean;
   }>({
     queryKey: ["/api/submissions", submissionId, "job-data"],
-    enabled: !!submissionId && !!submission && isAuthenticated,
+    enabled: !!submissionId && isAuthenticated,
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) return false;
       return failureCount < 3;
     },
   });
 
-  const copyEmail = async (email: string) => {
-    try {
-      await navigator.clipboard.writeText(email);
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
       toast({
-        title: "Copied!",
-        description: "Email address copied to clipboard",
-      });
-    } catch (err) {
-      toast({
-        title: "Failed to copy",
-        description: "Please copy the text manually",
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
         variant: "destructive",
       });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
     }
-  };
+  }, [isAuthenticated, isLoading, toast]);
 
-  const getConfidenceBadge = (score: number | null) => {
-    if (!score) return { 
-      variant: "secondary" as const, 
-      text: "Unknown", 
-      tooltip: "This confidence score was sourced from Apollo. 'Unknown' means no data was returned for this contact.",
-      className: "text-slate-400"
-    };
-    if (score >= 90) return { 
-      variant: "default" as const, 
-      text: `${score}% confidence`, 
-      className: "bg-emerald-100 text-emerald-800",
-      tooltip: "High confidence match based on job title analysis"
-    };
-    if (score >= 75) return { 
-      variant: "default" as const, 
-      text: `${score}% confidence`, 
-      className: "bg-amber-100 text-amber-800",
-      tooltip: "Good confidence match based on job title analysis"
-    };
-    return { 
-      variant: "secondary" as const, 
-      text: `${score}% confidence`,
-      tooltip: "Moderate confidence match based on job title analysis"
-    };
-  };
-
-  const getVerificationBadge = (status: string | null, verified: string | null) => {
-    if (verified === "true") {
-      if (status === "valid") return { 
-        variant: "default" as const, 
-        text: "✅ Verified", 
-        className: "bg-emerald-100 text-emerald-800",
-        tooltip: "Email confirmed deliverable via NeverBounce verification"
-      };
-      if (status === "risky") return { 
-        variant: "default" as const, 
-        text: "⚠️ Risky", 
-        className: "bg-amber-100 text-amber-800",
-        tooltip: "This is a catch-all domain. The server accepts all emails, but individual email validity could not be confirmed."
-      };
-    }
-    if (status === "invalid") return { 
-      variant: "destructive" as const, 
-      text: "❌ Invalid",
-      tooltip: "Email confirmed undeliverable via NeverBounce verification"
-    };
-    return { 
-      variant: "secondary" as const, 
-      text: "❓ Unverified",
-      tooltip: "Email verification not attempted or failed"
-    };
-  };
-
-  if (isLoading || !isAuthenticated) {
+  if (isLoading || submissionLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-slate-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (submissionLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-slate-600 text-sm">Loading results...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading submission details...</p>
         </div>
       </div>
     );
@@ -302,257 +226,55 @@ export default function Results() {
           </Collapsible>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left side: Contacts */}
-          <div className="lg:col-span-2 space-y-6">
-            {submission.recruiters && submission.recruiters.length > 0 ? (
-              <>
-                {/* Recruiting Contacts Bucket */}
-                {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <h2 className="text-xl font-bold text-slate-900">🎯 Recruiting Contacts</h2>
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).length} contacts
-                      </Badge>
-                    </div>
-                    {submission.recruiters.filter(r => (r as any).outreachBucket === "recruiter" || !(r as any).outreachBucket).map((recruiter) => {
-                  const confidenceBadge = getConfidenceBadge(recruiter.confidenceScore);
-                  const verificationBadge = getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified);
-                  return (
-                    <TooltipProvider key={recruiter.id}>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h3 className="text-lg font-semibold text-slate-900">
-                                {recruiter.name || "Unknown Recruiter"}
-                              </h3>
-                              <p className="text-slate-600">
-                                {recruiter.title || "Unknown Title"}
-                              </p>
-                            </div>
-                            <div className="text-right space-y-2">
-                              <div>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge 
-                                      variant={confidenceBadge.variant}
-                                      className={confidenceBadge.className}
-                                    >
-                                      {confidenceBadge.text}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="text-sm">
-                                      <strong>Confidence Score</strong><br/>
-                                      {confidenceBadge.tooltip}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </div>
-                              {recruiter.email && (
-                                <div>
-                                  <Tooltip>
-                                    <TooltipTrigger>
-                                      <Badge 
-                                        variant={verificationBadge.variant}
-                                        className={verificationBadge.className}
-                                      >
-                                        {verificationBadge.text}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p className="text-sm">{verificationBadge.tooltip}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="space-y-3">
-                            {recruiter.email && (
-                              <div className="flex items-center space-x-3">
-                                <Mail className="w-5 h-5 text-slate-400" />
-                                <span className="text-slate-700">{recruiter.email}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyEmail(recruiter.email!)}
-                                  className="text-primary hover:text-blue-700 p-1"
-                                >
-                                  <Copy className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            )}
-
-                            {!recruiter.email && recruiter.linkedinUrl && (
-                              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-                                No verified email found. Use LinkedIn to connect.
-                              </div>
-                            )}
-
-                            {recruiter.linkedinUrl && (
-                              <div className="flex items-center space-x-3">
-                                <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                                </svg>
-                                <a
-                                  href={recruiter.linkedinUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:text-blue-700 flex items-center"
-                                >
-                                  LinkedIn Profile
-                                  <ExternalLink className="w-4 h-4 ml-1" />
-                                </a>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Per-Recruiter Message Generation */}
-                          <div className="mt-4 pt-4 border-t">
-                            <RecruiterMessageCard recruiter={recruiter} />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TooltipProvider>
-                  );
-                })}
-                  </div>
-                )}
-
-                {/* Department Lead Contacts Bucket */}
-                {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <h2 className="text-xl font-bold text-slate-900">🏢 Department Lead Contacts</h2>
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").length} contacts
-                      </Badge>
-                    </div>
-                    {submission.recruiters.filter(r => (r as any).outreachBucket === "department_lead").map((recruiter) => {
-                      const confidenceBadge = getConfidenceBadge(recruiter.confidenceScore);
-                      const verificationBadge = getVerificationBadge((recruiter as any).verificationStatus, (recruiter as any).emailVerified);
-                      return (
-                        <TooltipProvider key={recruiter.id}>
-                          <Card>
-                            <CardContent className="p-6">
-                              <div className="flex justify-between items-start mb-4">
-                                <div>
-                                  <h3 className="text-lg font-semibold text-slate-900">
-                                    {recruiter.name || "Unknown Contact"}
-                                  </h3>
-                                  <p className="text-slate-600">
-                                    {recruiter.title || "Unknown Title"}
-                                  </p>
-                                  {(recruiter as any).department && (
-                                    <p className="text-sm text-slate-500 mt-1">
-                                      📂 {(recruiter as any).department} Department
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="text-right space-y-2">
-                                  <div>
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Badge 
-                                          variant={verificationBadge.variant}
-                                          className={verificationBadge.className}
-                                        >
-                                          {verificationBadge.text}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p className="text-sm">
-                                          {verificationBadge.tooltip}
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="space-y-3">
-                                {recruiter.email && (
-                                  <div className="flex items-center space-x-3">
-                                    <Mail className="w-5 h-5 text-slate-400" />
-                                    <span className="text-slate-700">{recruiter.email}</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => copyEmail(recruiter.email!)}
-                                      className="text-primary hover:text-blue-700 p-1"
-                                    >
-                                      <Copy className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                )}
-
-                                {!recruiter.email && recruiter.linkedinUrl && (
-                                  <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-                                    No verified email found. Use LinkedIn to connect.
-                                  </div>
-                                )}
-
-                                {recruiter.linkedinUrl && (
-                                  <div className="flex items-center space-x-3">
-                                    <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
-                                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                                    </svg>
-                                    <a
-                                      href={recruiter.linkedinUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:text-blue-700 flex items-center"
-                                    >
-                                      LinkedIn Profile
-                                      <ExternalLink className="w-4 h-4 ml-1" />
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Per-Contact Message Generation */}
-                              <div className="mt-4 pt-4 border-t">
-                                <RecruiterMessageCard recruiter={recruiter} />
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </TooltipProvider>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            ) : (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <p className="text-slate-600">No recruiter contacts were found for this submission.</p>
-                </CardContent>
-              </Card>
-            )}
+        {/* Contact Table */}
+        {submission.recruiters && submission.recruiters.length > 0 ? (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900">Recruiter Contacts</h2>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                {submission.recruiters.length} contacts found
+              </Badge>
+            </div>
+            <ContactTable 
+              contacts={submission.recruiters.map(r => ({
+                id: r.id,
+                name: r.name || "Unknown",
+                title: r.title || "Unknown Title",
+                email: r.email || "",
+                linkedinUrl: r.linkedinUrl || undefined,
+                confidence: r.confidenceScore || 0,
+                department: (r as any).outreachBucket === "recruiter" ? "Recruiting" : 
+                           (r as any).department || "Other",
+                emailVerified: (r as any).emailVerified || false,
+                verificationStatus: (r as any).verificationStatus || "unknown",
+                sourcePlatform: r.sourcePlatform || "openai",
+                apolloId: (r as any).apolloId,
+                isRecruiterRole: (r as any).outreachBucket === "recruiter" || 
+                               (r.title?.toLowerCase().includes("recruiter") || false),
+                contactStatus: (r as any).contactStatus,
+                notes: (r as any).notes,
+                lastContacted: (r as any).lastContacted,
+                influenceScore: (r as any).influenceScore,
+                emailDraft: (r as any).emailDraft,
+                linkedinMessage: (r as any).linkedinMessage,
+              }))}
+              submissionId={parseInt(submissionId || "0")}
+            />
           </div>
-
-          {/* Right sidebar: Actions and Notes */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h3>
-                <div className="space-y-3">
-                  <Button 
-                    onClick={handleBackToDashboard} 
-                    variant="outline" 
-                    className="w-full"
-                  >
-                    Back to Dashboard
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        ) : (
+          <div className="text-center py-12">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Contacts Found</h3>
+            <p className="text-slate-600 mb-4">
+              We couldn't find any recruiter contacts for this position yet.
+            </p>
+            <Button
+              onClick={() => setLocation("/")}
+              className="bg-primary text-white hover:bg-blue-700"
+            >
+              Try Another Search
+            </Button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
