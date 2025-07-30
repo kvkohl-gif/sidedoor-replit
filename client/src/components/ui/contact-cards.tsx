@@ -61,12 +61,12 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/submissions/${submissionId}`] });
       setGeneratingMessages(prev => {
-        const next = new Set([...prev]);
+        const next = new Set(Array.from(prev));
         next.delete(variables.contactId);
         return next;
       });
       setExpandedCards(prev => {
-        const next = new Set([...prev]);
+        const next = new Set(Array.from(prev));
         next.add(variables.contactId);
         return next;
       });
@@ -77,7 +77,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
     },
     onError: (error, variables) => {
       setGeneratingMessages(prev => {
-        const next = new Set([...prev]);
+        const next = new Set(Array.from(prev));
         next.delete(variables.contactId);
         return next;
       });
@@ -86,7 +86,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
   const toggleCardExpansion = (contactId: number) => {
     setExpandedCards(prev => {
-      const next = new Set([...prev]);
+      const next = new Set(Array.from(prev));
       if (next.has(contactId)) {
         next.delete(contactId);
       } else {
@@ -97,7 +97,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   };
 
   const handleGenerateMessages = (contact: any) => {
-    setGeneratingMessages(prev => new Set([...Array.from(prev), contact.id]));
+    setGeneratingMessages(prev => new Set(Array.from(prev).concat([contact.id])));
     generateMessageMutation.mutate({
       contactId: contact.id,
       messageType: 'email',

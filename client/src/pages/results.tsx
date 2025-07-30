@@ -37,7 +37,7 @@ export default function Results() {
     isLoading: submissionLoading,
     error,
   } = useQuery<JobSubmissionWithRecruiters>({
-    queryKey: ["/api/submissions", submissionId],
+    queryKey: [`/api/submissions/${submissionId}`],
     enabled: !!submissionId && isAuthenticated,
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) return false;
@@ -62,7 +62,7 @@ export default function Results() {
     };
     hasEnhancedData: boolean;
   }>({
-    queryKey: ["/api/submissions", submissionId, "job-data"],
+    queryKey: [`/api/submissions/${submissionId}/job-data`],
     enabled: !!submissionId && isAuthenticated,
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) return false;
