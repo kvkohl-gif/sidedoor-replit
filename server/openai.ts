@@ -233,54 +233,81 @@ Only extract names that are clearly identified as recruiters, hiring managers, o
 }
 
 /**
- * Extract Apollo search parameters from job content
+ * Extract Apollo search parameters from job content using enhanced structure
  */
 export async function extractApolloSearchParams(content: string): Promise<{
   job_title: string | undefined;
-  domain: string | undefined;
   company_name: string | undefined;
+  domain: string | undefined;
   location: string | undefined;
-  relevant_departments: string[];
-  person_titles: string[];
-  person_seniorities: string[];
-  organization_locations: string[];
   job_country?: string;
   job_region?: string;
   company_hq_country?: string;
   remote_hiring_countries?: string[];
   is_remote_job?: boolean;
+  organization_locations: string[];
+  primary_department: string;
+  recruiter_departments: string[];
+  department_lead_departments: string[];
+  recruiter_title_targets: Array<{ title: string; confidence: number }>;
+  department_lead_title_targets: Array<{ title: string; confidence: number }>;
+  person_seniorities: string[];
+  include_similar_titles: boolean;
+  fallback_recruiter_titles: string[];
+  fallback_departments: string[];
 }> {
-  const systemPrompt = `You are a data extraction AI that helps prepare accurate and structured inputs for an Apollo People Search query with geographic filtering capabilities.
-Only extract clearly stated facts from the provided job description or URL content.
-Do not guess or infer — if a value is not explicitly mentioned, return null.
+  const systemPrompt = `You are a data extraction AI that prepares structured input for an Apollo People Search query to help a job seeker find relevant recruiter and department lead contacts.
 
-Your job is to extract Apollo search parameters with geographic context in this exact format:
+Your task is to extract job-specific search parameters from a job description, formatted as JSON, to improve the relevance of Apollo API results.
 
+Only extract clearly stated or confidently inferable information from the job description. Do not hallucinate data. If a value is not present, return \`null\` or an empty array.
+
+⚠️ Output must follow the exact JSON structure below.
+
+Return JSON with the following structure:
 {
-  "job_title": "[Exact role title from the listing]",
-  "domain": "[Company domain, e.g. wave.com]",
-  "company_name": "[Company name if present]",
-  "location": "[City or country if listed]",
-  "relevant_departments": ["People", "Recruiting", "Talent", "HR", "Product", "Engineering", "Growth"],
-  "person_titles": [
-    "Technical Recruiter",
-    "Senior Recruiter", 
-    "Talent Acquisition Manager",
-    "Head of Talent",
-    "Director of Recruiting",
-    "People Operations Manager"
-  ],
-  "person_seniorities": ["manager", "head", "director", "vp", "c_suite"],
-  "organization_locations": ["[If present, use HQ city or country]"],
+  "job_title": "[Exact job title from the listing]",
+  "company_name": "[Company name]",
+  "domain": "[Company domain, e.g., betterhelp.com]",
+  "location": "[City, state, or country where the job is based]",
   "job_country": "[Country where the job is located]",
-  "job_region": "[State/region/province where job is located]",
-  "company_hq_country": "[Country where company is headquartered]",
-  "remote_hiring_countries": ["[Countries where company hires remotely]"],
-  "is_remote_job": true/false
+  "job_region": "[State or province if available]",
+  "company_hq_country": "[Company headquarters country if stated]",
+  "remote_hiring_countries": ["[Countries mentioned for remote hiring]"],
+  "is_remote_job": true or false,
+  "organization_locations": ["[City or country of HQ, if available]"],
+
+  "primary_department": "[Select one from: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Human Resources, Finance, Legal, Other]",
+
+  "recruiter_departments": ["People", "Human Resources", "Recruiting", "Talent"],
+  "department_lead_departments": ["[Same as primary_department]"],
+
+  "recruiter_title_targets": [
+    { "title": "Technical Recruiter", "confidence": 95 },
+    { "title": "Talent Acquisition Manager", "confidence": 90 },
+    { "title": "People Operations Manager", "confidence": 85 }
+  ],
+
+  "department_lead_title_targets": [
+    { "title": "Director of Product", "confidence": 98 },
+    { "title": "VP of Product", "confidence": 95 },
+    { "title": "Group Product Manager", "confidence": 90 }
+  ],
+
+  "person_seniorities": ["manager", "head", "director", "vp", "c_suite"],
+
+  "include_similar_titles": false,
+
+  "fallback_recruiter_titles": ["Recruiter", "HR Manager"],
+  "fallback_departments": ["People", "Recruiting", "Talent"]
 }
 
-Do not return any names or emails. Do not make assumptions.
-This prompt is used as a first step to enrich data using Apollo's API, so accuracy matters more than completeness.`;
+Instructions:
+- Derive \`primary_department\` from the job title using the controlled list above.
+- Include recruiter and department lead titles relevant to the job. Rank them by confidence (0–100).
+- \`include_similar_titles\` should be set to \`false\` to enforce exact job title matching in Apollo.
+- Include fallback recruiter titles and departments in case others return no results.
+- All field names and structure must match exactly. Return no commentary, no additional text — only valid JSON.`;
 
   const userPrompt = `Extract Apollo search parameters from this job posting content:
 
@@ -303,35 +330,61 @@ Return the extracted data in the JSON format specified.`;
     
     return {
       job_title: result.job_title || undefined,
-      domain: result.domain || undefined,
       company_name: result.company_name || undefined,
+      domain: result.domain || undefined,
       location: result.location || undefined,
-      relevant_departments: Array.isArray(result.relevant_departments) ? result.relevant_departments : [],
-      person_titles: Array.isArray(result.person_titles) ? result.person_titles : [],
-      person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : [],
-      organization_locations: Array.isArray(result.organization_locations) ? result.organization_locations : [],
-      job_country: result.job_country || null,
-      job_region: result.job_region || null,
-      company_hq_country: result.company_hq_country || null,
+      job_country: result.job_country || undefined,
+      job_region: result.job_region || undefined,
+      company_hq_country: result.company_hq_country || undefined,
       remote_hiring_countries: Array.isArray(result.remote_hiring_countries) ? result.remote_hiring_countries : [],
-      is_remote_job: Boolean(result.is_remote_job)
+      is_remote_job: Boolean(result.is_remote_job),
+      organization_locations: Array.isArray(result.organization_locations) ? result.organization_locations : [],
+      primary_department: result.primary_department || "Other",
+      recruiter_departments: Array.isArray(result.recruiter_departments) ? result.recruiter_departments : ["People", "Human Resources", "Recruiting", "Talent"],
+      department_lead_departments: Array.isArray(result.department_lead_departments) ? result.department_lead_departments : [result.primary_department || "Other"],
+      recruiter_title_targets: Array.isArray(result.recruiter_title_targets) ? result.recruiter_title_targets : [
+        { title: "Technical Recruiter", confidence: 95 },
+        { title: "Talent Acquisition Manager", confidence: 90 },
+        { title: "People Operations Manager", confidence: 85 }
+      ],
+      department_lead_title_targets: Array.isArray(result.department_lead_title_targets) ? result.department_lead_title_targets : [
+        { title: "Director", confidence: 90 },
+        { title: "Manager", confidence: 85 }
+      ],
+      person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : ["manager", "head", "director", "vp", "c_suite"],
+      include_similar_titles: Boolean(result.include_similar_titles === undefined ? false : result.include_similar_titles),
+      fallback_recruiter_titles: Array.isArray(result.fallback_recruiter_titles) ? result.fallback_recruiter_titles : ["Recruiter", "HR Manager"],
+      fallback_departments: Array.isArray(result.fallback_departments) ? result.fallback_departments : ["People", "Recruiting", "Talent"]
     };
   } catch (error) {
     console.error("OpenAI Apollo params extraction error:", error);
     return {
       job_title: undefined,
-      domain: undefined,
       company_name: undefined,
+      domain: undefined,
       location: undefined,
-      relevant_departments: [],
-      person_titles: [],
-      person_seniorities: [],
-      organization_locations: [],
       job_country: undefined,
       job_region: undefined,
       company_hq_country: undefined,
       remote_hiring_countries: [],
-      is_remote_job: false
+      is_remote_job: false,
+      organization_locations: [],
+      primary_department: "Other",
+      recruiter_departments: ["People", "Human Resources", "Recruiting", "Talent"],
+      department_lead_departments: ["Other"],
+      recruiter_title_targets: [
+        { title: "Technical Recruiter", confidence: 95 },
+        { title: "Talent Acquisition Manager", confidence: 90 },
+        { title: "People Operations Manager", confidence: 85 }
+      ],
+      department_lead_title_targets: [
+        { title: "Director", confidence: 90 },
+        { title: "Manager", confidence: 85 }
+      ],
+      person_seniorities: ["manager", "head", "director", "vp", "c_suite"],
+      include_similar_titles: false,
+      fallback_recruiter_titles: ["Recruiter", "HR Manager"],
+      fallback_departments: ["People", "Recruiting", "Talent"]
     };
   }
 }
