@@ -177,16 +177,13 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
       {/* Table Header */}
-      <div className="bg-gray-50/80 border-b border-gray-200 px-6 py-4">
-        <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-          <div className="col-span-2">Name</div>
-          <div className="col-span-2">Job Title</div>
-          <div className="col-span-1">Contact Type</div>
-          <div className="col-span-1">Confidence</div>
-          <div className="col-span-2">Email Status</div>
-          <div className="col-span-1">Source</div>
-          <div className="col-span-2">Notes</div>
-          <div className="col-span-1">Actions</div>
+      <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <div className="grid grid-cols-12 gap-6 text-xs font-semibold text-gray-700 uppercase tracking-wide">
+          <div className="col-span-3">Contact</div>
+          <div className="col-span-2">Title & Department</div>
+          <div className="col-span-2">Type & Confidence</div>
+          <div className="col-span-3">Email & Status</div>
+          <div className="col-span-2">Actions & Notes</div>
         </div>
       </div>
 
@@ -203,156 +200,167 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
           return (
             <div key={contact.id}>
               {/* Main Row */}
-              <div className="px-6 py-4 hover:bg-gray-50/60 transition-all duration-200">
-                <div className="grid grid-cols-12 gap-4 items-center">
-                  {/* Name */}
-                  <div className="col-span-2">
-                    <div className="font-semibold text-gray-900 text-sm mb-1">{contact.name}</div>
-                    {contact.linkedinUrl && (
-                      <a
-                        href={contact.linkedinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-xs text-blue-600 hover:text-blue-700"
-                        title="View LinkedIn Profile"
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        LinkedIn
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Job Title */}
-                  <div className="col-span-2">
-                    <div className="text-sm text-gray-900 font-medium leading-relaxed">{contact.title}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{contact.department}</div>
-                  </div>
-
-                  {/* Contact Type */}
-                  <div className="col-span-1">
-                    <Badge {...contactTypeBadge} className={`text-xs px-2 py-1 ${contactTypeBadge.className}`}>
-                      {contactTypeBadge.text}
-                    </Badge>
-                  </div>
-
-                  {/* Confidence Level */}
-                  <div className="col-span-1">
-                    <Badge {...confidenceBadge} className={`text-xs px-2 py-1 ${confidenceBadge.className}`}>
-                      {confidenceBadge.text}
-                    </Badge>
-                    <div className="text-xs text-gray-500 mt-0.5">{contact.confidence}%</div>
-                  </div>
-
-                  {/* Email Status */}
-                  <div className="col-span-2">
-                    {contact.email ? (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => copyToClipboard(contact.email, "Email")}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-mono truncate max-w-[140px]"
-                            title={contact.email}
+              <div className="px-6 py-5 hover:bg-blue-50/30 transition-all duration-200 border-l-4 border-l-transparent hover:border-l-blue-400">
+                <div className="grid grid-cols-12 gap-6 items-start">
+                  {/* Contact Info */}
+                  <div className="col-span-3">
+                    <div className="space-y-2">
+                      <div className="font-semibold text-gray-900 text-base leading-tight">{contact.name}</div>
+                      <div className="flex items-center gap-3">
+                        {contact.linkedinUrl && (
+                          <a
+                            href={contact.linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            title="View LinkedIn Profile"
                           >
-                            {contact.email}
-                          </button>
+                            <ExternalLink className="h-4 w-4 mr-1.5" />
+                            LinkedIn
+                          </a>
+                        )}
+                        <div className="text-sm text-gray-500 capitalize">
+                          {contact.sourcePlatform}
                         </div>
-                        <Badge {...verificationBadge} className={`text-xs px-2 py-0.5 ${verificationBadge.className}`}>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Title & Department */}
+                  <div className="col-span-2">
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-900 font-medium leading-relaxed">{contact.title}</div>
+                      <div className="text-sm text-gray-600">{contact.department}</div>
+                    </div>
+                  </div>
+
+                  {/* Type & Confidence */}
+                  <div className="col-span-2">
+                    <div className="space-y-2">
+                      <Badge {...contactTypeBadge} className={`text-sm px-3 py-1 font-medium ${contactTypeBadge.className}`}>
+                        {contactTypeBadge.text}
+                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge {...confidenceBadge} className={`text-xs px-2 py-1 ${confidenceBadge.className}`}>
+                          {confidenceBadge.text}
+                        </Badge>
+                        <span className="text-xs text-gray-500 font-mono">{contact.confidence}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email & Status */}
+                  <div className="col-span-3">
+                    {contact.email ? (
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => copyToClipboard(contact.email, "Email")}
+                          className="text-sm text-blue-600 hover:text-blue-700 font-mono bg-blue-50 px-3 py-1 rounded border hover:bg-blue-100 transition-colors w-full text-left truncate"
+                          title={`Copy ${contact.email}`}
+                        >
+                          {contact.email}
+                        </button>
+                        <Badge {...verificationBadge} className={`text-xs px-2 py-1 font-medium ${verificationBadge.className}`}>
                           {verificationBadge.icon} {verificationBadge.text}
                         </Badge>
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">No email found</span>
+                      <div className="text-sm text-gray-400 bg-gray-50 px-3 py-2 rounded border">
+                        No email found
+                      </div>
                     )}
                   </div>
 
-                  {/* Source */}
-                  <div className="col-span-1">
-                    <div className="text-xs text-gray-600 capitalize">{contact.sourcePlatform}</div>
-                    {contact.apolloId && (
-                      <div className="text-xs text-gray-400">ID: {contact.apolloId}</div>
-                    )}
-                  </div>
-
-                  {/* Notes */}
+                  {/* Actions & Notes */}
                   <div className="col-span-2">
-                    {editingNotes === contact.id ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={notesValue}
-                          onChange={(e) => setNotesValue(e.target.value)}
-                          placeholder="Add notes..."
-                          className="min-h-[50px] text-xs"
-                        />
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSaveNotes(contact)}
-                            disabled={updateContactMutation.isPending}
-                            className="h-6 px-2 text-xs"
-                          >
-                            <Save className="h-3 w-3" />
-                          </Button>
+                    <div className="space-y-3">
+                      {/* Generate Button */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => handleGenerateMessages(contact)}
+                          disabled={isGenerating || !contact.email}
+                          size="sm"
+                          className="h-9 px-4 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                          title="Generate outreach email and LinkedIn message"
+                        >
+                          {isGenerating ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                          ) : (
+                            <Zap className="h-4 w-4 mr-2" />
+                          )}
+                          {isGenerating ? "Generating..." : "Generate"}
+                        </Button>
+                        {hasMessages && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              setEditingNotes(null);
-                              setNotesValue("");
-                            }}
-                            className="h-6 px-2 text-xs"
+                            onClick={() => toggleMessageView(contact.id)}
+                            className="h-9 w-9 p-0"
+                            title="View generated messages"
                           >
-                            <X className="h-3 w-3" />
+                            <ChevronDown 
+                              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                            />
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Notes */}
+                      {editingNotes === contact.id ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={notesValue}
+                            onChange={(e) => setNotesValue(e.target.value)}
+                            placeholder="Add notes about this contact..."
+                            className="min-h-[60px] text-sm resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveNotes(contact)}
+                              disabled={updateContactMutation.isPending}
+                              className="h-7 px-3 text-xs"
+                            >
+                              <Save className="h-3 w-3 mr-1" />
+                              Save
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingNotes(null);
+                                setNotesValue("");
+                              }}
+                              className="h-7 px-3 text-xs"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <div className="text-sm text-gray-600 flex-1 min-h-[20px]">
+                            {contact.notes ? (
+                              <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 text-amber-800">
+                                {contact.notes.length > 50 ? `${contact.notes.substring(0, 50)}...` : contact.notes}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 italic">No notes</div>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingNotes(contact.id);
+                              setNotesValue(contact.notes || "");
+                            }}
+                            className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                            title="Edit notes"
+                          >
+                            <Edit3 className="h-3 w-3" />
                           </Button>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <div className="text-xs text-gray-600 truncate flex-1">
-                          {contact.notes || "No notes"}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingNotes(contact.id);
-                            setNotesValue(contact.notes || "");
-                          }}
-                          className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="col-span-1">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => handleGenerateMessages(contact)}
-                        disabled={isGenerating || !contact.email}
-                        size="sm"
-                        className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                        title="Generate outreach email and LinkedIn message"
-                      >
-                        {isGenerating ? (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
-                        ) : (
-                          <Zap className="h-3 w-3 mr-1" />
-                        )}
-                        {isGenerating ? "..." : "Generate"}
-                      </Button>
-                      {hasMessages && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleMessageView(contact.id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <ChevronDown 
-                            className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                          />
-                        </Button>
                       )}
                     </div>
                   </div>
