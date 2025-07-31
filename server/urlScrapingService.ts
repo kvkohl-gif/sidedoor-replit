@@ -163,16 +163,27 @@ export class URLScrapingService {
       const dom = new JSDOM(html);
       const document = dom.window.document;
 
+      // Extract title and meta description first for fallback
+      const title = document.querySelector('title')?.textContent || '';
+      const metaDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+      
+      console.log(`Extracted title from HTML: "${title}"`);
+      console.log(`Extracted meta description length: ${metaDescription.length}`);
+
       // Remove script and style elements
       const scripts = document.querySelectorAll('script, style, nav, header, footer, .nav, .header, .footer, .sidebar, .menu');
       scripts.forEach((el: Element) => el.remove());
 
-      // Try to find main content areas
+      // Try to find main content areas - enhanced for job posting sites
       const contentSelectors = [
         'main',
         '[role="main"]',
         '.main-content',
         '.content',
+        '.job-content',
+        '.job-description',
+        '.posting-content',
+        '.position-description',
         '.job-description',
         '.job-details',
         '.posting',
@@ -206,9 +217,18 @@ export class URLScrapingService {
         .replace(/\n\s*\n/g, '\n') // Replace multiple newlines with single newline
         .trim();
 
-      // Ensure we have meaningful content
-      if (text.length < 50) {
-        // Fallback: try to get any text from body
+      // Ensure we have meaningful content - combine with title and meta description if needed
+      if (text.length < 200 && (title || metaDescription)) {
+        // Combine title and meta description as structured content
+        const structuredContent = [];
+        if (title) structuredContent.push(`Job Title: ${title}`);
+        if (metaDescription) structuredContent.push(`Job Description: ${metaDescription}`);
+        if (text.length >= 50) structuredContent.push(`Additional Details: ${text}`);
+        
+        text = structuredContent.join('\n\n');
+        console.log(`Enhanced content with title/meta, final length: ${text.length}`);
+      } else if (text.length < 50) {
+        // Final fallback: try to get any text from body
         text = document.body?.textContent || '';
         text = text.replace(/\s+/g, ' ').trim();
       }
