@@ -130,7 +130,7 @@ export default function Dashboard() {
   };
 
   const handleViewResults = (submissionId: number) => {
-    setLocation(`/results/${submissionId}`);
+    setLocation(`/submissions/${submissionId}`);
   };
 
   const handleStatusChange = (submissionId: number, newStatus: StatusType) => {
