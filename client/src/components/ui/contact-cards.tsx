@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Mail, 
   ExternalLink, 
@@ -179,12 +179,13 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   }
 
   return (
-    <div className="space-y-4">
-      {contacts.map((contact) => {
-        const isGenerating = generatingMessages.has(contact.id);
-        const isExpanded = expandedCards.has(contact.id);
-        const hasMessages = contact.generatedEmailMessage || contact.generatedLinkedInMessage || contact.emailDraft || contact.linkedinMessage;
-        const verificationBadge = getVerificationBadge(contact.verificationStatus);
+    <TooltipProvider>
+      <div className="space-y-4">
+        {contacts.map((contact) => {
+          const isGenerating = generatingMessages.has(contact.id);
+          const isExpanded = expandedCards.has(contact.id);
+          const hasMessages = contact.generatedEmailMessage || contact.generatedLinkedInMessage || contact.emailDraft || contact.linkedinMessage;
+          const verificationBadge = getVerificationBadge(contact.verificationStatus);
 
         return (
           <Card key={contact.id} className="border-gray-200 hover:shadow-md transition-all duration-200 p-6">
@@ -226,18 +227,38 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
             <div className="space-y-3 mb-6">
               {/* Email */}
               <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Mail className="h-5 w-5 text-gray-400 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Click email to copy to clipboard</p>
+                  </TooltipContent>
+                </Tooltip>
                 {contact.email ? (
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => copyToClipboard(contact.email, "Email")}
-                      className="text-gray-600 hover:text-blue-600 transition-colors"
-                      title={`Copy ${contact.email}`}
-                    >
-                      {contact.email}
-                    </button>
-                    <Copy className="h-4 w-4 text-gray-400 hover:text-blue-600 cursor-pointer" 
-                          onClick={() => copyToClipboard(contact.email, "Email")} />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => copyToClipboard(contact.email, "Email")}
+                          className="text-gray-600 hover:text-blue-600 transition-colors"
+                        >
+                          {contact.email}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Copy email address to clipboard</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Copy className="h-4 w-4 text-gray-400 hover:text-blue-600 cursor-pointer" 
+                              onClick={() => copyToClipboard(contact.email, "Email")} />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Copy email address</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ) : (
                   <span className="text-gray-400">email_not_unlocked@domain.com</span>
@@ -246,19 +267,33 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
               {/* LinkedIn */}
               <div className="flex items-center gap-3">
-                <div className="h-5 w-5 bg-blue-600 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">in</span>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="h-5 w-5 bg-blue-600 rounded flex items-center justify-center cursor-help">
+                      <span className="text-white text-xs font-bold">in</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>LinkedIn profile connection</p>
+                  </TooltipContent>
+                </Tooltip>
                 {contact.linkedinUrl ? (
-                  <a
-                    href={contact.linkedinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                  >
-                    LinkedIn Profile
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <a
+                        href={contact.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      >
+                        LinkedIn Profile
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>View full LinkedIn profile to learn more or connect</p>
+                    </TooltipContent>
+                  </Tooltip>
                 ) : (
                   <span className="text-gray-400">LinkedIn Profile</span>
                 )}
@@ -271,23 +306,30 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                 <h4 className="font-medium text-gray-900">{contact.name}</h4>
                 <p className="text-sm text-gray-600">{contact.title}</p>
               </div>
-              <Button
-                onClick={() => handleGenerateMessages(contact)}
-                disabled={isGenerating}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4 mr-2" />
-                    Generate Messages
-                  </>
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => handleGenerateMessages(contact)}
+                    disabled={isGenerating}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Generate Messages
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create personalized email and LinkedIn messages for this contact</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             {/* Expandable messages section - auto-expand when messages are generated */}
@@ -423,7 +465,8 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
             )}
           </Card>
         );
-      })}
-    </div>
+        })}
+      </div>
+    </TooltipProvider>
   );
 }
