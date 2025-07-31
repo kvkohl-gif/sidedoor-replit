@@ -397,7 +397,14 @@ export async function extractJobData(content: string, originalJobUrl?: string): 
 
 Given a job description (or URL scrape), return a clearly structured JSON object exactly in the format below.
 
-❗️All fields are required — if the data is missing, return "Not specified" or infer if reasonably possible.
+❗️CRITICAL: Look carefully for job titles in various formats:
+- Main heading titles (h1, h2 tags)
+- Role names in bold or emphasized text
+- Position titles near company names
+- Job titles in meta tags or page titles
+- Titles that may be split across multiple lines
+
+If the content appears to be mostly navigation/menu text or very limited, extract what you can but be more aggressive in inferring from context clues, URL patterns, and any visible text fragments.
 
 Return the data in this exact JSON structure:
 
@@ -414,7 +421,7 @@ Return the data in this exact JSON structure:
   "linkedin_keywords": ["Keywords for LinkedIn searches related to this role"]
 }
 
-Do NOT hallucinate information. Only use what's visible in the source content. If fields are missing, return "Not specified".`;
+Only return "Not specified" if there is truly no indication of the field anywhere in the content. Be creative in extracting from partial information.`;
 
   const userPrompt = `Extract structured information from this job posting content:
 
@@ -437,10 +444,12 @@ Return the extracted data in the JSON format specified.`;
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
     
+    console.log(`OpenAI extractJobData raw response:`, response.choices[0].message.content);
+    
     // Validate and ensure required fields with "Not specified" defaults
     return {
       job_title: result.job_title || "Not specified",
-      company_name: result.company_name || "Not specified",
+      company_name: result.company_name || "Not specified", 
       job_url: result.job_url || originalJobUrl || "Not specified",
       company_website: result.company_website || "Not specified",
       location: result.location || "Not specified",

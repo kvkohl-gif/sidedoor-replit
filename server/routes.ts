@@ -62,10 +62,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         console.log(`Content length: ${jobContent.length} characters`);
+        console.log(`First 500 chars of scraped content:`, jobContent.substring(0, 500));
         
         // Extract structured job data using standardized prompt format
         jobDataExtraction = await extractJobData(jobContent, submissionData.jobInput);
-        console.log(`Extracted job data:`, jobDataExtraction);
+        console.log(`Extracted job data:`, JSON.stringify(jobDataExtraction, null, 2));
       } else {
         // For text input, also extract structured job data
         console.log(`Processing text input for structured data extraction`);
