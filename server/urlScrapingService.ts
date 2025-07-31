@@ -50,15 +50,22 @@ export class URLScrapingService {
         console.log('Cheerio scraping failed:', errorMessage);
       }
 
-      throw new Error('Unable to extract meaningful content from the URL');
+      // If we reach here, provide a helpful fallback instead of throwing error
+      return {
+        title: 'Job Position (URL provided)',
+        content: `Job URL: ${url}\n\nUnable to automatically extract job details from this URL. Please copy and paste the job description text manually for best results with recruiter contact finding.`,
+        cleanedContent: `Job URL: ${url}\n\nUnable to automatically extract job details from this URL. Please copy and paste the job description text manually for best results with recruiter contact finding.`,
+        url,
+        error: 'Unable to extract content automatically - manual input recommended'
+      };
 
     } catch (error) {
       console.error('URL scraping error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to scrape URL';
       return {
-        title: '',
-        content: '',
-        cleanedContent: '',
+        title: 'Job Position (URL provided)',
+        content: `Job URL: ${url}\n\nUnable to automatically extract job details from this URL. Please copy and paste the job description text manually for best results with recruiter contact finding.`,
+        cleanedContent: `Job URL: ${url}\n\nUnable to automatically extract job details from this URL. Please copy and paste the job description text manually for best results with recruiter contact finding.`,
         url,
         error: errorMessage
       };

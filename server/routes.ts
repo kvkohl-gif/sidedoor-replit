@@ -54,14 +54,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const scrapedData = await urlScrapingService.scrapeJobURL(submissionData.jobInput);
         
         if (scrapedData.error || !scrapedData.cleanedContent || scrapedData.cleanedContent.length < 50) {
-          return res.status(400).json({ 
-            message: "Unable to extract content from this URL. Please try copying and pasting the job description text directly instead.",
-            details: scrapedData.error || "Insufficient content extracted"
-          });
+          // Continue with what we have rather than failing completely
+          console.log('URL scraping had issues, using fallback content:', scrapedData.error);
+          jobContent = scrapedData.cleanedContent || `Job URL: ${submissionData.jobInput}\n\nPlease manually paste the job description for better recruiter finding results.`;
+        } else {
+          jobContent = scrapedData.cleanedContent;
         }
         
-        jobContent = scrapedData.cleanedContent;
-        console.log(`Scraped content length: ${jobContent.length} characters`);
+        console.log(`Content length: ${jobContent.length} characters`);
         
         // Extract structured job data using standardized prompt format
         jobDataExtraction = await extractJobData(jobContent, submissionData.jobInput);
