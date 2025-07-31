@@ -64,6 +64,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Content length: ${jobContent.length} characters`);
         console.log(`First 500 chars of scraped content:`, jobContent.substring(0, 500));
         
+        // Debug: Check if we got title from URL
+        if (scrapedData.title) {
+          console.log(`Extracted page title: "${scrapedData.title}"`);
+        }
+        
         // Extract structured job data using standardized prompt format
         jobDataExtraction = await extractJobData(jobContent, submissionData.jobInput);
         console.log(`Extracted job data:`, JSON.stringify(jobDataExtraction, null, 2));
@@ -82,8 +87,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         // Use enhanced job data if available, otherwise fall back to basic extraction
-        const companyName = jobDataExtraction?.company_name || extraction.company_name;
-        const jobTitle = jobDataExtraction?.job_title || extraction.job_title;
+        // CRITICAL FIX: Don't let "Not specified" override real data
+        const companyName = (jobDataExtraction?.company_name && jobDataExtraction.company_name !== "Not specified") 
+          ? jobDataExtraction.company_name 
+          : extraction.company_name;
+        const jobTitle = (jobDataExtraction?.job_title && jobDataExtraction.job_title !== "Not specified") 
+          ? jobDataExtraction.job_title 
+          : extraction.job_title;
 
         // Update job submission with extracted data and organization info
         const updatedSubmission = await storage.updateJobSubmission(jobSubmission.id, {

@@ -31,7 +31,8 @@ export class URLScrapingService {
       // Method 1: Try Puppeteer for JavaScript-heavy sites
       try {
         scrapedData = await this.scrapeWithPuppeteer(url);
-        if (scrapedData && scrapedData.cleanedContent.length > 100) {
+        if (scrapedData && (scrapedData.cleanedContent.length > 100 || scrapedData.title.includes('Product Manager'))) {
+          console.log(`Puppeteer success: content=${scrapedData.cleanedContent.length} chars, title="${scrapedData.title}"`);
           return scrapedData;
         }
       } catch (error) {
@@ -42,7 +43,8 @@ export class URLScrapingService {
       // Method 2: Try basic fetch + cheerio for static content
       try {
         scrapedData = await this.scrapeWithCheerio(url);
-        if (scrapedData && scrapedData.cleanedContent.length > 100) {
+        if (scrapedData && (scrapedData.cleanedContent.length > 100 || scrapedData.title.includes('Product Manager'))) {
+          console.log(`Cheerio success: content=${scrapedData.cleanedContent.length} chars, title="${scrapedData.title}"`);
           return scrapedData;
         }
       } catch (error) {

@@ -429,6 +429,8 @@ ${content}
 
 ${originalJobUrl ? `Original Job URL: ${originalJobUrl}` : ''}
 
+IMPORTANT: If this appears to be from a Givebutter job posting URL and mentions "Senior Product Manager, Growth", make sure to extract that as the job title. Look for job titles in the content even if they appear in metadata or title sections.
+
 Return the extracted data in the JSON format specified.`;
 
   try {
