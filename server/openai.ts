@@ -175,38 +175,29 @@ export function mapJobTitleToDepartment(jobTitle: string): DepartmentTarget | nu
  * Extract recruiter name explicitly mentioned in job description
  */
 export async function extractRecruiterName(content: string): Promise<RecruiterNameExtraction> {
-  const systemPrompt = `You are a job contact extractor. From a job description or webpage HTML, extract the name of any recruiter or hiring contact explicitly listed. 
+  const systemPrompt = `You extract explicitly listed recruiter/hiring contact names from job pages.
 
-Look for phrases like:
-- "Contact [Name]"
-- "Apply to [Name]" 
-- "Questions? Reach out to [Name]"
-- "Recruiter: [Name]"
-- "Hiring Manager: [Name]"
-- "For more information, contact [Name]"
+Return ONLY valid JSON (no prose). Extract names ONLY when the page clearly identifies a person as a recruiter, sourcer, hiring manager, or application contact. Do NOT infer from general staff pages or LinkedIn buttons.
 
-Your output should be in this exact JSON format:
+Scan patterns:
+- "Contact [Name]", "Apply to [Name]", "Recruiter: [Name]", "Hiring Manager: [Name]", "Questions? Reach out to [Name]"
+- mailto: links and nearby text
+- Signature blocks near application instructions ("Best regards, [Name], [Title]")
+- Labeled ATS contact sections
+
+If multiple, include all. If none, return an empty array.
+
+OUTPUT JSON SHAPE:
 {
-  "recruiter_name": "Christopher Graham",
-  "title": "Lead Recruiter", 
-  "source_type": "job_description",
-  "company_name": "SprintFWD",
-  "contact_info": {
-    "email": "chris@sprintfwd.com",
-    "phone": "+1-555-123-4567",
-    "linkedin": "https://linkedin.com/in/christophergraham"
-  }
-}
-
-If no recruiter name is explicitly mentioned, return:
-{
-  "recruiter_name": null,
-  "title": null,
-  "source_type": "job_description", 
-  "company_name": null
-}
-
-Only extract names that are clearly identified as recruiters, hiring managers, or contact persons. Do not guess or infer names from general company information.`;
+  "recruiter_contacts": [
+    {
+      "name": "string",
+      "role": "Recruiter|Hiring Manager|Talent Acquisition|Sourcer|Other",
+      "email": "string|Not specified",
+      "source_snippet": "short quote around the match"
+    }
+  ]
+}`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -220,7 +211,17 @@ Only extract names that are clearly identified as recruiters, hiring managers, o
     });
 
     const extraction = JSON.parse(response.choices[0].message.content || "{}");
-    return extraction as RecruiterNameExtraction;
+    
+    // Convert new format to old format for compatibility
+    const contacts = Array.isArray(extraction.recruiter_contacts) ? extraction.recruiter_contacts : [];
+    const firstContact = contacts[0];
+    
+    return {
+      recruiter_name: firstContact?.name || null,
+      title: firstContact?.role || null,
+      source_type: "job_description",
+      company_name: null
+    } as RecruiterNameExtraction;
   } catch (error) {
     console.error("Error extracting recruiter name:", error);
     return {
@@ -256,58 +257,55 @@ export async function extractApolloSearchParams(content: string): Promise<{
   fallback_recruiter_titles: string[];
   fallback_departments: string[];
 }> {
-  const systemPrompt = `You are a data extraction AI that prepares structured input for an Apollo People Search query to help a job seeker find relevant recruiter and department lead contacts.
+  const systemPrompt = `You prepare high-precision Apollo People Search parameters from a job description.
 
-Your task is to extract job-specific search parameters from a job description, formatted as JSON, to improve the relevance of Apollo API results.
+Return ONLY valid JSON (no prose). Do not hallucinate. Use exact strings when present; otherwise omit or leave [].
 
-Only extract clearly stated or confidently inferable information from the job description. Do not hallucinate data. If a value is not present, return \`null\` or an empty array.
+Rules:
+- Provide BOTH the exact scraped job title and a normalized base title (remove seniority, contract labels, parentheticals; map common synonyms, e.g., "Software Engineer" ⇄ "Software Developer").
+- Keep include_similar_titles=false for primary search; also return a fallback block that can loosen matches using the normalized title.
+- Classify departments (primary + optional secondary) from: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other.
+- Titles to target:
+  - Recruiter bucket: "Recruiter", "Technical Recruiter", "Talent Acquisition", "Sourcer", "Senior Technical Recruiter", "Recruiting Manager/Lead/Director", etc.
+  - Department lead bucket: role-relevant leadership (e.g., "Engineering Manager", "Director of Engineering", "VP Product", "Head of Design").
+- Rank every target title with confidence 0–100 based on job context.
+- Geography: extract city/region/country if present; infer cautiously from page/company if explicitly indicated (otherwise leave empty).
+- Seniority: "Intern/Entry", "Associate", "Mid", "Senior", "Lead/Staff/Principal", "Manager", "Director", "VP", "C‑level", or "Not specified".
 
-⚠️ Output must follow the exact JSON structure below.
-
-Return JSON with the following structure:
+OUTPUT JSON SHAPE:
 {
-  "job_title": "[Exact job title from the listing]",
-  "company_name": "[Company name]",
-  "domain": "[Company domain, e.g., betterhelp.com]",
-  "location": "[City, state, or country where the job is based]",
-  "job_country": "[Country where the job is located]",
-  "job_region": "[State or province if available]",
-  "company_hq_country": "[Company headquarters country if stated]",
-  "remote_hiring_countries": ["[Countries mentioned for remote hiring]"],
-  "is_remote_job": true or false,
-  "organization_locations": ["[City or country of HQ, if available]"],
-
-  "primary_department": "[Select one from: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Human Resources, Finance, Legal, Other]",
-
-  "recruiter_departments": ["People", "Human Resources", "Recruiting", "Talent"],
-  "department_lead_departments": ["[Same as primary_department]"],
-
-  "recruiter_title_targets": [
-    { "title": "Technical Recruiter", "confidence": 95 },
-    { "title": "Talent Acquisition Manager", "confidence": 90 },
-    { "title": "People Operations Manager", "confidence": 85 }
+  "exact_title": "string",
+  "normalized_title": "string",
+  "primary_department": "Engineering|Product Management|Design|Data Analysis|Marketing|Sales|Customer Success|Leadership|Operations|Compliance|Other",
+  "secondary_departments": ["..."],
+  "geography": {
+    "cities": ["..."],
+    "regions": ["..."],
+    "countries": ["..."],
+    "remote_ok": true|false|null
+  },
+  "seniority": "Intern/Entry|Associate|Mid|Senior|Lead/Staff/Principal|Manager|Director|VP|C-level|Not specified",
+  "keywords": ["role terms","stack/tools","domain"],
+  "recruiter_titles": [
+    {"title":"Technical Recruiter","confidence":95},
+    {"title":"Senior Recruiter","confidence":88},
+    {"title":"Talent Acquisition Partner","confidence":85}
   ],
-
-  "department_lead_title_targets": [
-    { "title": "Director of Product", "confidence": 98 },
-    { "title": "VP of Product", "confidence": 95 },
-    { "title": "Group Product Manager", "confidence": 90 }
+  "department_lead_titles": [
+    {"title":"Engineering Manager","confidence":92},
+    {"title":"Director of Engineering","confidence":85}
   ],
-
-  "person_seniorities": ["manager", "head", "director", "vp", "c_suite"],
-
   "include_similar_titles": false,
-
-  "fallback_recruiter_titles": ["Recruiter", "HR Manager"],
-  "fallback_departments": ["People", "Recruiting", "Talent"]
-}
-
-Instructions:
-- Derive \`primary_department\` from the job title using the controlled list above.
-- Include recruiter and department lead titles relevant to the job. Rank them by confidence (0–100).
-- \`include_similar_titles\` should be set to \`false\` to enforce exact job title matching in Apollo.
-- Include fallback recruiter titles and departments in case others return no results.
-- All field names and structure must match exactly. Return no commentary, no additional text — only valid JSON.`;
+  "fallback": {
+    "use_normalized_title": true,
+    "fallback_recruiter_titles": [
+      {"title":"Recruiter","confidence":75},
+      {"title":"Talent Sourcer","confidence":70}
+    ],
+    "fallback_departments": ["Engineering","Product Management","Design","Data Analysis"]
+  },
+  "debug_notes": ["why a department was chosen", "signals used for geography"]
+}`;
 
   const userPrompt = `Extract Apollo search parameters from this job posting content:
 
@@ -395,33 +393,39 @@ Return the extracted data in the JSON format specified.`;
 export async function extractJobData(content: string, originalJobUrl?: string): Promise<JobDataExtraction & RecruitingInsights> {
   const systemPrompt = `You are extracting structured job data for a job search and messaging platform.
 
-Given a job description (or URL scrape), return a clearly structured JSON object exactly in the format below.
+Return ONLY valid JSON (no prose). Be strict: if a field is unknown, use "Not specified" (or [] for lists). Never hallucinate company domains or emails.
 
-❗️CRITICAL: Look carefully for job titles in various formats:
-- Main heading titles (h1, h2 tags)
-- Role names in bold or emphasized text
-- Position titles near company names
-- Job titles in meta tags or page titles
-- Titles that may be split across multiple lines
+Be aggressive and resilient when finding the job title and company:
+- Scan: H1–H3 tags; near CTA buttons ("Apply", "Submit application"), breadcrumb text, page <title>, meta tags (og:title, og:site_name, name="title"), image alt/ARIA labels, and URL slugs.
+- Prefer job-role context over blog/news headings.
+- If multiple candidates appear, choose the one most aligned with a job opening.
 
-If the content appears to be mostly navigation/menu text or very limited, extract what you can but be more aggressive in inferring from context clues, URL patterns, and any visible text fragments.
+For minimal, nav‑heavy, or JS‑heavy pages, extract what you can and infer cautiously from URL and visible fragments. Only use "Not specified" if truly absent.
 
-Return the data in this exact JSON structure:
+Also:
+- Split responsibilities vs. requirements if the text separates them; otherwise best‑effort.
+- Map departments from title/description into a small set (Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other). Include up to two departments if cross‑functional.
+- Create LinkedIn keywords: role synonyms, core tech/tools, seniority tokens, and company name.
 
+OUTPUT JSON SHAPE:
 {
-  "job_title": "Title of the role",
-  "company_name": "Company Name", 
-  "job_url": "Paste exact URL if given. If missing, return 'Not specified'",
-  "company_website": "Find official website of the company. Use best guess from name or job URL domain if not specified",
-  "location": "City, Country or Remote – Country format",
-  "job_description": "Brief paragraph of 3–5 sentences summarizing the job",
-  "key_responsibilities": ["Bullet point 1", "Bullet point 2", "Bullet point 3"],
-  "requirements": ["Requirement bullet 1", "Requirement bullet 2", "Requirement bullet 3"],
-  "likely_departments": ["Choose 3–5 from: Product Management, Engineering, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other"],
-  "linkedin_keywords": ["Keywords for LinkedIn searches related to this role"]
-}
-
-Only return "Not specified" if there is truly no indication of the field anywhere in the content. Be creative in extracting from partial information.`;
+  "job_title": "string",
+  "company_name": "string",
+  "location": "string",
+  "description": "string",
+  "responsibilities": ["string", "..."],
+  "requirements": ["string", "..."],
+  "departments": {
+    "primary": "Engineering|Product Management|Design|Data Analysis|Marketing|Sales|Customer Success|Leadership|Operations|Compliance|Other",
+    "secondary": "Engineering|Product Management|Design|Data Analysis|Marketing|Sales|Customer Success|Leadership|Operations|Compliance|Other|Not specified",
+    "confidence": 0-100
+  },
+  "linkedin_keywords": ["string", "..."],
+  "debug_sources": {
+    "title_candidates": ["string", "..."],
+    "signals_used": ["h1","meta.og:title","url_slug","apply_cta","breadcrumbs","alt/aria","other"]
+  }
+}`;
 
   const userPrompt = `Extract structured information from this job posting content:
 
@@ -452,13 +456,13 @@ Return the extracted data in the JSON format specified.`;
     return {
       job_title: result.job_title || "Not specified",
       company_name: result.company_name || "Not specified", 
-      job_url: result.job_url || originalJobUrl || "Not specified",
-      company_website: result.company_website || "Not specified",
+      job_url: originalJobUrl || "Not specified",
+      company_website: "Not specified", // Not included in new format
       location: result.location || "Not specified",
-      job_description: result.job_description || "Not specified",
-      key_responsibilities: Array.isArray(result.key_responsibilities) ? result.key_responsibilities : ["Not specified"],
+      job_description: result.description || "Not specified",
+      key_responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities : ["Not specified"],
       requirements: Array.isArray(result.requirements) ? result.requirements : ["Not specified"],
-      likely_departments: Array.isArray(result.likely_departments) ? result.likely_departments : ["Other"],
+      likely_departments: result.departments?.primary ? [result.departments.primary] : ["Other"],
       linkedin_keywords: Array.isArray(result.linkedin_keywords) ? result.linkedin_keywords : [],
     };
   } catch (error) {
@@ -468,15 +472,26 @@ Return the extracted data in the JSON format specified.`;
 }
 
 export async function extractRecruiterInfo(jobInput: string, inputType: "text" | "url"): Promise<RecruiterExtraction> {
-  const systemPrompt = `You are an assistant that extracts company information and generates outreach messages from job descriptions.
+  const systemPrompt = `You extract basic job/company info and generate outreach templates. CRITICAL: Do NOT output or invent any recruiter names, emails, or personnel. Apollo supplies people; you only create templates.
 
-CRITICAL: Do NOT generate recruiter names, contacts, or personnel information. Apollo API will provide real recruiter data.
+Before templating, redact any person names or emails found in the input (ignore for output).
 
-Your task is to:
-1. Extract basic company and job information ONLY
-2. Generate professional email and LinkedIn message templates
+Create two email tones (Formal, Conversational) and one short LinkedIn DM. Personalize with role, company, and 1–2 value props derived from requirements/responsibilities. Keep placeholders like {{FirstName}} and {{YourPortfolio}}. Max 140 words per email, 300 characters for the DM.
 
-Always respond with valid JSON in the exact format specified.`;
+Return ONLY valid JSON (no prose).
+
+OUTPUT JSON SHAPE:
+{
+  "company_name": "string|Not specified",
+  "job_title": "string|Not specified",
+  "location": "string|Not specified",
+  "summary": "1–3 sentences describing the role focus",
+  "value_props": ["string","string"],
+  "subject_lines": ["string","string","string"],
+  "email_template_formal": "string",
+  "email_template_casual": "string",
+  "linkedin_dm_short": "string"
+}`;
 
   const userPrompt = `${inputType === "url" ? "Job URL: " : "Job description: "}${jobInput}
 
@@ -543,28 +558,26 @@ export async function extractCompanyInfo(content: string): Promise<{
   company_url: string | null;
   fallback_query: string | null;
 }> {
-  const systemPrompt = `You are a data extraction assistant helping match job postings to Apollo organizations.
+  const systemPrompt = `You extract company identification for Apollo org matching.
 
-Your job is to extract the **company name** and **website domain** from the given job description or URL content. Be precise and do not guess.
+Return ONLY valid JSON (no prose). Be precise; do NOT guess domains.
 
-Return JSON in the following format:
+Rules & fallbacks:
+- If the page is clearly a company-owned job site, infer domain from known ATS subpaths:
+  - jobs.lever.co/{org} → canonical domain may be {org}.com or org's declared domain on page; first prefer explicit links/meta.
+  - greenhouse.io boards/{org} → check page header/footer links;
+  - workday/ashby/teamsense/etc. → use company links or meta og:site_name.
+- Prefer explicit company name in page body/header/footer. Use meta tags: og:site_name, og:title.
+- If only a brand name is visible, return that as company_name and leave domain "Not specified".
+- Provide a lowercase fallback_query for fuzzy org search.
+
+OUTPUT JSON SHAPE:
 {
-  "company_name": "[Exact name of the company]",
-  "company_domain": "[company.com]",
-  "company_url": "[Company career or homepage URL if available]",
-  "fallback_query": "[Cleaned-up version of the company name to use for fuzzy search]"
-}
-
-- Only return values if explicitly mentioned.
-- Use job URL to infer domain if clearly from a company site (e.g., jobs.lever.co/notion).
-- \`fallback_query\` is a stripped, lowercase version of the company name for backup fuzzy matching.
-
-Do not return null values. If nothing is found, return:
-{
-  "company_name": null,
-  "company_domain": null,
-  "company_url": null,
-  "fallback_query": null
+  "company_name": "string|Not specified",
+  "website_domain": "string|Not specified",
+  "source": "explicit_body|header_footer|meta|url_inference|other",
+  "fallback_query": "lowercase company name without punctuation or inc/llc suffix",
+  "confidence": 0-100
 }`;
 
   const userPrompt = `Extract company information from this job content:
@@ -588,7 +601,7 @@ Return the company data in the JSON format specified.`;
     
     return {
       company_name: result.company_name || null,
-      company_domain: result.company_domain || null,
+      company_domain: result.website_domain || null,
       company_url: result.company_url || null,
       fallback_query: result.fallback_query || null
     };
@@ -618,35 +631,35 @@ export async function generateDepartmentStrategyBuckets(jobTitle: string, jobDes
     job_title_match: string;
   };
 }> {
-  const systemPrompt = `You are analyzing job titles to determine a two-bucket contact strategy using Apollo's search API.
+  const systemPrompt = `You map a job title into a two-bucket outreach plan for Apollo.
 
-Given a job title, return the following:
+Return ONLY valid JSON (no prose).
 
-{
-  "recruiter_contacts": {
-    "titles": [
-      "recruiter", 
-      "talent acquisition specialist", 
-      "recruiting manager", 
-      "technical recruiter", 
-      "senior recruiter"
-    ],
-    "priority": true
-  },
-  "department_lead_contacts": {
-    "primary_department": "[Choose one of: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other]",
-    "titles": [
-      "[Relevant team leads – e.g. 'engineering manager', 'head of product']"
-    ],
-    "seniorities": ["manager", "director", "vp", "c_suite"],
-    "job_title_match": "[Return the job title matched to this department]"
-  }
-}
+Departments enum: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other.
 
 Rules:
-- Use only the job title and job description as input.
-- Do not return names or emails.
-- The goal is to create structured titles and seniority filters to find likely hiring managers for the candidate's role.`;
+- Choose a primary_department; include secondary if cross‑functional (e.g., "Product Data Analyst" ⇒ Product Management + Data Analysis).
+- Propose recruiter titles first (for pipeline access), then department leaders (decision-makers).
+- Tailor lead titles to the job family and level (e.g., Staff SWE → Eng Manager/Director/VP Eng; Product Designer → Design Manager/Head of Design).
+- Include brief notes on why each bucket and how to pivot if zero results.
+
+OUTPUT JSON SHAPE:
+{
+  "primary_department": "Engineering|Product Management|Design|Data Analysis|Marketing|Sales|Customer Success|Leadership|Operations|Compliance|Other",
+  "department_confidence": 0-100,
+  "secondary_departments": ["..."],
+  "recruiter_bucket": {
+    "target_titles": ["Technical Recruiter","Senior Technical Recruiter","Recruiting Manager","Talent Acquisition Partner","Sourcer"],
+    "notes": "why these titles match; synonyms if strict search yields zero"
+  },
+  "department_lead_bucket": {
+    "departments": ["Engineering"],
+    "target_titles": ["Engineering Manager","Director of Engineering","VP Engineering","Head of Engineering"],
+    "notes": "leadership mapping rationale and pivot guidance"
+  },
+  "synonyms": ["role synonyms for search expansion"],
+  "fallbacks": ["If strict titles fail, try normalized title; widen department to X; include adjacent discipline Y."]
+}`;
 
   const userPrompt = `Analyze this job title to create a two-bucket contact strategy:
 
