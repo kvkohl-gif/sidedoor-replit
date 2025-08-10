@@ -302,7 +302,7 @@ export default function Overview() {
               <table className="min-w-full">
                 <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                   <tr>
-                    <th className="px-4 py-3 hidden lg:table-cell">Job Title</th>
+                    <th className="px-4 py-3 hidden lg:table-cell text-left">Job Title</th>
                     <th className="px-4 py-3 hidden lg:table-cell">Company</th>
                     <th className="px-4 py-3 hidden lg:table-cell">Date</th>
                     <th className="px-4 py-3 hidden lg:table-cell">Contacts</th>
@@ -347,12 +347,12 @@ export default function Overview() {
               <table className="min-w-full">
                 <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                   <tr>
-                    <th scope="col" className="px-4 py-3 hidden lg:table-cell">Job Title</th>
+                    <th scope="col" className="px-4 py-3 hidden lg:table-cell text-left">Job Title</th>
                     <th scope="col" className="px-4 py-3 hidden lg:table-cell">Company</th>
                     <th scope="col" className="px-4 py-3 hidden lg:table-cell">Date</th>
                     <th scope="col" className="px-4 py-3 hidden lg:table-cell">Contacts</th>
                     <th scope="col" className="px-2 py-3 hidden lg:table-cell"></th>
-                    <th scope="col" className="px-4 py-3 lg:hidden">Search</th>
+                    <th scope="col" className="px-4 py-3 lg:hidden text-left">Search</th>
                     <th scope="col" className="px-2 py-3 lg:hidden"></th>
                   </tr>
                 </thead>
@@ -364,7 +364,7 @@ export default function Overview() {
                     return (
                       <tr key={submission.id} className="hover:bg-gray-50">
                         {/* Desktop Layout */}
-                        <th scope="row" className="max-w-[280px] truncate px-4 py-4 text-sm font-medium text-gray-900 hidden lg:table-cell">
+                        <th scope="row" className="max-w-[280px] truncate px-4 py-4 text-sm font-medium text-gray-900 hidden lg:table-cell text-left">
                           {submission.jobTitle || "Not specified"}
                         </th>
                         <td className="px-4 py-4 text-sm text-gray-600 hidden lg:table-cell">
@@ -389,8 +389,8 @@ export default function Overview() {
                         </td>
 
                         {/* Mobile Layout */}
-                        <td className="px-4 py-4 lg:hidden">
-                          <div className="font-medium text-gray-900 truncate">
+                        <td className="px-4 py-4 lg:hidden text-left">
+                          <div className="font-medium text-gray-900 truncate text-left">
                             {submission.jobTitle || "Not specified"}
                           </div>
                           <div className="text-sm text-gray-600 truncate">
