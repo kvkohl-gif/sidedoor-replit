@@ -175,7 +175,7 @@ export default function Search() {
                     onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder="Paste the complete job description or job link here…"
+                    placeholder="Paste the complete job description here (include title, company, requirements, and responsibilities)…"
                     disabled={isInputLocked}
                     data-testid="textarea-job-description"
                     style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height

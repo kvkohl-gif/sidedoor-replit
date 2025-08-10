@@ -114,7 +114,7 @@ export default function Landing() {
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Paste the complete job description or job link here…"
+                    placeholder="Paste the complete job description here (include title, company, requirements, and responsibilities)…"
                     style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
                     className={`peer resize-none transition-all duration-200 placeholder:opacity-100 focus:placeholder:opacity-0 ${
                       jobInput.length > 0 ? 'placeholder:opacity-0' : ''
