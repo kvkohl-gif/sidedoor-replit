@@ -191,3 +191,9 @@ The enrichment service is structured to easily integrate with:
   * Added dynamic content waiting specifically tuned for React/Vue job board applications
   * Updated to Chrome 126 user agent with realistic headers (Accept-Language, DNT)
   * Maintained backward compatibility with existing cheerio fallback system
+- **URL Input Capability Temporarily Hidden (Jan 30, 2025)**:
+  * Hidden URL input tabs/options from frontend (landing page and search page) per user request
+  * All backend URL scraping code remains intact and functional for future restoration
+  * Updated UI text to remove references to URL input while preserving functionality
+  * Restoration command: User will say "re-install the url input capabilities" to restore full UI
+  * Code preserved in commented sections with clear restoration markers

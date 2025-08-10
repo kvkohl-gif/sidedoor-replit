@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 export default function Search() {
   const [, setLocation] = useLocation();
   const [jobInput, setJobInput] = useState("");
-  const [activeTab, setActiveTab] = useState("url");
+  // URL input capability hidden - now always defaults to description
+  const [activeTab, setActiveTab] = useState("description");
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
@@ -69,25 +70,27 @@ export default function Search() {
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Recruiter Contacts</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Paste a job description or job posting URL to discover and connect with recruiters and hiring managers
+          Paste a job description to discover and connect with recruiters and hiring managers
         </p>
       </div>
 
       {/* Input Section with Tabs */}
       <Card className="mb-8">
         <CardContent className="p-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-none rounded-t-lg">
-              <TabsTrigger value="url" className="flex items-center gap-2">
+          {/* URL input capability hidden - can be restored with 're-install the url input capabilities' */}
+          <Tabs value="description" onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-1 rounded-none rounded-t-lg">
+              {/* <TabsTrigger value="url" className="flex items-center gap-2">
                 <Link className="h-4 w-4" />
                 Job URL
-              </TabsTrigger>
+              </TabsTrigger> */}
               <TabsTrigger value="description" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 Job Description
               </TabsTrigger>
             </TabsList>
             
+            {/* URL tab hidden - code preserved for restoration
             <TabsContent value="url" className="p-6 space-y-4">
               <div>
                 <h3 className="font-medium text-gray-900 mb-3">Job URL</h3>
@@ -112,6 +115,7 @@ export default function Search() {
                 {isProcessing ? "Analyzing..." : "Analyze Job & Find Recruiters"}
               </Button>
             </TabsContent>
+            */}
             
             <TabsContent value="description" className="p-6 space-y-4">
               <div>

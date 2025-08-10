@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Search, MessageSquare, BarChart3 } from "lucide-react";
 
 export default function Landing() {
-  const [inputType, setInputType] = useState<"text" | "url">("text");
+  // URL input type removed - now always defaults to text
+  const [inputType] = useState<"text">("text");
   const [jobInput, setJobInput] = useState("");
 
   const handleSubmit = () => {
@@ -49,7 +50,7 @@ export default function Landing() {
             Find the right recruiter for any job instantly.
           </h1>
           <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto">
-            Paste a job description or URL and get recruiter contacts with personalized outreach messages powered by AI.
+            Paste a job description and get recruiter contacts with personalized outreach messages powered by AI.
           </p>
         </div>
 
@@ -57,16 +58,17 @@ export default function Landing() {
         <Card className="shadow-sm border border-slate-200">
           <CardContent className="p-8">
             <div className="space-y-6">
+              {/* URL input capability hidden - can be restored with 're-install the url input capabilities' */}
               {/* Toggle Buttons */}
               <div className="flex bg-slate-100 p-1 rounded-lg w-fit mx-auto">
                 <Button
-                  variant={inputType === "text" ? "default" : "ghost"}
+                  variant="default"
                   size="sm"
-                  onClick={() => setInputType("text")}
-                  className={inputType === "text" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}
+                  className="bg-white text-slate-900 shadow-sm"
                 >
                   Job Description
                 </Button>
+                {/* URL button hidden - code preserved for restoration
                 <Button
                   variant={inputType === "url" ? "default" : "ghost"}
                   size="sm"
@@ -75,22 +77,24 @@ export default function Landing() {
                 >
                   Job URL
                 </Button>
+                */}
               </div>
 
-              {/* Input Area */}
-              {inputType === "text" ? (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Paste Job Description
-                  </label>
-                  <Textarea
-                    placeholder="Paste the full job description here..."
-                    className="h-48 resize-none"
-                    value={jobInput}
-                    onChange={(e) => setJobInput(e.target.value)}
-                  />
-                </div>
-              ) : (
+              {/* Input Area - URL section hidden */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Paste Job Description
+                </label>
+                <Textarea
+                  placeholder="Paste the full job description here..."
+                  className="h-48 resize-none"
+                  value={jobInput}
+                  onChange={(e) => setJobInput(e.target.value)}
+                />
+              </div>
+              
+              {/* URL input hidden - code preserved for restoration
+              {inputType === "url" && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Job URL
@@ -103,6 +107,7 @@ export default function Landing() {
                   />
                 </div>
               )}
+              */}
 
               {/* Submit Button */}
               <div className="text-center">
