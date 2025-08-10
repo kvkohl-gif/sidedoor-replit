@@ -266,7 +266,8 @@ export default function Search() {
         </CardContent>
       </Card>
 
-      {/* How it Works Section */}
+      {/* How it Works Section - Hidden for now */}
+      {/*
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
@@ -295,6 +296,7 @@ export default function Search() {
           </div>
         </CardContent>
       </Card>
+      */}
 
       {/* Processing Status */}
       {isProcessing && (
