@@ -1,0 +1,44 @@
+Task: Prevent overlap between the floating label and placeholder in the Job Description textarea
+Goal: Only the floating label is visible; the placeholder never renders text. Use :placeholder-shown to control label position.
+
+Acceptance Criteria
+- Placeholder text is never visible (we’ll keep a single space to trigger :placeholder-shown).
+- Label sits inside the field (baseline position) when the textarea is empty/unfocused.
+- Label floats above (smaller) when textarea is focused OR has content.
+- No visual overlap in any state (empty/focused/filled/disabled).
+- Works in Chrome, Safari, Firefox, and mobile.
+
+Implementation (React + Tailwind)
+
+```tsx
+<div className="relative">
+  <textarea
+    id="jobDescription"
+    // NOTE: placeholder must be a single space to enable :placeholder-shown without showing text
+    placeholder=" "
+    className={[
+      "peer w-full min-h-[16rem] rounded-xl border border-gray-300 bg-white px-4 py-4",
+      "text-gray-900 leading-relaxed outline-none",
+      "focus:border-blue-600 focus:ring-4 focus:ring-blue-200/50",
+      // ensure the (invisible) placeholder never shows
+      "placeholder-transparent focus:placeholder-transparent",
+    ].join(" ")}
+    aria-describedby="jd-help"
+  />
+  <label
+    htmlFor="jobDescription"
+    className={[
+      "pointer-events-none absolute left-4 top-4 px-1 bg-white text-gray-500 transition-all",
+      // when empty & unfocused (placeholder-shown), label sits inside at normal size
+      "peer-placeholder-shown:top-4 peer-placeholder-shown:text-base",
+      // when focused OR has content, float the label above and shrink
+      "peer-focus:-top-3 peer-focus:text-xs peer-focus:text-blue-600",
+      "peer-[&:not(:placeholder-shown)]:-top-3 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-gray-600",
+    ].join(" ")}
+  >
+    Full Job Description
+  </label>
+</div>
+<p id="jd-help" className="mt-2 text-sm text-gray-500">
+  Tip: Include title, company, requirements, and responsibilities for best results.
+</p>

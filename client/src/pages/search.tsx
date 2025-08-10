@@ -171,29 +171,28 @@ export default function Search() {
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
+                    id="jobDescription"
                     value={jobInput}
                     onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder="Paste the complete job description here (include title, company, requirements, and responsibilities)…"
+                    placeholder=" "
                     disabled={isInputLocked}
                     data-testid="textarea-job-description"
                     style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
-                    className={`peer text-sm resize-none transition-all duration-200 placeholder:opacity-100 focus:placeholder:opacity-0 ${
-                      jobInput.length > 0 ? 'placeholder:opacity-0' : ''
-                    } ${
+                    className={`peer w-full text-sm resize-none transition-all duration-200 px-4 py-4 rounded-xl border placeholder-transparent focus:placeholder-transparent outline-none focus:ring-4 focus:ring-blue-200/50 ${
                       isInputLocked 
                         ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
-                        : ""
+                        : "text-gray-900 border-gray-300 bg-white focus:border-blue-600"
                     }`}
+                    aria-describedby="jd-help"
                   />
                   
                   {/* Floating label */}
-                  <label className={`absolute left-3 text-sm transition-all duration-200 ease-in-out pointer-events-none bg-white px-1 ${
-                    jobInput.length > 0 
-                      ? "text-blue-600 text-xs -top-2 scale-90" 
-                      : "text-gray-500 top-3 peer-focus:text-blue-600 peer-focus:text-xs peer-focus:-top-2 peer-focus:scale-90"
-                  }`}>
+                  <label
+                    htmlFor="jobDescription"
+                    className="pointer-events-none absolute left-4 top-4 px-1 bg-white text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-focus:-top-3 peer-focus:text-xs peer-focus:text-blue-600 peer-[&:not(:placeholder-shown)]:-top-3 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-gray-600"
+                  >
                     Full Job Description
                   </label>
                   
@@ -214,7 +213,7 @@ export default function Search() {
                   )}
                 </div>
                 
-                <p className="text-sm text-gray-500 mt-2">
+                <p id="jd-help" className="text-sm text-gray-500 mt-2">
                   Tip: Include title, company, requirements, and responsibilities for best results.
                 </p>
               </div>
