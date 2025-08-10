@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+
 import { 
   Plus, 
   TrendingUp, 
@@ -187,84 +187,86 @@ export default function Overview() {
           <p className="text-slate-600">Here's what's happening with your recruiter outreach</p>
         </div>
 
-        {/* Quick Action */}
-        <div className="mb-8 border-2 border-dashed border-blue-200 hover:border-blue-300 transition-colors rounded-xl bg-white p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Start a new search</h3>
-              <p className="text-gray-600 mb-4">
-                Paste a job description to find recruiters and hiring managers
-              </p>
+        {/* Dashboard Cards */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 mb-8">
+          {/* Start a new search */}
+          <section 
+            role="region" 
+            aria-labelledby="card-new" 
+            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+          >
+            <div className="mb-3">
+              <h3 id="card-new" className="text-sm font-medium text-gray-700">Start a new search</h3>
+              <p className="mt-1 text-xs text-gray-500">Paste a job description to find recruiters and hiring managers</p>
             </div>
-            <Button 
+            <button 
               onClick={handleNewSearch}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 lg:w-[220px]"
               data-testid="button-new-search"
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               Find Contacts
-            </Button>
-          </div>
-        </div>
+            </button>
+          </section>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Contacts Card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Contacts</h3>
-              <div className="flex items-center text-xs text-green-600">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                12%
-              </div>
+          {/* Contacts */}
+          <section 
+            role="region" 
+            aria-labelledby="card-contacts" 
+            className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+          >
+            <div className="absolute right-3 top-3 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">
+              <TrendingUp className="inline h-3 w-3 mr-0.5" />
+              12%
             </div>
-            <div className="text-2xl font-bold">{stats.totalContacts}</div>
-            <p className="text-xs text-gray-500">contacts found</p>
-            <div className="mt-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span>Email verification</span>
-                <span>{stats.emailVerificationRate}%</span>
-              </div>
-              <Progress value={stats.emailVerificationRate} className="h-2" />
+            <h3 id="card-contacts" className="text-sm font-medium text-gray-700">Contacts</h3>
+            <div className="mt-2 flex items-baseline">
+              <div className="text-2xl font-semibold text-gray-900">{stats.totalContacts}</div>
+              <div className="ml-2 text-xs text-gray-500">contacts found</div>
             </div>
-          </div>
-
-          {/* Outreach Card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Outreach</h3>
-              <div className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">New</div>
-            </div>
-            <div className="text-2xl font-bold">{stats.totalMessages}</div>
-            <p className="text-xs text-gray-500">messages created</p>
-            <div className="mt-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span>Personalization score</span>
-                <span>{stats.personalizationScore}%</span>
-              </div>
-              <Progress value={stats.personalizationScore} className="h-2" />
-            </div>
-          </div>
-
-          {/* Activity Card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Recent Activity</h3>
-              <Calendar className="h-4 w-4 text-gray-400" />
-            </div>
-            <div className="text-2xl font-bold">{stats.recentSearches}</div>
-            <p className="text-xs text-gray-500">searches this month</p>
-            <div className="mt-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span>Success rate</span>
-                <span>{stats.totalContacts > 0 ? Math.round((stats.verifiedContacts / stats.totalContacts) * 100) : 0}%</span>
-              </div>
-              <Progress 
-                value={stats.totalContacts > 0 ? (stats.verifiedContacts / stats.totalContacts) * 100 : 0} 
-                className="h-2" 
+            <div className="mt-4 text-xs text-gray-600">Email verification</div>
+            <div 
+              className="mt-1 h-1.5 w-full rounded-full bg-gray-100" 
+              role="progressbar" 
+              aria-valuemin={0} 
+              aria-valuemax={100} 
+              aria-valuenow={stats.emailVerificationRate}
+            >
+              <div 
+                className="h-1.5 rounded-full bg-emerald-500 transition-all duration-300" 
+                style={{ width: `${stats.emailVerificationRate}%` }} 
               />
             </div>
-          </div>
+            <div className="mt-1 text-right text-xs text-gray-500">{stats.emailVerificationRate}%</div>
+          </section>
+
+          {/* Outreach */}
+          <section 
+            role="region" 
+            aria-labelledby="card-outreach" 
+            className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+          >
+            <div className="absolute right-3 top-3 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-700">New</div>
+            <h3 id="card-outreach" className="text-sm font-medium text-gray-700">Outreach</h3>
+            <div className="mt-2 flex items-baseline">
+              <div className="text-2xl font-semibold text-gray-900">{stats.totalMessages}</div>
+              <div className="ml-2 text-xs text-gray-500">messages created</div>
+            </div>
+            <div className="mt-4 text-xs text-gray-600">Personalization score</div>
+            <div 
+              className="mt-1 h-1.5 w-full rounded-full bg-gray-100" 
+              role="progressbar" 
+              aria-valuemin={0} 
+              aria-valuemax={100} 
+              aria-valuenow={stats.personalizationScore}
+            >
+              <div 
+                className="h-1.5 rounded-full bg-blue-600 transition-all duration-300" 
+                style={{ width: `${stats.personalizationScore}%` }} 
+              />
+            </div>
+            <div className="mt-1 text-right text-xs text-gray-500">{stats.personalizationScore}%</div>
+          </section>
         </div>
 
         {/* Recent Searches */}

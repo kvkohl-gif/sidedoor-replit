@@ -1,0 +1,78 @@
+Task: Restyle “Start a new search / Contacts / Outreach” cards to match UXpilot compact design
+Goal: Replace large, padded cards with tighter 3‑up cards; move CTA inside left card; use thin borders, small headings, compact metrics bars.
+
+Acceptance Criteria
+- Grid: 3 columns on ≥1024px (`lg:grid-cols-3`), 1 column on mobile, consistent gap `gap-4`.
+- Card chrome: `rounded-xl border border-gray-200 bg-white shadow-sm` with inner padding `p-4` (NOT dotted border). No oversized hero typography.
+- Headings: `text-sm font-medium text-gray-700` (e.g., “Start a new search”, “Contacts”, “Outreach”).
+- Body copy: `text-xs text-gray-500` for helper lines (“Paste a job description…” / “contacts found” / “messages created”).
+- Metrics:
+  - Large metric number: `text-2xl font-semibold text-gray-900` (drop from 58/107 hero size).
+  - Submetric label inline: `text-xs text-gray-500 ml-2` (e.g., “contacts found”, “messages created”).
+  - Bars: 6px height, rounded, neutral track `bg-gray-100`, fill uses:
+      - Email verification: `bg-emerald-500`
+      - Personalization score: `bg-blue-600`
+- Badges:
+  - Trend badge (Contacts): small chip `text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded` aligned top‑right.
+  - “New” badge (Outreach): `text-[11px] text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded` aligned top‑right.
+- CTA:
+  - Move button **inside** left card, full width on mobile, fixed 220px on desktop.
+  - Style: `bg-blue-600 hover:bg-blue-700 text-white rounded-md h-9 text-sm inline-flex items-center justify-center gap-2`.
+  - Label: “Find Contacts”.
+- Remove the giant top dashed box and oversized H2. Keep the section heading outside the grid if needed.
+- A11y: All cards `role="region"` with `aria-labelledby` of the card header; progress bars have `role="progressbar"` with `aria-valuenow`.
+
+Implementation (React + Tailwind)
+
+```tsx
+export default function DashboardSummary({ stats }: {
+  stats: {
+    contactsFound: number; emailVerificationPct: number; trendPct: number;
+    messagesCreated: number; personalizationPct: number;
+  }
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* Start a new search */}
+      <section role="region" aria-labelledby="card-new" className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-3">
+          <h3 id="card-new" className="text-sm font-medium text-gray-700">Start a new search</h3>
+          <p className="mt-1 text-xs text-gray-500">Paste a job description to find recruiters and hiring managers</p>
+        </div>
+        <button className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 lg:w-[220px]">
+          <span className="text-base">🔎</span> Find Contacts
+        </button>
+      </section>
+
+      {/* Contacts */}
+      <section role="region" aria-labelledby="card-contacts" className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="absolute right-3 top-3 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">
+          ↑ {stats.trendPct}%
+        </div>
+        <h3 id="card-contacts" className="text-sm font-medium text-gray-700">Contacts</h3>
+        <div className="mt-2 flex items-baseline">
+          <div className="text-2xl font-semibold text-gray-900">{stats.contactsFound}</div>
+          <div className="ml-2 text-xs text-gray-500">contacts found</div>
+        </div>
+        <div className="mt-4 text-xs text-gray-600">Email verification</div>
+        <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={stats.emailVerificationPct}>
+          <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${stats.emailVerificationPct}%` }} />
+        </div>
+      </section>
+
+      {/* Outreach */}
+      <section role="region" aria-labelledby="card-outreach" className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="absolute right-3 top-3 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-700">New</div>
+        <h3 id="card-outreach" className="text-sm font-medium text-gray-700">Outreach</h3>
+        <div className="mt-2 flex items-baseline">
+          <div className="text-2xl font-semibold text-gray-900">{stats.messagesCreated}</div>
+          <div className="ml-2 text-xs text-gray-500">messages created</div>
+        </div>
+        <div className="mt-4 text-xs text-gray-600">Personalization score</div>
+        <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={stats.personalizationPct}>
+          <div className="h-1.5 rounded-full bg-blue-600" style={{ width: `${stats.personalizationPct}%` }} />
+        </div>
+      </section>
+    </div>
+  );
+}
