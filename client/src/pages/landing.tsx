@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, MessageSquare, BarChart3, Loader2, Lock } from "lucide-react";
+import { Search, MessageSquare, BarChart3, Loader2, Lock, Users } from "lucide-react";
 
 export default function Landing() {
   // URL input type removed - now always defaults to text
@@ -84,7 +84,7 @@ export default function Landing() {
         </div>
 
         {/* Input Form */}
-        <Card className="shadow-sm border border-slate-200">
+        <Card className="rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 border border-slate-200">
           <CardContent className="p-8">
             <div className="space-y-6">
               {/* URL input capability hidden - can be restored with 're-install the url input capabilities' */}
@@ -118,7 +118,8 @@ export default function Landing() {
                   <Textarea
                     ref={textareaRef}
                     placeholder="Paste the complete job description or job link here…"
-                    className={`h-48 resize-none transition-all duration-200 ${
+                    style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
+                    className={`resize-none transition-all duration-200 ${
                       isInputLocked 
                         ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
                         : ""
@@ -130,6 +131,13 @@ export default function Landing() {
                     disabled={isInputLocked}
                     data-testid="textarea-job-description-landing"
                   />
+                  
+                  {/* Character counter */}
+                  <div className={`absolute bottom-2 right-2 text-xs text-gray-400 bg-white/80 rounded px-1 transition-all duration-200 ${
+                    isInputLocked ? 'bottom-12' : 'bottom-2'
+                  }`}>
+                    {jobInput.length} characters
+                  </div>
                   
                   {/* Lock overlay */}
                   {isInputLocked && (
@@ -177,6 +185,10 @@ export default function Landing() {
                     </>
                   ) : (
                     <>
+                      <div className="relative mr-2">
+                        <Search className="w-4 h-4" />
+                        <Users className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5" />
+                      </div>
                       Find Contacts & Draft Outreach
                       <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
@@ -197,8 +209,9 @@ export default function Landing() {
         {/* Features Grid */}
         <div className="grid md:grid-cols-3 gap-8 mt-20">
           <div className="text-center">
-            <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Search className="w-6 h-6 text-primary" />
+            <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4 relative">
+              <Search className="w-5 h-5 text-primary" />
+              <Users className="w-3 h-3 text-primary absolute -bottom-0.5 -right-0.5" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">AI-Powered Search</h3>
             <p className="text-slate-600">Advanced AI extracts recruiter information and contact details from job postings.</p>

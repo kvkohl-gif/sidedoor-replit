@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Briefcase, Search as SearchIcon, Link, FileText, Globe, PlayCircle, BookOpen, Loader2, Lock } from "lucide-react";
+import { AlertCircle, Briefcase, Search as SearchIcon, Link, FileText, Globe, PlayCircle, BookOpen, Loader2, Lock, Users } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { nanoid } from "nanoid";
@@ -109,10 +109,13 @@ export default function Search() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="text-center mb-8">
+      {/* Sticky Header */}
+      <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 text-center mb-8 pb-4">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-          <SearchIcon className="h-8 w-8 text-blue-600" />
+          <div className="relative">
+            <SearchIcon className="h-6 w-6 text-blue-600" />
+            <Users className="h-4 w-4 text-blue-600 absolute -bottom-1 -right-1" />
+          </div>
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Recruiter Contacts</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -121,7 +124,7 @@ export default function Search() {
       </div>
 
       {/* Input Section with Tabs */}
-      <Card className="mb-8">
+      <Card className="mb-8 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
         <CardContent className="p-0">
           {/* URL input capability hidden - can be restored with 're-install the url input capabilities' */}
           <Tabs value="description" onValueChange={setActiveTab} className="w-full">
@@ -176,12 +179,20 @@ export default function Search() {
                     placeholder="Paste the complete job description or job link here…"
                     disabled={isInputLocked}
                     data-testid="textarea-job-description"
-                    className={`min-h-[200px] text-sm resize-none transition-all duration-200 ${
+                    style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
+                    className={`text-sm resize-none transition-all duration-200 ${
                       isInputLocked 
                         ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
                         : ""
                     }`}
                   />
+                  
+                  {/* Character counter */}
+                  <div className={`absolute bottom-2 right-2 text-xs text-gray-400 bg-white/80 rounded px-1 ${
+                    isInputLocked ? 'bottom-12' : 'bottom-2'
+                  }`}>
+                    {jobInput.length} characters
+                  </div>
                   
                   {/* Lock overlay */}
                   {isInputLocked && (
@@ -213,7 +224,10 @@ export default function Search() {
                     </>
                   ) : (
                     <>
-                      <SearchIcon className="h-4 w-4 mr-2" />
+                      <div className="relative mr-2">
+                        <SearchIcon className="h-4 w-4" />
+                        <Users className="h-2.5 w-2.5 absolute -bottom-0.5 -right-0.5" />
+                      </div>
                       Find Contacts & Draft Outreach
                     </>
                   )}
