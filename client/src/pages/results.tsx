@@ -10,13 +10,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { JobDetailCard } from "@/components/ui/job-detail-card";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 import ContactCards from "@/components/ui/contact-cards";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 export default function Results() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const submissionId = params.id;
 
@@ -103,9 +104,12 @@ export default function Results() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
-              <Button variant="ghost" onClick={handleLogout}>
-                Logout
-              </Button>
+              <UserDropdown 
+                user={user}
+                onLogout={handleLogout}
+                onDashboard={handleBackToDashboard}
+                showDashboard={true}
+              />
             </div>
           </div>
         </nav>
@@ -129,9 +133,12 @@ export default function Results() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
-            <Button variant="ghost" onClick={handleLogout}>
-              Logout
-            </Button>
+            <UserDropdown 
+              user={user}
+              onLogout={handleLogout}
+              onDashboard={handleBackToDashboard}
+              showDashboard={true}
+            />
           </div>
         </div>
       </nav>

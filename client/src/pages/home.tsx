@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { CompanySelectionModal, type ApolloOrganization } from "@/components/ui/company-selection-modal";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 
 export default function Home() {
   const [inputType, setInputType] = useState<"text" | "url">("url");
@@ -233,16 +234,13 @@ export default function Home() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-slate-600 text-sm">
-                Welcome, {(user as any)?.firstName || (user as any)?.email}
-              </span>
-              <Button variant="ghost" onClick={goToDashboard}>
-                Dashboard
-              </Button>
-              <Button variant="ghost" onClick={handleLogout}>
-                Logout
-              </Button>
+            <div className="flex items-center">
+              <UserDropdown 
+                user={user}
+                onLogout={handleLogout}
+                onDashboard={goToDashboard}
+                showDashboard={true}
+              />
             </div>
           </div>
         </div>

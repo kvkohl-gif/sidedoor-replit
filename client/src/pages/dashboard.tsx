@@ -13,6 +13,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { LoadingAnimation } from "@/components/ui/loading-animation";
 import { StatusDropdown, type StatusType } from "@/components/ui/status-dropdown";
 import { InlineNotes } from "@/components/ui/inline-notes";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 import { apiRequest } from "@/lib/queryClient";
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
@@ -196,13 +197,11 @@ export default function Dashboard() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-slate-600 text-sm">
-                Welcome, {(user as any)?.firstName || (user as any)?.email}
-              </span>
-              <Button variant="ghost" onClick={handleLogout}>
-                Logout
-              </Button>
+            <div className="flex items-center">
+              <UserDropdown 
+                user={user}
+                onLogout={handleLogout}
+              />
             </div>
           </div>
         </div>
