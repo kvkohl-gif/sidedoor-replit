@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
   Plus, 
@@ -147,22 +145,7 @@ export default function Overview() {
     return date.toLocaleDateString();
   };
 
-  const getStatusBadge = (submission: JobSubmissionWithRecruiters) => {
-    const recruiters = submission.recruiters || [];
-    const verifiedCount = recruiters.filter(r => r.emailVerified).length;
-    const totalCount = recruiters.length;
 
-    if (totalCount === 0) {
-      return <Badge variant="secondary">Pending</Badge>;
-    }
-    if (verifiedCount === totalCount) {
-      return <Badge variant="default" className="bg-green-100 text-green-800">Complete</Badge>;
-    }
-    if (verifiedCount > 0) {
-      return <Badge variant="default" className="bg-blue-100 text-blue-800">Partial</Badge>;
-    }
-    return <Badge variant="destructive">Issues</Badge>;
-  };
 
   if (isLoading || submissionsLoading) {
     return (
@@ -205,184 +188,236 @@ export default function Overview() {
         </div>
 
         {/* Quick Action */}
-        <Card className="mb-8 border-2 border-dashed border-blue-200 hover:border-blue-300 transition-colors">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">Start a new search</h3>
-                <p className="text-slate-600 mb-4">
-                  Paste a job description to find recruiters and hiring managers
-                </p>
-              </div>
-              <Button 
-                onClick={handleNewSearch}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                data-testid="button-new-search"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Find Contacts
-              </Button>
+        <div className="mb-8 border-2 border-dashed border-blue-200 hover:border-blue-300 transition-colors rounded-xl bg-white p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Start a new search</h3>
+              <p className="text-gray-600 mb-4">
+                Paste a job description to find recruiters and hiring managers
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <Button 
+              onClick={handleNewSearch}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              data-testid="button-new-search"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Find Contacts
+            </Button>
+          </div>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Contacts Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Contacts</CardTitle>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <h3 className="text-sm font-medium">Contacts</h3>
               <div className="flex items-center text-xs text-green-600">
                 <TrendingUp className="h-3 w-3 mr-1" />
                 12%
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalContacts}</div>
-              <p className="text-xs text-muted-foreground">contacts found</p>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Email verification</span>
-                  <span>{stats.emailVerificationRate}%</span>
-                </div>
-                <Progress value={stats.emailVerificationRate} className="h-2" />
+            </div>
+            <div className="text-2xl font-bold">{stats.totalContacts}</div>
+            <p className="text-xs text-gray-500">contacts found</p>
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Email verification</span>
+                <span>{stats.emailVerificationRate}%</span>
               </div>
-            </CardContent>
-          </Card>
+              <Progress value={stats.emailVerificationRate} className="h-2" />
+            </div>
+          </div>
 
           {/* Outreach Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Outreach</CardTitle>
-              <Badge variant="secondary" className="text-xs">New</Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalMessages}</div>
-              <p className="text-xs text-muted-foreground">messages created</p>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Personalization score</span>
-                  <span>{stats.personalizationScore}%</span>
-                </div>
-                <Progress value={stats.personalizationScore} className="h-2" />
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <h3 className="text-sm font-medium">Outreach</h3>
+              <div className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">New</div>
+            </div>
+            <div className="text-2xl font-bold">{stats.totalMessages}</div>
+            <p className="text-xs text-gray-500">messages created</p>
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Personalization score</span>
+                <span>{stats.personalizationScore}%</span>
               </div>
-            </CardContent>
-          </Card>
+              <Progress value={stats.personalizationScore} className="h-2" />
+            </div>
+          </div>
 
           {/* Activity Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.recentSearches}</div>
-              <p className="text-xs text-muted-foreground">searches this month</p>
-              <div className="mt-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Success rate</span>
-                  <span>{stats.totalContacts > 0 ? Math.round((stats.verifiedContacts / stats.totalContacts) * 100) : 0}%</span>
-                </div>
-                <Progress 
-                  value={stats.totalContacts > 0 ? (stats.verifiedContacts / stats.totalContacts) * 100 : 0} 
-                  className="h-2" 
-                />
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <h3 className="text-sm font-medium">Recent Activity</h3>
+              <Calendar className="h-4 w-4 text-gray-400" />
+            </div>
+            <div className="text-2xl font-bold">{stats.recentSearches}</div>
+            <p className="text-xs text-gray-500">searches this month</p>
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Success rate</span>
+                <span>{stats.totalContacts > 0 ? Math.round((stats.verifiedContacts / stats.totalContacts) * 100) : 0}%</span>
               </div>
-            </CardContent>
-          </Card>
+              <Progress 
+                value={stats.totalContacts > 0 ? (stats.verifiedContacts / stats.totalContacts) * 100 : 0} 
+                className="h-2" 
+              />
+            </div>
+          </div>
         </div>
 
         {/* Recent Searches */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Recent Searches</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your {recentSubmissions.length} most recent job searches
-                </p>
-              </div>
-              {submissions && submissions.length > 5 && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleViewAllHistory}
-                  data-testid="button-view-all-history"
-                >
-                  View all job history
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              )}
+        <section className="mx-auto max-w-5xl">
+          <div className="mb-3 flex items-end justify-between pt-2 pb-3">
+            <div>
+              <h3 className="text-2xl font-semibold text-gray-900">Recent Searches</h3>
+              <p className="text-sm text-gray-500">Your 5 most recent job searches</p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {recentSubmissions.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 mb-2">No searches yet</h3>
-                <p className="text-slate-500 mb-4">Start your first job search to see results here</p>
+            {submissions && submissions.length > 5 && (
+              <a 
+                href="/dashboard" 
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                data-testid="link-view-all-history"
+              >
+                View all job history <span>→</span>
+              </a>
+            )}
+          </div>
+
+          {recentSubmissions.length === 0 ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No recent searches yet</h3>
+                <p className="text-gray-500 mb-4">Start your first job search to see results here</p>
                 <Button onClick={handleNewSearch} data-testid="button-first-search">
                   <Plus className="h-4 w-4 mr-2" />
-                  Start Your First Search
+                  Start a new search
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Table Header */}
-                <div className="hidden md:grid md:grid-cols-5 gap-4 text-xs font-medium text-slate-500 uppercase tracking-wide pb-2 border-b">
-                  <div>Job Title</div>
-                  <div>Company</div>
-                  <div>Date</div>
-                  <div>Contacts</div>
-                  <div>Status</div>
-                </div>
+            </div>
+          ) : submissionsLoading ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <table className="min-w-full">
+                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3 hidden lg:table-cell">Job Title</th>
+                    <th className="px-4 py-3 hidden lg:table-cell">Company</th>
+                    <th className="px-4 py-3 hidden lg:table-cell">Date</th>
+                    <th className="px-4 py-3 hidden lg:table-cell">Contacts</th>
+                    <th className="px-2 py-3 hidden lg:table-cell"></th>
+                    <th className="px-4 py-3 lg:hidden">Search</th>
+                    <th className="px-2 py-3 lg:hidden"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {[...Array(5)].map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-4 py-4 hidden lg:table-cell">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse mb-1"></div>
+                        <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-2 py-3 hidden lg:table-cell">
+                        <div className="h-6 w-6 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-4 py-4 lg:hidden">
+                        <div className="h-5 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                      <td className="px-2 py-3 lg:hidden">
+                        <div className="h-6 w-6 bg-gray-200 rounded animate-pulse"></div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <table className="min-w-full">
+                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 hidden lg:table-cell">Job Title</th>
+                    <th scope="col" className="px-4 py-3 hidden lg:table-cell">Company</th>
+                    <th scope="col" className="px-4 py-3 hidden lg:table-cell">Date</th>
+                    <th scope="col" className="px-4 py-3 hidden lg:table-cell">Contacts</th>
+                    <th scope="col" className="px-2 py-3 hidden lg:table-cell"></th>
+                    <th scope="col" className="px-4 py-3 lg:hidden">Search</th>
+                    <th scope="col" className="px-2 py-3 lg:hidden"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {recentSubmissions.slice(0, 5).map((submission) => {
+                    const foundCount = submission.recruiters?.length || 0;
+                    const verifiedCount = submission.recruiters?.filter(r => r.emailVerified).length || 0;
+                    
+                    return (
+                      <tr key={submission.id} className="hover:bg-gray-50">
+                        {/* Desktop Layout */}
+                        <th scope="row" className="max-w-[280px] truncate px-4 py-4 text-sm font-medium text-gray-900 hidden lg:table-cell">
+                          {submission.jobTitle || "Not specified"}
+                        </th>
+                        <td className="px-4 py-4 text-sm text-gray-600 hidden lg:table-cell">
+                          {submission.companyName || "Unknown Company"}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500 hidden lg:table-cell">
+                          {formatDate(submission.submittedAt)}
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <div className="text-sm font-medium text-gray-900">{foundCount} found</div>
+                          <div className="text-xs text-green-600">{verifiedCount} verified</div>
+                        </td>
+                        <td className="px-2 py-3 hidden lg:table-cell">
+                          <a 
+                            href={`/submissions/${submission.id}`}
+                            className="inline-flex items-center rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            aria-label={`View results for ${submission.jobTitle || 'job'} at ${submission.companyName || 'company'}`}
+                            data-testid={`link-submission-${submission.id}`}
+                          >
+                            →
+                          </a>
+                        </td>
 
-                {/* Table Rows */}
-                {recentSubmissions.map((submission) => (
-                  <div 
-                    key={submission.id}
-                    className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
-                    onClick={() => handleViewSubmission(submission.id)}
-                    data-testid={`submission-row-${submission.id}`}
-                  >
-                    <div className="md:col-span-1">
-                      <div className="font-medium text-slate-900 truncate">
-                        {submission.jobTitle || "Untitled Position"}
-                      </div>
-                      <div className="md:hidden text-sm text-slate-500 mt-1">
-                        {submission.companyName || "Unknown Company"}
-                      </div>
-                    </div>
-                    <div className="hidden md:block">
-                      <div className="text-slate-700">
-                        {submission.companyName || "Unknown Company"}
-                      </div>
-                    </div>
-                    <div className="md:col-span-1">
-                      <div className="text-sm text-slate-500">
-                        {formatDate(submission.submittedAt)}
-                      </div>
-                    </div>
-                    <div className="md:col-span-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">
-                          {submission.recruiters?.length || 0} found
-                        </span>
-                        <span className="text-sm text-green-600">
-                          {submission.recruiters?.filter(r => r.emailVerified).length || 0} verified
-                        </span>
-                      </div>
-                    </div>
-                    <div className="md:col-span-1 flex items-center justify-between">
-                      {getStatusBadge(submission)}
-                      <ArrowRight className="h-4 w-4 text-slate-400" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        {/* Mobile Layout */}
+                        <td className="px-4 py-4 lg:hidden">
+                          <div className="font-medium text-gray-900 truncate">
+                            {submission.jobTitle || "Not specified"}
+                          </div>
+                          <div className="text-sm text-gray-600 truncate">
+                            {submission.companyName || "Unknown Company"}
+                          </div>
+                          <div className="text-sm text-gray-500 mt-1">
+                            {formatDate(submission.submittedAt)} • {foundCount}/{verifiedCount}
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 lg:hidden">
+                          <a 
+                            href={`/submissions/${submission.id}`}
+                            className="inline-flex items-center rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            aria-label={`View results for ${submission.jobTitle || 'job'} at ${submission.companyName || 'company'}`}
+                            data-testid={`link-submission-mobile-${submission.id}`}
+                          >
+                            →
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

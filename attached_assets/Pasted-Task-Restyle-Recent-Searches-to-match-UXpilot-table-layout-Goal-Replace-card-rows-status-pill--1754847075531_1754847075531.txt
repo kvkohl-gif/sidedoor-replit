@@ -1,0 +1,88 @@
+Task: Restyle “Recent Searches” to match UXpilot table layout
+Goal: Replace card rows + status pill with compact table showing Job Title, Company, Date, and Contacts (found + verified), with a “View all job history” link on the right.
+
+Acceptance Criteria
+- Section header row:
+  - Left: H3 “Recent Searches” + subtext “Your 5 most recent job searches”.
+  - Right: ghost button “View all job history →”.
+  - Spacing: pt-2 pb-3, container max-w-5xl centered.
+
+- Table (desktop ≥1024px):
+  - 4 columns: JOB TITLE, COMPANY, DATE, CONTACTS.
+  - Row height ~56–60px; zebra disabled; 1px top divider between rows; no card borders.
+  - Contacts cell shows two lines:
+      line 1: “{n} found” (semibold, neutral)
+      line 2: “{m} verified” (smaller, green-600)
+  - Rightmost chevron button per row (→) with hover bg-gray-50; entire row clickable.
+  - Remove “Status” pill completely.
+  - Truncate long titles with ellipsis; title uses `font-medium text-gray-900`, company `text-gray-600`, date `text-gray-500`.
+
+- Hover/active:
+  - Row hover: bg-gray-50.
+  - Focus-visible ring on row link: ring-2 ring-blue-500 rounded-md within cell.
+
+- Empty & loading states:
+  - If no items: muted card with “No recent searches yet” + primary CTA “Start a new search”.
+  - Loading: 5 skeleton rows.
+
+- Mobile (≤640px):
+  - Collapse to 2-line rows: Title (bold) + Company; second line: Date • “{found}/{verified}”; chevron at right.
+
+- A11y:
+  - Use table semantics (`<table>`, `<thead>`, `<tbody>`, `<th scope="col">`, `<th scope="row">`).
+  - Each row is an `<a>` wrapping cells or a button with `aria-label="View results for {title} at {company}"`.
+
+Implementation (React + Tailwind)
+
+```tsx
+function RecentSearches({ items }: {
+  items: Array<{ id:string; title:string; company:string; dateLabel:string; found:number; verified:number; href:string; }>;
+}) {
+  return (
+    <section className="mx-auto max-w-5xl">
+      <div className="mb-3 flex items-end justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold text-gray-900">Recent Searches</h3>
+          <p className="text-sm text-gray-500">Your 5 most recent job searches</p>
+        </div>
+        <a href="/dashboard" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          View all job history <span>→</span>
+        </a>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <table className="min-w-full">
+          <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-4 py-3">Job Title</th>
+              <th className="px-4 py-3">Company</th>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">Contacts</th>
+              <th className="px-2 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {items.slice(0,5).map((it) => (
+              <tr key={it.id} className="hover:bg-gray-50">
+                <th scope="row" className="max-w-[280px] truncate px-4 py-4 text-sm font-medium text-gray-900">
+                  {it.title || "Not specified"}
+                </th>
+                <td className="px-4 py-4 text-sm text-gray-600">{it.company}</td>
+                <td className="px-4 py-4 text-sm text-gray-500">{it.dateLabel}</td>
+                <td className="px-4 py-3">
+                  <div className="text-sm font-medium text-gray-900">{it.found} found</div>
+                  <div className="text-xs text-green-600">{it.verified} verified</div>
+                </td>
+                <td className="px-2 py-3">
+                  <a href={it.href} className="inline-flex items-center rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`View results for ${it.title} at ${it.company}`}>
+                    →
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
