@@ -61,10 +61,10 @@ export default function Search() {
   });
 
   const handleSubmit = () => {
-    if (!jobInput.trim()) {
+    if (!jobInput.trim() || jobInput.trim().length < 12) {
       toast({
         title: "Input Required",
-        description: "Please enter a job description to continue.",
+        description: "Please enter at least 12 characters to continue.",
         variant: "destructive",
       });
       return;
@@ -78,6 +78,9 @@ export default function Search() {
     
     submitJobMutation.mutate({ input: jobInput.trim(), runId });
   };
+
+  // Check if input meets minimum length requirement
+  const hasMinimumInput = jobInput.trim().length >= 12;
 
   const handleCancel = () => {
     // Cancel current run and unlock input
@@ -113,7 +116,7 @@ export default function Search() {
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Recruiter Contacts</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Paste a job description to discover and connect with recruiters and hiring managers
+          Paste a description and we'll pull the role details, find recruiter/hiring manager contacts, verify emails, and draft personalized outreach.
         </p>
       </div>
 
@@ -170,7 +173,7 @@ export default function Search() {
                     onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder="Paste the complete job description here..."
+                    placeholder="Paste the complete job description or job link here…"
                     disabled={isInputLocked}
                     data-testid="textarea-job-description"
                     className={`min-h-[200px] text-sm resize-none transition-all duration-200 ${
@@ -191,14 +194,14 @@ export default function Search() {
                 </div>
                 
                 <p className="text-sm text-gray-500 mt-2">
-                  Include job title, company name, requirements, and responsibilities for best results
+                  Tip: Include title, company, and requirements for best results. We support LinkedIn, Greenhouse, Lever, Ashby, and more.
                 </p>
               </div>
               
               <div className="flex gap-3">
                 <Button 
                   onClick={handleSubmit} 
-                  disabled={isProcessing || !jobInput.trim() || isInputLocked}
+                  disabled={isProcessing || !hasMinimumInput || isInputLocked}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                   size="lg"
                   data-testid="button-submit"
@@ -211,7 +214,7 @@ export default function Search() {
                   ) : (
                     <>
                       <SearchIcon className="h-4 w-4 mr-2" />
-                      Analyze Job & Find Recruiters
+                      Find Contacts & Draft Outreach
                     </>
                   )}
                 </Button>
@@ -229,6 +232,12 @@ export default function Search() {
                   </Button>
                 )}
               </div>
+              
+              {!hasMinimumInput && !isProcessing && (
+                <p className="text-sm text-gray-400 text-center mt-2">
+                  Enter at least 12 characters to continue
+                </p>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>

@@ -14,7 +14,7 @@ export default function Landing() {
 
   const handleSubmit = () => {
     // For demo purposes on landing page, lock input briefly to show functionality
-    if (jobInput.trim()) {
+    if (jobInput.trim().length >= 12) {
       setIsInputLocked(true);
       
       // Simulate brief loading then redirect to login
@@ -23,10 +23,13 @@ export default function Landing() {
         window.location.href = "/api/login";
       }, 1500);
     } else {
-      // Redirect to login immediately if no input
+      // Redirect to login immediately if no sufficient input
       window.location.href = "/api/login";
     }
   };
+
+  // Check if input meets minimum length requirement
+  const hasMinimumInput = jobInput.trim().length >= 12;
 
   // Handle keyboard events to prevent input when locked
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -73,10 +76,10 @@ export default function Landing() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
         <div className="text-center">
           <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">
-            Find the right recruiter for any job instantly.
+            Find Recruiter Contacts
           </h1>
           <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto">
-            Paste a job description and get recruiter contacts with personalized outreach messages powered by AI.
+            Paste a description and we'll pull the role details, find recruiter/hiring manager contacts, verify emails, and draft personalized outreach.
           </p>
         </div>
 
@@ -114,7 +117,7 @@ export default function Landing() {
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Paste the full job description here..."
+                    placeholder="Paste the complete job description or job link here…"
                     className={`h-48 resize-none transition-all duration-200 ${
                       isInputLocked 
                         ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
@@ -137,6 +140,9 @@ export default function Landing() {
                     </div>
                   )}
                 </div>
+                <p className="text-sm text-slate-500 mt-2">
+                  Tip: Include title, company, and requirements for best results. We support LinkedIn, Greenhouse, Lever, Ashby, and more.
+                </p>
               </div>
               
               {/* URL input hidden - code preserved for restoration
@@ -159,7 +165,7 @@ export default function Landing() {
               <div className="text-center">
                 <Button 
                   onClick={handleSubmit}
-                  disabled={isInputLocked}
+                  disabled={isInputLocked || !hasMinimumInput}
                   className="bg-primary text-white hover:bg-blue-700 px-8 py-3 disabled:opacity-50"
                   size="lg"
                   data-testid="button-submit-landing"
@@ -171,13 +177,18 @@ export default function Landing() {
                     </>
                   ) : (
                     <>
-                      Find Recruiters & Generate Messages
+                      Find Contacts & Draft Outreach
                       <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                       </svg>
                     </>
                   )}
                 </Button>
+                {!hasMinimumInput && !isInputLocked && (
+                  <p className="text-sm text-slate-400 mt-2">
+                    Enter at least 12 characters to continue
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
