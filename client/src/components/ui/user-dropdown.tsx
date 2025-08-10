@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Settings, HelpCircle, LogOut, ChevronDown, Menu, X } from "lucide-react";
+import { User, Settings, HelpCircle, LogOut, ChevronDown, Menu, X, BarChart3 } from "lucide-react";
 
 interface UserDropdownProps {
   user: any;
@@ -48,7 +48,7 @@ export function UserDropdown({ user, onLogout, onDashboard, showDashboard = fals
   };
 
   const menuItems = [
-    ...(showDashboard ? [{ icon: User, label: 'Dashboard', action: onDashboard }] : []),
+    ...(showDashboard ? [{ icon: BarChart3, label: 'Dashboard', action: onDashboard }] : []),
     { icon: User, label: 'Profile', action: () => {} },
     { icon: Settings, label: 'Settings', action: () => {} },
     { icon: HelpCircle, label: 'Help', action: () => {} },

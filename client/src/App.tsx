@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import SearchPage from "@/pages/search";
 import Dashboard from "@/pages/dashboard";
+import Overview from "@/pages/overview";
 import ContactsPage from "@/pages/contacts";
 import Results from "@/pages/results";
 
@@ -21,7 +22,7 @@ function Router() {
         <Route path="/" component={Landing} />
       ) : (
         <MainLayout>
-          <Route path="/" component={Dashboard} />
+          <Route path="/" component={Overview} />
           <Route path="/search" component={SearchPage} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/contacts" component={ContactsPage} />
