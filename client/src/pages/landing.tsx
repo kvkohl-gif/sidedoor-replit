@@ -114,7 +114,7 @@ export default function Landing() {
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
-                    placeholder="Paste the complete job description or job link here…"
+                    placeholder={jobInput.length === 0 ? "Paste the complete job description or job link here…" : ""}
                     style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
                     className={`resize-none transition-all duration-200 ${
                       isInputLocked 
@@ -130,10 +130,10 @@ export default function Landing() {
                   />
                   
                   {/* Floating label */}
-                  <label className={`absolute top-3 left-3 text-sm transition-all duration-200 pointer-events-none ${
+                  <label className={`absolute transition-all duration-200 pointer-events-none ${
                     jobInput.length > 0 
-                      ? "text-blue-600 text-xs top-1 bg-white px-1" 
-                      : "text-slate-500"
+                      ? "text-blue-600 text-xs top-1 left-3 bg-white px-1" 
+                      : "text-slate-500 text-sm top-3 left-3"
                   }`}>
                     Full Job Description
                   </label>
