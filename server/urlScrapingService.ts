@@ -1,6 +1,11 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { Browser, Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { JSDOM } from 'jsdom';
+
+// Enable stealth mode to avoid bot detection
+puppeteer.use(StealthPlugin());
 
 export interface ScrapedJobData {
   title: string;
@@ -80,13 +85,14 @@ export class URLScrapingService {
   private async scrapeWithPuppeteer(url: string): Promise<ScrapedJobData> {
     if (!this.browser) {
       this.browser = await puppeteer.launch({
-        headless: true,
+        headless: true, // Use headless mode (changed from 'new' for compatibility)
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
           '--disable-features=VizDisplayCompositor',
+          '--ignore-certificate-errors',
         ]
       });
     }
@@ -94,26 +100,63 @@ export class URLScrapingService {
     const page = await this.browser.newPage();
     
     try {
-      // Set user agent to avoid bot detection
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      
-      // Navigate to the page
-      await page.goto(url, { 
-        waitUntil: 'networkidle2', 
-        timeout: 30000 
+      // Set realistic headers to avoid bot detection
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36');
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'DNT': '1',
       });
 
-      // Wait for content to load
-      await page.waitForTimeout(2000);
+      // Smart request interception - block heavy resources but keep CSS/fonts for proper rendering
+      await page.setRequestInterception(true);
+      page.on('request', (req: any) => {
+        const resourceType = req.resourceType();
+        const url = req.url();
+        
+        // Block large images and media, but allow small images that might contain logos/text
+        if (resourceType === 'image' && !url.includes('logo') && !url.includes('icon')) {
+          return req.abort();
+        }
+        if (resourceType === 'media') {
+          return req.abort();
+        }
+        // Allow fonts and stylesheets for proper rendering
+        req.continue();
+      });
 
-      // Extract title and content
+      // Navigate with appropriate wait strategy
+      console.log(`Navigating to: ${url}`);
+      await page.goto(url, { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 60000 
+      });
+
+      // Strategy 1: Try to extract structured data (JSON-LD) first
+      const structuredData = await this.extractStructuredData(page);
+      if (structuredData) {
+        console.log('Successfully extracted structured job data');
+        return structuredData;
+      }
+
+      // Strategy 2: Handle known job board iframe patterns
+      const frameData = await this.extractFromFrames(page, url);
+      if (frameData) {
+        console.log('Successfully extracted job data from iframe');
+        return frameData;
+      }
+
+      // Strategy 3: Wait for dynamic content and extract using enhanced selectors
+      await this.waitForJobContent(page);
+      
       const title = await page.title();
       const content = await page.content();
-
       const cleanedContent = this.cleanHTML(content);
 
+      // Enhanced title extraction if page title isn't helpful
+      const enhancedTitle = await this.extractJobTitle(page) || title;
+
       return {
-        title,
+        title: enhancedTitle,
         content,
         cleanedContent,
         url
@@ -259,6 +302,207 @@ export class URLScrapingService {
   /**
    * Cleanup resources
    */
+  /**
+   * Extract structured data (JSON-LD) from the page
+   */
+  private async extractStructuredData(page: Page): Promise<ScrapedJobData | null> {
+    try {
+      const jsonLD = await page.evaluate(() => {
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+        const jobPostings: any[] = [];
+        
+        for (let i = 0; i < scripts.length; i++) {
+          const script = scripts[i];
+          try {
+            const data = JSON.parse(script.textContent || '');
+            if (data['@type'] === 'JobPosting' || 
+                (Array.isArray(data) && data.some((item: any) => item['@type'] === 'JobPosting'))) {
+              jobPostings.push(data);
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+        return jobPostings.length > 0 ? jobPostings : null;
+      });
+
+      if (jsonLD && jsonLD.length > 0) {
+        const jobData = Array.isArray(jsonLD[0]) ? jsonLD[0].find((item: any) => item['@type'] === 'JobPosting') : jsonLD[0];
+        
+        if (jobData && jobData['@type'] === 'JobPosting') {
+          const title = jobData.title || jobData.name || 'Job Position';
+          const description = jobData.description || '';
+          const company = jobData.hiringOrganization?.name || '';
+          const location = jobData.jobLocation?.address?.addressLocality || 
+                          jobData.jobLocation?.address?.addressRegion || '';
+          
+          const structuredContent = [
+            title,
+            company ? `Company: ${company}` : '',
+            location ? `Location: ${location}` : '',
+            description
+          ].filter(Boolean).join('\n\n');
+
+          return {
+            title,
+            content: JSON.stringify(jobData, null, 2),
+            cleanedContent: structuredContent,
+            url: page.url()
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.log('Structured data extraction failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract job data from known iframe patterns
+   */
+  private async extractFromFrames(page: Page, originalUrl: string): Promise<ScrapedJobData | null> {
+    try {
+      const knownFrameHosts = [
+        'ashbyhq.com', 'workable.com', 'smartrecruiters.com', 
+        'myworkdayjobs.com', 'greenhouse.io', 'lever.co',
+        'bamboohr.com', 'icims.com', 'jobvite.com'
+      ];
+
+      // Get all frames on the page
+      const frames = page.frames();
+      
+      for (const frame of frames) {
+        const frameUrl = frame.url();
+        const isKnownFrame = knownFrameHosts.some(host => frameUrl.includes(host));
+        
+        // Try to extract from known frames or any substantial iframe
+        if (isKnownFrame || frameUrl !== originalUrl) {
+          try {
+            // Safely attempt to access frame content
+            const frameContent = await frame.evaluate(() => {
+              try {
+                return {
+                  title: document.title,
+                  content: document.body?.textContent || '',
+                  html: document.documentElement?.outerHTML || ''
+                };
+              } catch (e) {
+                return null; // Cross-origin restriction
+              }
+            }).catch(() => null);
+
+            if (frameContent && frameContent.content.length > 200) {
+              console.log(`Successfully extracted from frame: ${frameUrl}`);
+              return {
+                title: frameContent.title || 'Job Position',
+                content: frameContent.html,
+                cleanedContent: this.cleanHTML(frameContent.html),
+                url: originalUrl
+              };
+            }
+          } catch (error) {
+            // Frame access failed, continue to next
+            continue;
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.log('Frame extraction failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Wait for job content to load dynamically
+   */
+  private async waitForJobContent(page: Page): Promise<void> {
+    try {
+      // Wait for one of these job-specific selectors to appear
+      const jobSelectors = [
+        '.job-description',
+        '.job-content',
+        '.posting-content',
+        '.position-description',
+        '.job-details',
+        '[data-testid*="job"]',
+        '[class*="job-description"]',
+        '[class*="posting"]'
+      ];
+
+      await Promise.race([
+        // Wait for specific content selectors
+        page.waitForSelector(jobSelectors.join(', '), { timeout: 10000 }).catch(() => null),
+        // Or wait with timeout
+        new Promise(resolve => setTimeout(resolve, 5000))
+      ]);
+
+      // Additional wait for React/Vue apps to hydrate
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.log('Content waiting completed with timeout');
+    }
+  }
+
+  /**
+   * Enhanced job title extraction from various page elements
+   */
+  private async extractJobTitle(page: Page): Promise<string | null> {
+    try {
+      return await page.evaluate(() => {
+        // Try multiple strategies to find job title
+        const strategies = [
+          // Strategy 1: Look for job-specific selectors
+          () => document.querySelector('.job-title, .position-title, .posting-title, [data-testid*="job-title"]')?.textContent?.trim(),
+          
+          // Strategy 2: Look for h1 that contains job-related keywords
+          () => {
+            const h1s = document.querySelectorAll('h1');
+            for (let i = 0; i < h1s.length; i++) {
+              const h1 = h1s[i];
+              const text = h1.textContent?.trim() || '';
+              if (text.length > 10 && text.length < 100 && 
+                  (text.includes('Engineer') || text.includes('Manager') || text.includes('Developer') || 
+                   text.includes('Analyst') || text.includes('Designer') || text.includes('Specialist'))) {
+                return text;
+              }
+            }
+            return null;
+          },
+
+          // Strategy 3: Look for job title in meta tags
+          () => document.querySelector('meta[property="og:title"], meta[name="title"]')?.getAttribute('content')?.trim(),
+
+          // Strategy 4: Look for structured data
+          () => {
+            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+            for (let i = 0; i < scripts.length; i++) {
+              const script = scripts[i];
+              try {
+                const data = JSON.parse(script.textContent || '');
+                if (data['@type'] === 'JobPosting' && data.title) {
+                  return data.title;
+                }
+              } catch (e) {}
+            }
+            return null;
+          }
+        ];
+
+        for (const strategy of strategies) {
+          const result = strategy();
+          if (result && result.length > 5) {
+            return result;
+          }
+        }
+        return null;
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
   async cleanup() {
     if (this.browser) {
       await this.browser.close();

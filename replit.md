@@ -182,3 +182,12 @@ The enrichment service is structured to easily integrate with:
   * Improved data density following modern CRM UI patterns
   * Integrated LinkedIn links directly in name column
   * Added collapsible message view below rows when generated
+- **NEW: Enhanced Puppeteer Web Scraping with Stealth Technology (Jan 30, 2025)**:
+  * Integrated puppeteer-extra with StealthPlugin for advanced bot detection avoidance
+  * Implemented multi-strategy extraction: JSON-LD structured data → iframe detection → dynamic content scraping
+  * Added smart request interception to block heavy resources while preserving critical assets
+  * Enhanced frame handling for major job boards (Ashby, Workable, Greenhouse, Lever, Workday, etc.)
+  * Improved job title extraction with multiple fallback strategies and content-aware selectors
+  * Added dynamic content waiting specifically tuned for React/Vue job board applications
+  * Updated to Chrome 126 user agent with realistic headers (Accept-Language, DNT)
+  * Maintained backward compatibility with existing cheerio fallback system
