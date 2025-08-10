@@ -175,11 +175,13 @@ export default function Search() {
                     onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder={jobInput.length === 0 ? "Paste the complete job description or job link here…" : ""}
+                    placeholder="Paste the complete job description or job link here…"
                     disabled={isInputLocked}
                     data-testid="textarea-job-description"
                     style={{ lineHeight: '1.6', minHeight: '19.2rem' }} // 12 lines * 1.6 line-height
-                    className={`text-sm resize-none transition-all duration-200 ${
+                    className={`peer text-sm resize-none transition-all duration-200 placeholder:opacity-100 focus:placeholder:opacity-0 ${
+                      jobInput.length > 0 ? 'placeholder:opacity-0' : ''
+                    } ${
                       isInputLocked 
                         ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
                         : ""
@@ -187,10 +189,10 @@ export default function Search() {
                   />
                   
                   {/* Floating label */}
-                  <label className={`absolute transition-all duration-200 pointer-events-none ${
+                  <label className={`absolute left-3 text-sm transition-all duration-200 ease-in-out pointer-events-none bg-white px-1 ${
                     jobInput.length > 0 
-                      ? "text-blue-600 text-xs top-1 left-3 bg-white px-1" 
-                      : "text-gray-500 text-sm top-3 left-3"
+                      ? "text-blue-600 text-xs -top-2 scale-90" 
+                      : "text-gray-500 top-3 peer-focus:text-blue-600 peer-focus:text-xs peer-focus:-top-2 peer-focus:scale-90"
                   }`}>
                     Full Job Description
                   </label>
