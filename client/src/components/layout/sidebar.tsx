@@ -4,12 +4,19 @@ import {
   Briefcase, 
   Users, 
   Plus,
-  Home
+  Home,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navigationItems = [
+  {
+    title: "Dashboard",
+    href: "/",
+    icon: BarChart3,
+    description: "View your overview & analytics"
+  },
   {
     title: "Search",
     href: "/search",
@@ -37,7 +44,7 @@ export default function Sidebar() {
     <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
-        <Link href="/dashboard">
+        <Link href="/">
           <div className="flex items-center gap-3 cursor-pointer">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Users className="h-5 w-5 text-white" />
@@ -71,7 +78,7 @@ export default function Sidebar() {
           
           {navigationItems.map((item) => {
             const isActive = location === item.href || 
-              (item.href === "/dashboard" && location === "/") ||
+              (item.href === "/" && location === "/") ||
               (item.href === "/dashboard" && location.startsWith("/submissions/"));
             
             return (

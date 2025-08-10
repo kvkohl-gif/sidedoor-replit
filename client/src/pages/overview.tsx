@@ -188,8 +188,6 @@ export default function Overview() {
               <UserDropdown 
                 user={user}
                 onLogout={handleLogout}
-                onDashboard={() => setLocation("/dashboard")}
-                showDashboard={true}
               />
             </div>
           </div>

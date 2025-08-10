@@ -168,6 +168,12 @@ The enrichment service is structured to easily integrate with:
   * Two-bucket system operational: 2 recruiting contacts + 3 department leads per search
   * NeverBounce email verification fully functional (valid/catchall/invalid detection)
   * Removed webhook requirement that was blocking enrichment
+- **NEW: Updated Navigation Structure (Aug 10, 2025)**: Moved Dashboard from user dropdown to main sidebar navigation:
+  * Added "Dashboard" as first navigation item in sidebar with BarChart3 icon
+  * Dashboard shows overview & analytics with description "View your overview & analytics"
+  * Removed Dashboard option from user dropdown menu - now only Profile, Settings, Help, Logout
+  * Overview page (/) remains the default landing page for authenticated users
+  * Cleaner separation between account management (dropdown) and core features (sidebar)
 - **NEW: Enhanced OpenAI prompts with Department Strategy Builder (Jan 30, 2025)**:
   * Added sophisticated Apollo search parameter extraction with confidence scoring
   * Implemented Department Strategy Bucket Builder for customized two-bucket outreach
