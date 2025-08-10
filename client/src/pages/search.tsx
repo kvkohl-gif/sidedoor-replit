@@ -193,7 +193,7 @@ export default function Search() {
                     htmlFor="jobDescription"
                     className="pointer-events-none absolute left-4 top-4 px-1 bg-white text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-focus:-top-3 peer-focus:text-xs peer-focus:text-blue-600 peer-[&:not(:placeholder-shown)]:-top-3 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-gray-600"
                   >
-                    Full Job Description
+                    Paste Full Job Description
                   </label>
                   
                   {/* Character counter */}
