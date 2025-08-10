@@ -157,7 +157,7 @@ export default function Landing() {
                   )}
                 </div>
                 <p className="text-sm text-slate-500 mt-2">
-                  Tip: Include title, company, and requirements for best results. We support LinkedIn, Greenhouse, Lever, Ashby, and more.
+                  Tip: Include title, company, requirements, and responsibilities for best results.
                 </p>
               </div>
               
