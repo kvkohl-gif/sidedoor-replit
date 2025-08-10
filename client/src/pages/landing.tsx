@@ -1,18 +1,44 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, MessageSquare, BarChart3 } from "lucide-react";
+import { Search, MessageSquare, BarChart3, Loader2, Lock } from "lucide-react";
 
 export default function Landing() {
   // URL input type removed - now always defaults to text
   const [inputType] = useState<"text">("text");
   const [jobInput, setJobInput] = useState("");
+  const [isInputLocked, setIsInputLocked] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
-    // Redirect to login since user needs to be authenticated
-    window.location.href = "/api/login";
+    // For demo purposes on landing page, lock input briefly to show functionality
+    if (jobInput.trim()) {
+      setIsInputLocked(true);
+      
+      // Simulate brief loading then redirect to login
+      setTimeout(() => {
+        setIsInputLocked(false);
+        window.location.href = "/api/login";
+      }, 1500);
+    } else {
+      // Redirect to login immediately if no input
+      window.location.href = "/api/login";
+    }
+  };
+
+  // Handle keyboard events to prevent input when locked
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isInputLocked) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (isInputLocked) {
+      e.preventDefault();
+    }
   };
 
   return (
@@ -85,12 +111,32 @@ export default function Landing() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Paste Job Description
                 </label>
-                <Textarea
-                  placeholder="Paste the full job description here..."
-                  className="h-48 resize-none"
-                  value={jobInput}
-                  onChange={(e) => setJobInput(e.target.value)}
-                />
+                <div className="relative">
+                  <Textarea
+                    ref={textareaRef}
+                    placeholder="Paste the full job description here..."
+                    className={`h-48 resize-none transition-all duration-200 ${
+                      isInputLocked 
+                        ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
+                        : ""
+                    }`}
+                    value={jobInput}
+                    onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    disabled={isInputLocked}
+                    data-testid="textarea-job-description-landing"
+                  />
+                  
+                  {/* Lock overlay */}
+                  {isInputLocked && (
+                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm border border-gray-300 rounded-md px-2 py-1 flex items-center gap-1.5 text-xs text-gray-600 shadow-sm">
+                      <Lock className="h-3 w-3" />
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Locked — Analysis in progress</span>
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* URL input hidden - code preserved for restoration
@@ -113,13 +159,24 @@ export default function Landing() {
               <div className="text-center">
                 <Button 
                   onClick={handleSubmit}
-                  className="bg-primary text-white hover:bg-blue-700 px-8 py-3"
+                  disabled={isInputLocked}
+                  className="bg-primary text-white hover:bg-blue-700 px-8 py-3 disabled:opacity-50"
                   size="lg"
+                  data-testid="button-submit-landing"
                 >
-                  Find Recruiters & Generate Messages
-                  <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                  </svg>
+                  {isInputLocked ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      Find Recruiters & Generate Messages
+                      <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                      </svg>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

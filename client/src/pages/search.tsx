@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Briefcase, Search as SearchIcon, Link, FileText, Globe, PlayCircle, BookOpen } from "lucide-react";
+import { AlertCircle, Briefcase, Search as SearchIcon, Link, FileText, Globe, PlayCircle, BookOpen, Loader2, Lock } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { nanoid } from "nanoid";
 
 export default function Search() {
   const [, setLocation] = useLocation();
@@ -17,18 +18,26 @@ export default function Search() {
   // URL input capability hidden - now always defaults to description
   const [activeTab, setActiveTab] = useState("description");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInputLocked, setIsInputLocked] = useState(false);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
   const submitJobMutation = useMutation({
-    mutationFn: async (input: string) => {
-      const isUrl = input.trim().startsWith('http');
+    mutationFn: async (data: { input: string; runId: string }) => {
+      const isUrl = data.input.trim().startsWith('http');
       return await apiRequest("POST", "/api/submissions", { 
-        jobInput: input,
-        inputType: isUrl ? "url" : "text"
+        jobInput: data.input,
+        inputType: isUrl ? "url" : "text",
+        runId: data.runId
       });
     },
     onSuccess: async (response) => {
       const data = await response.json();
+      // Unlock input on success
+      setIsInputLocked(false);
+      setCurrentRunId(null);
+      
       toast({
         title: "Job Submission Created",
         description: "Your job has been submitted for processing. Redirecting to results...",
@@ -38,6 +47,10 @@ export default function Search() {
       }, 1000);
     },
     onError: (error: any) => {
+      // Unlock input on error
+      setIsInputLocked(false);
+      setCurrentRunId(null);
+      
       toast({
         title: "Submission Failed",
         description: error.message || "Failed to submit job. Please try again.",
@@ -51,14 +64,44 @@ export default function Search() {
     if (!jobInput.trim()) {
       toast({
         title: "Input Required",
-        description: "Please enter a job description or URL to continue.",
+        description: "Please enter a job description to continue.",
         variant: "destructive",
       });
       return;
     }
 
+    // Generate unique run ID and lock input immediately
+    const runId = nanoid();
+    setCurrentRunId(runId);
+    setIsInputLocked(true);
     setIsProcessing(true);
-    submitJobMutation.mutate(jobInput.trim());
+    
+    submitJobMutation.mutate({ input: jobInput.trim(), runId });
+  };
+
+  const handleCancel = () => {
+    // Cancel current run and unlock input
+    setIsInputLocked(false);
+    setIsProcessing(false);
+    setCurrentRunId(null);
+    
+    toast({
+      title: "Analysis Cancelled",
+      description: "Job analysis has been stopped. You can make edits and try again.",
+    });
+  };
+
+  // Handle keyboard events to prevent input when locked
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isInputLocked) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (isInputLocked) {
+      e.preventDefault();
+    }
   };
 
   return (
@@ -120,26 +163,72 @@ export default function Search() {
             <TabsContent value="description" className="p-6 space-y-4">
               <div>
                 <h3 className="font-medium text-gray-900 mb-3">Job Description</h3>
-                <Textarea
-                  value={jobInput}
-                  onChange={(e) => setJobInput(e.target.value)}
-                  placeholder="Paste the complete job description here..."
-                  className="min-h-[200px] text-sm resize-none"
-                />
+                <div className="relative">
+                  <Textarea
+                    ref={textareaRef}
+                    value={jobInput}
+                    onChange={(e) => !isInputLocked && setJobInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    placeholder="Paste the complete job description here..."
+                    disabled={isInputLocked}
+                    data-testid="textarea-job-description"
+                    className={`min-h-[200px] text-sm resize-none transition-all duration-200 ${
+                      isInputLocked 
+                        ? "text-gray-500 border-gray-300 cursor-not-allowed bg-gray-50" 
+                        : ""
+                    }`}
+                  />
+                  
+                  {/* Lock overlay */}
+                  {isInputLocked && (
+                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm border border-gray-300 rounded-md px-2 py-1 flex items-center gap-1.5 text-xs text-gray-600 shadow-sm">
+                      <Lock className="h-3 w-3" />
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Locked — Analysis in progress</span>
+                    </div>
+                  )}
+                </div>
+                
                 <p className="text-sm text-gray-500 mt-2">
                   Include job title, company name, requirements, and responsibilities for best results
                 </p>
               </div>
               
-              <Button 
-                onClick={handleSubmit} 
-                disabled={isProcessing || !jobInput.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                size="lg"
-              >
-                <SearchIcon className="h-4 w-4 mr-2" />
-                {isProcessing ? "Analyzing..." : "Analyze Job & Find Recruiters"}
-              </Button>
+              <div className="flex gap-3">
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={isProcessing || !jobInput.trim() || isInputLocked}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                  size="lg"
+                  data-testid="button-submit"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <SearchIcon className="h-4 w-4 mr-2" />
+                      Analyze Job & Find Recruiters
+                    </>
+                  )}
+                </Button>
+                
+                {/* Cancel button shown when processing */}
+                {isProcessing && (
+                  <Button 
+                    onClick={handleCancel}
+                    variant="outline"
+                    size="lg"
+                    className="px-4"
+                    data-testid="button-cancel"
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

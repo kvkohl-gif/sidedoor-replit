@@ -197,3 +197,11 @@ The enrichment service is structured to easily integrate with:
   * Updated UI text to remove references to URL input while preserving functionality
   * Restoration command: User will say "re-install the url input capabilities" to restore full UI
   * Code preserved in commented sections with clear restoration markers
+- **NEW: Job Description Input Locking During Analysis (Jan 30, 2025)**:
+  * Implemented comprehensive input locking system to prevent edits during processing
+  * Frontend features: Disabled textarea with visual feedback, lock overlay with spinner, greyed-out styling
+  * Backend protection: runId-based duplicate submission prevention with active run tracking
+  * UI enhancements: "Locked — Analysis in progress" overlay, disabled submit button with "Analyzing..." state
+  * Keyboard event blocking: Prevents typing, pasting, and other input while analysis runs
+  * Automatic cleanup: Active runs removed on completion/error, periodic cleanup of expired runs
+  * Multi-page support: Implemented on both search page and landing page with consistent UX

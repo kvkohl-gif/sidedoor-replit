@@ -27,10 +27,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Active run IDs for session-based duplicate prevention
+  const activeRuns = new Map<string, { userId: string; startTime: number }>();
+
   // Job submission routes
   app.post("/api/submissions", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const { runId } = req.body;
+
+      // Validate runId is provided
+      if (!runId) {
+        return res.status(400).json({ message: "Run ID is required for input locking protection" });
+      }
+
+      // Check if this runId is already active for this user
+      if (activeRuns.has(runId)) {
+        const activeRun = activeRuns.get(runId);
+        if (activeRun?.userId === userId) {
+          return res.status(409).json({ 
+            message: "Duplicate submission - analysis already in progress",
+            runId 
+          });
+        }
+      }
+
+      // Check if user has any other active runs (prevent multiple simultaneous runs per user)
+      const userActiveRuns = Array.from(activeRuns.entries()).filter(([_, run]) => run.userId === userId);
+      if (userActiveRuns.length > 0) {
+        return res.status(429).json({ 
+          message: "Another analysis is already running. Please wait for it to complete.",
+          activeRunId: userActiveRuns[0][0]
+        });
+      }
+
+      // Register the run as active
+      activeRuns.set(runId, { userId, startTime: Date.now() });
       
       // Validate request body
       const submissionData = insertJobSubmissionSchema.parse({
@@ -191,10 +223,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Return the complete submission with recruiters
         const completeSubmission = await storage.getJobSubmissionById(jobSubmission.id);
-        res.json({ submission: completeSubmission });
+        res.json({ submission: completeSubmission, runId });
+
+        // Remove from active runs on successful completion
+        activeRuns.delete(runId);
+        console.log(`Completed and removed runId ${runId} from active runs`);
 
       } catch (openaiError) {
         console.error("OpenAI extraction error:", openaiError);
+        
+        // Remove from active runs on error
+        activeRuns.delete(runId);
+        console.log(`Error occurred, removed runId ${runId} from active runs`);
+        
         // Update submission with error status but still return it
         const errorMessage = openaiError instanceof Error ? openaiError.message : "Unknown error";
         await storage.updateJobSubmission(jobSubmission.id, {
@@ -208,6 +249,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error("Error creating submission:", error);
+      
+      // Ensure runId is removed from active runs on any error
+      if (runId) {
+        activeRuns.delete(runId);
+      }
+      
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Invalid request data", errors: error.errors });
       } else {
@@ -215,6 +262,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
   });
+
+  // Clean up expired runs periodically (every 5 minutes)
+  setInterval(() => {
+    const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+    let cleanedCount = 0;
+    for (const [id, run] of activeRuns.entries()) {
+      if (run.startTime < tenMinutesAgo) {
+        activeRuns.delete(id);
+        cleanedCount++;
+      }
+    }
+    if (cleanedCount > 0) {
+      console.log(`Cleaned up ${cleanedCount} expired run IDs`);
+    }
+  }, 5 * 60 * 1000); // 5 minutes
 
   app.get("/api/submissions", isAuthenticated, async (req: any, res) => {
     try {
