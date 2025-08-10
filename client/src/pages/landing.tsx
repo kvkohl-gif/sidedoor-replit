@@ -111,9 +111,6 @@ export default function Landing() {
 
               {/* Input Area - URL section hidden */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Paste Job Description
-                </label>
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
@@ -131,6 +128,15 @@ export default function Landing() {
                     disabled={isInputLocked}
                     data-testid="textarea-job-description-landing"
                   />
+                  
+                  {/* Floating label */}
+                  <label className={`absolute top-3 left-3 text-sm transition-all duration-200 pointer-events-none ${
+                    jobInput.length > 0 
+                      ? "text-blue-600 text-xs top-1 bg-white px-1" 
+                      : "text-slate-500"
+                  }`}>
+                    Full Job Description
+                  </label>
                   
                   {/* Character counter */}
                   <div className={`absolute bottom-2 right-2 text-xs text-gray-400 bg-white/80 rounded px-1 transition-all duration-200 ${
