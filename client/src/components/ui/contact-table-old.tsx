@@ -70,13 +70,13 @@ export default function ContactTable({ contacts, submissionId }: ContactTablePro
     
     switch (contact.verificationStatus) {
       case "valid":
-        return <Badge variant="default" className="bg-green-100 text-green-800">✅ Verified</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800">✅ Valid</Badge>;
       case "risky":
         return <Badge variant="outline" className="border-yellow-500 text-yellow-700">⚠️ Risky</Badge>;
       case "invalid":
         return <Badge variant="destructive">❌ Invalid</Badge>;
       default:
-        return <Badge variant="secondary">Unverified</Badge>;
+        return <Badge variant="secondary">Unknown</Badge>;
     }
   };
 

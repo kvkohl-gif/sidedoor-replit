@@ -13,7 +13,8 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  Plus
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -23,10 +24,10 @@ import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 interface DashboardStats {
   totalContacts: number;
-  verifiedContacts: number;
+  validContacts: number;
   totalMessages: number;
   recentSearches: number;
-  emailVerificationRate: number;
+  validEmailRate: number;
   personalizationScore: number;
 }
 
@@ -75,17 +76,17 @@ export default function Overview() {
     if (!submissions || submissions.length === 0) {
       return {
         totalContacts: 0,
-        verifiedContacts: 0,
+        validContacts: 0,
         totalMessages: 0,
         recentSearches: 0,
-        emailVerificationRate: 0,
+        validEmailRate: 0,
         personalizationScore: 0,
       };
     }
 
     const totalContacts = submissions.reduce((sum, sub) => sum + (sub.recruiters?.length || 0), 0);
-    const verifiedContacts = submissions.reduce((sum, sub) => 
-      sum + (sub.recruiters?.filter(r => r.emailVerified).length || 0), 0);
+    const validContacts = submissions.reduce((sum, sub) => 
+      sum + (sub.recruiters?.filter(r => r.emailVerified && r.verificationStatus === 'valid').length || 0), 0);
     
     const totalMessages = submissions.reduce((sum, sub) => 
       sum + (sub.recruiters?.filter(r => r.emailDraft && r.emailDraft.trim().length > 0).length || 0), 0);
@@ -95,25 +96,25 @@ export default function Overview() {
     const recentSearches = submissions.filter(sub => 
       sub.submittedAt && new Date(sub.submittedAt) >= thirtyDaysAgo).length;
 
-    const emailVerificationRate = totalContacts > 0 ? Math.round((verifiedContacts / totalContacts) * 100) : 0;
+    const validEmailRate = totalContacts > 0 ? Math.round((validContacts / totalContacts) * 100) : 0;
     const personalizationScore = totalContacts > 0 ? Math.round((totalMessages / totalContacts) * 100) : 0;
 
     return {
       totalContacts,
-      verifiedContacts,
+      validContacts,
       totalMessages,
       recentSearches,
-      emailVerificationRate,
+      validEmailRate,
       personalizationScore,
     };
   };
 
   const stats = submissions ? calculateStats(submissions) : {
     totalContacts: 0,
-    verifiedContacts: 0,
+    validContacts: 0,
     totalMessages: 0,
     recentSearches: 0,
-    emailVerificationRate: 0,
+    validEmailRate: 0,
     personalizationScore: 0,
   };
 
@@ -205,20 +206,20 @@ export default function Overview() {
               <div className="text-2xl font-semibold text-gray-900">{stats.totalContacts}</div>
               <div className="ml-2 text-xs text-gray-500">contacts found</div>
             </div>
-            <div className="mt-4 text-xs text-gray-600">Email verification</div>
+            <div className="mt-4 text-xs text-gray-600">Valid emails</div>
             <div 
               className="mt-1 h-1.5 w-full rounded-full bg-gray-100" 
               role="progressbar" 
               aria-valuemin={0} 
               aria-valuemax={100} 
-              aria-valuenow={stats.emailVerificationRate}
+              aria-valuenow={stats.validEmailRate}
             >
               <div 
                 className="h-1.5 rounded-full bg-emerald-500 transition-all duration-300" 
-                style={{ width: `${stats.emailVerificationRate}%` }} 
+                style={{ width: `${stats.validEmailRate}%` }} 
               />
             </div>
-            <div className="mt-1 text-right text-xs text-gray-500">{stats.emailVerificationRate}%</div>
+            <div className="mt-1 text-right text-xs text-gray-500">{stats.validEmailRate}%</div>
           </section>
 
           {/* Outreach */}
@@ -342,7 +343,7 @@ export default function Overview() {
                 <tbody className="divide-y divide-gray-200">
                   {recentSubmissions.slice(0, 5).map((submission) => {
                     const foundCount = submission.recruiters?.length || 0;
-                    const verifiedCount = submission.recruiters?.filter(r => r.emailVerified).length || 0;
+                    const validCount = submission.recruiters?.filter(r => r.emailVerified && r.verificationStatus === 'valid').length || 0;
                     
                     return (
                       <tr key={submission.id} className="hover:bg-gray-50">
@@ -358,7 +359,7 @@ export default function Overview() {
                         </td>
                         <td className="px-4 py-3 hidden lg:table-cell">
                           <div className="text-sm font-medium text-gray-900">{foundCount} found</div>
-                          <div className="text-xs text-green-600">{verifiedCount} verified</div>
+                          <div className="text-xs text-green-600">{validCount} valid</div>
                         </td>
                         <td className="px-2 py-3 hidden lg:table-cell">
                           <a 
@@ -380,7 +381,7 @@ export default function Overview() {
                             {submission.companyName || "Unknown Company"}
                           </div>
                           <div className="text-sm text-gray-500 mt-1">
-                            {formatDate(submission.submittedAt)} • {foundCount}/{verifiedCount}
+                            {formatDate(submission.submittedAt)} • {foundCount} found, {validCount} valid
                           </div>
                         </td>
                         <td className="px-2 py-3 lg:hidden">
