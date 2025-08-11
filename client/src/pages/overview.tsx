@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 
 import { 
-  Plus, 
+  Search, 
   TrendingUp, 
   Users, 
   MessageSquare, 
@@ -182,10 +182,10 @@ export default function Overview() {
             </div>
             <button 
               onClick={handleNewSearch}
-              className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 lg:w-[220px]"
+              className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-[#0070BA] text-white text-sm font-semibold hover:bg-[#005C99] focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-150 w-full lg:w-[220px]"
               data-testid="button-new-search"
             >
-              <Plus className="h-4 w-4" />
+              <Search className="h-4 w-4" />
               Find Contacts
             </button>
           </section>
