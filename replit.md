@@ -1,238 +1,66 @@
 # Recruiter Contact Finder
 
 ## Overview
-
-This is a full-stack web application that helps users find recruiter contact information from job postings. Users can paste job descriptions or URLs, and the app uses OpenAI's API to extract recruiter details and generate personalized outreach messages. Built with React frontend, Express backend, PostgreSQL database, and OpenAI integration.
+Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
+The application adopts a monorepo structure, comprising a React frontend, an Express.js backend, and a PostgreSQL database. Authentication is handled via Replit's OpenID Connect.
 
-The application follows a monorepo structure with three main components:
-- **Frontend**: React SPA with TypeScript, using Vite for development
-- **Backend**: Express.js REST API with TypeScript 
-- **Database**: PostgreSQL with Drizzle ORM
-- **Authentication**: Replit's OpenID Connect integration
+### Key Architectural Decisions:
+*   **Monorepo Structure**: Facilitates co-development and shared type management between frontend and backend.
+*   **Type Safety**: Utilizes TypeScript across the stack for improved code quality and maintainability.
+*   **Database**: PostgreSQL with Drizzle ORM for type-safe and efficient data management, hosted on Neon for serverless capabilities.
+*   **Authentication**: Integrated with Replit's OpenID Connect for secure user authentication and session management.
+*   **UI/UX**: Employs Shadcn/ui and Radix UI with Tailwind CSS for a modern, consistent, and accessible user interface. Components are designed for compactness and clarity, including consistent header structures and a collapsible sidebar.
+*   **AI Integration**: OpenAI GPT-4o is central to extracting initial recruiter data and generating outreach parameters.
+*   **Contact Enrichment**: A multi-stage process involving:
+    *   Initial extraction via OpenAI.
+    *   Professional contact and email discovery using Apollo.io, including advanced title and geographic filtering.
+    *   Email verification via NeverBounce, with status badges in the UI.
+    *   Prioritization of specific recruiter names extracted from job descriptions.
+    *   Inference of email patterns when direct verification is not possible.
+*   **Web Scraping**: Utilizes Puppeteer with stealth technology for robust and resilient job board data extraction, supporting various common job board frameworks and employing smart request interception.
+*   **Data Flow**: User authentication via Replit OAuth, job submission through the frontend, AI processing and contact enrichment on the backend, data storage in PostgreSQL, and display of verified results on the frontend. Input fields are locked during analysis to prevent data inconsistencies.
 
-### Directory Structure
-```
-├── client/          # React frontend
-├── server/          # Express backend  
-├── shared/          # Shared types and schemas
-├── migrations/      # Database migrations
-└── attached_assets/ # Requirements document
-```
+### Technical Implementations:
+*   **Frontend**: React 18, Vite, Shadcn/ui, Radix UI, Tailwind CSS, TanStack Query for server state, Wouter for routing, React Hook Form with Zod for form validation.
+*   **Backend**: Express.js, Drizzle ORM, Passport.js (OpenID Connect strategy), Express sessions, OpenAI API.
+*   **Database Schema**: Includes `users`, `sessions`, `job_submissions`, and `recruiter_contacts` tables, with detailed fields for contact verification status, source, and Apollo ID tracking.
+*   **Deployment**: Optimized for Replit environment, using Vite for frontend builds and esbuild for backend bundling, with environment variables for external service configuration.
 
-## Key Components
-
-### Frontend Architecture
-- **Framework**: React 18 with TypeScript and Vite
-- **UI Library**: Shadcn/ui components with Radix UI primitives
-- **Styling**: Tailwind CSS with CSS variables for theming
-- **State Management**: TanStack Query for server state
-- **Routing**: Wouter for client-side routing
-- **Forms**: React Hook Form with Zod validation
-
-### Backend Architecture
-- **Framework**: Express.js with TypeScript
-- **Database**: Drizzle ORM with PostgreSQL (Neon serverless)
-- **Authentication**: Passport.js with OpenID Connect strategy
-- **Session Management**: Express sessions with PostgreSQL store
-- **API Integration**: OpenAI GPT-4o for recruiter extraction
-
-### Data Storage
-- **Primary Database**: PostgreSQL via Neon serverless
-- **ORM**: Drizzle with type-safe schema definitions
-- **Session Storage**: PostgreSQL table for user sessions
-- **Migration System**: Drizzle Kit for schema management
-
-## Data Flow
-
-1. **User Authentication**: Replit OAuth flow with session persistence
-2. **Job Submission**: User submits job description/URL through React form
-3. **AI Processing**: Backend calls OpenAI API to extract recruiter information
-4. **Contact Enrichment**: Enhanced recruiter contact verification and email validation
-5. **Data Storage**: Results stored in PostgreSQL with user association and verification status
-6. **Result Display**: Frontend fetches and displays extracted data with verification badges
-
-### Database Schema
-- `users`: User profiles from Replit OAuth
-- `sessions`: Session management for authentication
-- `job_submissions`: Job posts with AI-extracted data
-- `recruiter_contacts`: Individual recruiter contact details with verification status
+### Feature Specifications:
+*   **Recruiter Contact Extraction**: Extracts recruiter details from job descriptions/URLs.
+*   **Personalized Outreach**: Generates tailored outreach messages based on extracted data.
+*   **Email Verification**: Provides real-time email verification status (valid, risky, invalid) for discovered contacts.
+*   **Geographic Filtering**: Prioritizes recruiters based on job location and company headquarters.
+*   **Structured Job Data Extraction**: Standardized extraction of job title, company, URL, description, and key responsibilities.
+*   **UI Consistency**: Consistent header, navigation, and card layouts across the application for a unified user experience.
+*   **Collapsible Sidebar**: Dynamic, responsive sidebar with state persistence for improved navigation.
 
 ## External Dependencies
 
 ### Core Dependencies
-- **@neondatabase/serverless**: PostgreSQL database connection
-- **drizzle-orm**: Type-safe database ORM
-- **openai**: OpenAI API client for GPT-4o
-- **passport**: Authentication middleware
-- **express-session**: Session management
+*   **@neondatabase/serverless**: PostgreSQL database connection
+*   **drizzle-orm**: Type-safe database ORM
+*   **openai**: OpenAI API client for GPT-4o
+*   **passport**: Authentication middleware
+*   **express-session**: Session management
+*   **puppeteer-extra**: Advanced web scraping with stealth capabilities
+*   **apollo-client**: Integration for Apollo.io API
+*   **neverbounce-js**: Integration for NeverBounce email verification
 
 ### UI Dependencies
-- **@radix-ui/***: Headless UI components
-- **@tanstack/react-query**: Server state management
-- **tailwindcss**: Utility-first CSS framework
-- **wouter**: Lightweight React router
+*   **@radix-ui/***: Headless UI components
+*   **@tanstack/react-query**: Server state management
+*   **tailwindcss**: Utility-first CSS framework
+*   **wouter**: Lightweight React router
+*   **shadcn/ui**: UI component library
 
 ### Development Tools
-- **vite**: Frontend build tool and dev server
-- **typescript**: Type safety across the stack
-- **drizzle-kit**: Database migration tool
-
-## Authentication and Authorization
-
-The app uses Replit's built-in authentication system:
-- **Provider**: OpenID Connect through Replit
-- **Session Management**: PostgreSQL-backed sessions
-- **Authorization**: Route-level protection requiring authentication
-- **User Data**: Stored in users table with Replit user ID as primary key
-
-## Deployment Strategy
-
-- **Environment**: Designed for Replit deployment
-- **Build Process**: Vite builds frontend, esbuild bundles backend
-- **Database**: Neon PostgreSQL with connection pooling
-- **Environment Variables**: DATABASE_URL, OPENAI_API_KEY, SESSION_SECRET
-- **Development**: Hot reloading with Vite dev server proxy
-
-The application expects to run in Replit's environment with their authentication system and uses environment variables for external service configuration.
-
-## Enhanced Email Verification Features
-
-The application now includes post-OpenAI contact enrichment and email verification capabilities:
-
-### Contact Enrichment Process
-1. **OpenAI Extraction**: Initial recruiter contact extraction from job descriptions
-2. **Email Discovery**: Attempts to find verified emails using third-party services:
-   - Apollo.io API integration (placeholder)
-   - Hunter.io API integration (placeholder)
-   - Clay platform support (placeholder)
-3. **Email Verification**: Validates discovered emails using:
-   - ZeroBounce API integration (placeholder)
-   - Mailboxlayer verification (placeholder)
-   - Basic format validation as fallback
-4. **Contact Filtering**: Only saves contacts with verified email or LinkedIn URL
-
-### Database Enhancements
-- `emailVerified`: Boolean flag for email verification status
-- `verificationStatus`: Email status (valid, risky, invalid, unknown)
-- `sourcePlatform`: Contact source (openai, apollo, zoominfo, clay, hunter)
-
-### UI Features
-- Verification status badges on contact cards
-- Email verification indicators (Verified, Risky, Invalid, Unverified)
-- LinkedIn fallback message when no verified email found
-- Copy-to-clipboard functionality for contact details
-
-### API Integration Ready
-The enrichment service is structured to easily integrate with:
-- Apollo.io for professional contact discovery
-- Hunter.io for email finding and verification
-- ZeroBounce/Mailboxlayer for email validation
-- Clay for LinkedIn-based enrichment
-
-### Current Implementation
-- Apollo.io API integration for professional contact search with optimized search parameters
-- **NEW: Advanced title filtering with predefined recruiter titles** - Uses Apollo's `person_titles` parameter with 21 specific recruiter roles
-- NeverBounce email verification with status badges (✅ Valid, ⚠️ Risky, ❌ Invalid)
-- Modular apolloService.ts and verifierService.ts architecture
-- Enhanced OpenAI prompt for extracting accurate Apollo search parameters
-- **CRITICAL FIX (Jan 2025)**: Removed fake recruiter generation from OpenAI - Apollo is now sole source of contact data
-- Workflow: OpenAI parameter extraction → Apollo recruiter search (with title filters) → NeverBounce verification → Database storage
-- **Enhanced confidence scoring**: Exact title matches (100% for "recruiter") + partial keyword matching (85-90% for "talent acquisition")
-- Three-tier search strategy: 1) Title-filtered search 2) Non-filtered search with client-side filtering 3) Broader fallback
-- Full UI support for verification status display with icons and detailed tooltips
-- Database schema with Apollo ID tracking and verification data storage
-- Message editing with AI-powered tone improvement (Confident, Concise, Friendly, Professional, Personalized)
-- **NEW: Geographic filtering system (Jan 2025)**: Apollo search now prioritizes recruiters by location hierarchy:
-  1. Job country (highest priority)
-  2. Job region/state if available  
-  3. Remote hiring countries (for remote jobs)
-  4. Company HQ country
-  5. English-speaking regions fallback (US, Canada, UK, Australia)
-- **NEW: Enhanced recruiter name extraction**: Extracts specific recruiter names from job descriptions and prioritizes them in Apollo search
-- **NEW: Email pattern inference**: When Apollo doesn't have verified emails, system analyzes company email patterns and generates likely email addresses with verification
-- **NEW: Standardized job information extraction (Jan 2025)**: Implements structured job data format with required fields:
-  * Job Title, Company, Job URL, Company Website, Location
-  * Job Description (3-5 sentence summary)
-  * Key Responsibilities and Requirements (bullet points)
-  * Likely Departments (from predefined list)
-  * All fields default to "Not specified" if missing
-  * Enhanced UI with JobDetailCard component for consistent display
-- **MAJOR SUCCESS: Apollo enrichment working with real emails (Jan 25, 2025)**: Fixed Apollo people/match endpoint integration:
-  * Successfully getting real verified emails: mackenziecyr@dropbox.com, cbontia@dropbox.com, mila@dropbox.com
-  * Two-bucket system operational: 2 recruiting contacts + 3 department leads per search
-  * NeverBounce email verification fully functional (valid/catchall/invalid detection)
-  * Removed webhook requirement that was blocking enrichment
-- **NEW: Consistent Header Structure Across Pages (Aug 11, 2025)**: Updated Contacts and Job History pages to match Dashboard layout:
-  * Removed redundant "Recruiter Contact Finder" navigation header from Dashboard page for cleaner design
-  * Updated Contacts page header: "All Contacts" title with consistent typography (text-2xl font-bold text-slate-900)
-  * Added proper subtitle: "Manage all your recruiter and hiring manager contacts across all job searches"
-  * Implemented Dashboard-style search/filter card layout with grid columns for consistency
-  * Used matching container classes (max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8) across all pages
-  * Maintained consistent spacing (mb-8 for header, mb-6 for search card) and color scheme (text-slate-600 for subtitles)
-  * All three pages now share identical header height, typography, spacing, and grid alignment
-- **NEW: Updated Navigation Structure (Aug 10, 2025)**: Moved Dashboard from user dropdown to main sidebar navigation:
-  * Added "Dashboard" as first navigation item in sidebar with BarChart3 icon
-  * Dashboard shows overview & analytics with description "View your overview & analytics"
-  * Removed Dashboard option from user dropdown menu - now only Profile, Settings, Help, Logout
-  * Overview page (/) remains the default landing page for authenticated users
-  * Cleaner separation between account management (dropdown) and core features (sidebar)
-- **NEW: UXpilot Compact Card Redesign (Aug 10, 2025)**: Restyled dashboard cards to match compact design:
-  * Replaced large padded cards with tight 3-column grid (lg:grid-cols-3)
-  * Moved CTA button inside "Start a new search" card with full width on mobile, 220px on desktop
-  * Implemented compact styling: p-4 padding, text-sm headings, text-xs helper text
-  * Added proper accessibility with role="region" and aria-labelledby attributes
-  * Custom progress bars: h-1.5 height, emerald-500 for email verification, blue-600 for personalization
-  * Positioned badges: emerald trend badge and gray "New" badge in top-right corners
-  * Removed Progress component dependency in favor of custom styled progress bars
-- **NEW: Compact Collapsible Sidebar Implementation (Aug 11, 2025)**: Implemented UXpilot-style collapsible sidebar:
-  * Expanded (224px) and collapsed (72px) states with smooth width transitions
-  * State persistence via localStorage with "navCollapsed" key
-  * Icon-only rail in collapsed state with centered 44px height navigation items
-  * Active state shows blue accent bar (3px) and soft blue background
-  * Moved "New Search" button from sidebar to global top bar
-  * Full accessibility: aria-label, aria-current, focus-visible ring styling
-  * Main content uses dynamic left padding (pl-[224px]/pl-[72px]) to prevent reflow
-  * Custom Tailwind spacing extension for w-18 (72px) collapsed width
-- **NEW: Enhanced OpenAI prompts with Department Strategy Builder (Jan 30, 2025)**:
-  * Added sophisticated Apollo search parameter extraction with confidence scoring
-  * Implemented Department Strategy Bucket Builder for customized two-bucket outreach
-  * Enhanced geographic filtering with job country/region prioritization
-  * Added structured department classification and title targeting with confidence levels
-  * Fallback strategy implementation for failed searches
-- **NEW: Redesigned Contact Table with Flattened View (Jan 30, 2025)**:
-  * Removed expandable rows in favor of comprehensive single-row view
-  * Added dedicated columns: Contact Type, Confidence Level, Email Status, Source, Notes
-  * Streamlined actions to single "Generate" button for outreach message creation
-  * Enhanced hover states and accessibility with tooltips
-  * Improved data density following modern CRM UI patterns
-  * Integrated LinkedIn links directly in name column
-  * Added collapsible message view below rows when generated
-- **NEW: Enhanced Puppeteer Web Scraping with Stealth Technology (Jan 30, 2025)**:
-  * Integrated puppeteer-extra with StealthPlugin for advanced bot detection avoidance
-  * Implemented multi-strategy extraction: JSON-LD structured data → iframe detection → dynamic content scraping
-  * Added smart request interception to block heavy resources while preserving critical assets
-  * Enhanced frame handling for major job boards (Ashby, Workable, Greenhouse, Lever, Workday, etc.)
-  * Improved job title extraction with multiple fallback strategies and content-aware selectors
-  * Added dynamic content waiting specifically tuned for React/Vue job board applications
-  * Updated to Chrome 126 user agent with realistic headers (Accept-Language, DNT)
-  * Maintained backward compatibility with existing cheerio fallback system
-- **URL Input Capability Temporarily Hidden (Jan 30, 2025)**:
-  * Hidden URL input tabs/options from frontend (landing page and search page) per user request
-  * All backend URL scraping code remains intact and functional for future restoration
-  * Updated UI text to remove references to URL input while preserving functionality
-  * Restoration command: User will say "re-install the url input capabilities" to restore full UI
-  * Code preserved in commented sections with clear restoration markers
-- **NEW: Job Description Input Locking During Analysis (Jan 30, 2025)**:
-  * Implemented comprehensive input locking system to prevent edits during processing
-  * Frontend features: Disabled textarea with visual feedback, lock overlay with spinner, greyed-out styling
-  * Backend protection: runId-based duplicate submission prevention with active run tracking
-  * UI enhancements: "Locked — Analysis in progress" overlay, disabled submit button with "Analyzing..." state
-  * Keyboard event blocking: Prevents typing, pasting, and other input while analysis runs
-  * Automatic cleanup: Active runs removed on completion/error, periodic cleanup of expired runs
-  * Multi-page support: Implemented on both search page and landing page with consistent UX
+*   **vite**: Frontend build tool and dev server
+*   **typescript**: Type safety across the stack
+*   **drizzle-kit**: Database migration tool
+```
