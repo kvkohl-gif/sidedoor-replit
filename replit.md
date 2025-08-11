@@ -168,6 +168,14 @@ The enrichment service is structured to easily integrate with:
   * Two-bucket system operational: 2 recruiting contacts + 3 department leads per search
   * NeverBounce email verification fully functional (valid/catchall/invalid detection)
   * Removed webhook requirement that was blocking enrichment
+- **NEW: Consistent Header Structure Across Pages (Aug 11, 2025)**: Updated Contacts and Job History pages to match Dashboard layout:
+  * Removed redundant "Recruiter Contact Finder" navigation header from Dashboard page for cleaner design
+  * Updated Contacts page header: "All Contacts" title with consistent typography (text-2xl font-bold text-slate-900)
+  * Added proper subtitle: "Manage all your recruiter and hiring manager contacts across all job searches"
+  * Implemented Dashboard-style search/filter card layout with grid columns for consistency
+  * Used matching container classes (max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8) across all pages
+  * Maintained consistent spacing (mb-8 for header, mb-6 for search card) and color scheme (text-slate-600 for subtitles)
+  * All three pages now share identical header height, typography, spacing, and grid alignment
 - **NEW: Updated Navigation Structure (Aug 10, 2025)**: Moved Dashboard from user dropdown to main sidebar navigation:
   * Added "Dashboard" as first navigation item in sidebar with BarChart3 icon
   * Dashboard shows overview & analytics with description "View your overview & analytics"
