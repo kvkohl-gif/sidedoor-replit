@@ -182,7 +182,7 @@ export default function Overview() {
             </div>
             <button 
               onClick={handleNewSearch}
-              className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-[#0070BA] text-white text-sm font-semibold hover:bg-[#005C99] focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-150 w-full lg:w-[220px]"
+              className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-[#0070BA] text-white text-sm font-semibold hover:bg-[#005C99] focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-150 w-full"
               data-testid="button-new-search"
             >
               <Search className="h-4 w-4" />
