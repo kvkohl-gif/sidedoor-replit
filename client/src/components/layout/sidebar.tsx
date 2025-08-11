@@ -79,11 +79,11 @@ export default function Sidebar({ collapsed: controlledCollapsed, onCollapsedCha
       aria-label="Primary" 
       className={cn(
         sidebarWidth,
-        "hidden sm:flex shrink-0 flex-col border-r border-gray-200 bg-white transition-[width] duration-200 ease-in-out"
+        "hidden sm:flex shrink-0 flex-col border-r border-gray-200 bg-white transition-[width] duration-200 ease-in-out relative"
       )}
     >
-      {/* Brand with toggle */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
+      {/* Brand */}
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-200">
         <Link href="/">
           <div className="flex items-center gap-2 cursor-pointer">
             <div className="grid h-8 w-8 place-items-center rounded-xl bg-blue-600 text-white shrink-0">
@@ -96,20 +96,23 @@ export default function Sidebar({ collapsed: controlledCollapsed, onCollapsedCha
             )}
           </div>
         </Link>
-        <button
-          onClick={handleToggle}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          aria-pressed={collapsed}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
-        >
-          <ChevronLeft 
-            className={cn(
-              "h-4 w-4 transition-transform duration-200",
-              collapsed ? "rotate-180" : ""
-            )} 
-          />
-        </button>
       </div>
+
+      {/* Overhanging toggle button */}
+      <button
+        onClick={handleToggle}
+        aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+        aria-pressed={collapsed}
+        className="absolute top-[14px] -right-[14px] z-20 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        title={collapsed ? "Expand navigation" : "Collapse navigation"}
+      >
+        <ChevronLeft 
+          className={cn(
+            "h-4 w-4 transition-transform duration-200",
+            collapsed ? "rotate-180" : ""
+          )} 
+        />
+      </button>
 
       {/* MAIN header - only show when expanded */}
       {!collapsed && (

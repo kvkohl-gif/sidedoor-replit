@@ -1,0 +1,54 @@
+Task: Position sidebar toggle to match UXpilot (images 3 & 4)
+Goal: Small circular chevron button overhanging the sidebar/content divider, aligned with the brand row.
+
+Acceptance Criteria (exact)
+- Sidebar root is `position: relative`.
+- Toggle button is a **28px** circular icon button (`h-7 w-7`) with:
+  - Border: `1px solid #E5E7EB` (gray-200)
+  - Background: `#FFFFFF`
+  - Shadow: subtle `shadow-sm`
+  - Icon: chevron (16–18px), gray-500 → gray-700 on hover
+- **Placement (expanded)**:
+  - Overhang the divider by half its width on the **right edge**.
+  - CSS: `position:absolute; top: 14px; right: -14px;`  (14px = half of 28px)
+  - Vertically aligns with brand row (logo is 32px tall with ~12px top padding).
+- **Placement (collapsed)**:
+  - Same overhang: `right: -14px`
+  - `top: 14px` (aligned with the centered logo tile)
+- Chevron direction:
+  - Expanded → shows **chevron-left**
+  - Collapsed → rotates 180° (or use **chevron-right**)
+- Interactions:
+  - Hover: `bg-gray-50`
+  - Focus: `focus:outline-none focus:ring-2 focus:ring-blue-500`
+  - Tooltip on hover/focus: “Collapse navigation” / “Expand navigation”
+- Accessibility:
+  - `aria-label` reflects action
+  - `aria-pressed` mirrors collapsed state
+- Persist state in `localStorage.navCollapsed`.
+- Z-index: above content (`z-20`) so it’s clickable on the seam.
+- Remove any bottom “Collapse” button.
+
+Implementation (React + Tailwind)
+
+```tsx
+// inside Sidebar component
+const BTN_POS = "absolute top-[14px] -right-[14px]"; // 28px button overhangs half
+
+<a href="/dashboard" className="flex items-center gap-2 px-3 py-3">
+  <div className="grid h-8 w-8 place-items-center rounded-xl bg-blue-600 text-white">□</div>
+  {!collapsed && <span className="text-sm font-semibold text-gray-900">Workspace</span>}
+</a>
+
+<button
+  onClick={() => setCollapsed(v => !v)}
+  aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+  aria-pressed={collapsed}
+  className={[
+    "z-20", BTN_POS,
+    "flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm",
+    "hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+  ].join(" ")}
+>
+  <ChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
+</button>
