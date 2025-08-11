@@ -182,6 +182,15 @@ The enrichment service is structured to easily integrate with:
   * Custom progress bars: h-1.5 height, emerald-500 for email verification, blue-600 for personalization
   * Positioned badges: emerald trend badge and gray "New" badge in top-right corners
   * Removed Progress component dependency in favor of custom styled progress bars
+- **NEW: Compact Collapsible Sidebar Implementation (Aug 11, 2025)**: Implemented UXpilot-style collapsible sidebar:
+  * Expanded (224px) and collapsed (72px) states with smooth width transitions
+  * State persistence via localStorage with "navCollapsed" key
+  * Icon-only rail in collapsed state with centered 44px height navigation items
+  * Active state shows blue accent bar (3px) and soft blue background
+  * Moved "New Search" button from sidebar to global top bar
+  * Full accessibility: aria-label, aria-current, focus-visible ring styling
+  * Main content uses dynamic left padding (pl-[224px]/pl-[72px]) to prevent reflow
+  * Custom Tailwind spacing extension for w-18 (72px) collapsed width
 - **NEW: Enhanced OpenAI prompts with Department Strategy Builder (Jan 30, 2025)**:
   * Added sophisticated Apollo search parameter extraction with confidence scoring
   * Implemented Department Strategy Bucket Builder for customized two-bucket outreach

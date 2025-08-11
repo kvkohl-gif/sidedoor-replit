@@ -1,0 +1,126 @@
+Task: Implement compact, collapsible sidebar (expanded ↔ collapsed) to match UXpilot design
+Goal: Reduce sidebar footprint with an icon‑rail collapsed state, while keeping an expanded state with labels. Persist user choice.
+
+Acceptance Criteria
+- Widths
+  - Expanded: 224px (Tailwind `w-56`)
+  - Collapsed (icon‑only rail): 72px (`w-18`) with centered icons
+  - Mobile <640px: sidebar hidden by default; opens as slide‑in drawer
+
+- Structure
+  - Top: app logo + product name (expanded) or logo only (collapsed)
+  - “MAIN” group header (10–11px uppercase, muted) in expanded only
+  - Nav items (Dashboard, Search, Job History, Contacts) each show:
+    - Expanded: icon + label + optional caption (muted) under label
+    - Collapsed: icon‑only in rounded tile; tooltip shows label on hover/focus
+  - Active state shows vertical blue accent bar (2–3px) + soft blue tile bg
+
+- Interactions
+  - Collapse/Expand toggle button:
+    - Expanded view: chevron pointing left; Collapsed: chevron pointing right (rail top)
+    - Persist state in `localStorage.navCollapsed` (true/false)
+  - Smooth width transition without content reflow (content wrapper uses left padding equal to current sidebar width)
+  - Entire nav item row clickable; on hover use light gray bg; focus shows `ring-2 ring-blue-500`
+
+- Visual tokens
+  - Icons 20–22px (lucide-react), default `text-gray-500`, active `text-blue-600`
+  - Item height 44px; gap‑2 between icon/label; tiles rounded‑lg
+  - Colors: border `gray-200`, text `gray-700/500`, active bg `#EEF2FF` (indigo/blue‑50), accent bar `#2563EB`
+
+- Tooltips (collapsed)
+  - On hover/focus, show tooltip with item label; accessible with `aria-describedby`, dismiss on `Esc`
+
+- Mobile drawer
+  - Hamburger in topbar opens drawer (`fixed inset-y-0 left-0 w-64 bg-white shadow-xl`)
+  - Trap focus while open; close on overlay click or `Esc`
+
+- Accessibility
+  - `<nav aria-label="Primary">`
+  - Each link: `aria-current="page"` when active
+  - Toggle: `aria-pressed` + `aria-label="Collapse/Expand navigation"`
+
+- Remove
+  - Large “New Search” primary button from sidebar; replace with compact icon button placed in topbar (global)
+
+Implementation (React + Tailwind – skeleton)
+```tsx
+// Sidebar.tsx
+import { useEffect, useState } from "react";
+import { Home, Search, History, Users, ChevronLeft } from "lucide-react";
+
+const NAV = [
+  { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: Home },
+  { key: "search", label: "Search", href: "/search", icon: Search },
+  { key: "history", label: "Job History", href: "/dashboard", icon: History },
+  { key: "contacts", label: "Contacts", href: "/contacts", icon: Users },
+];
+
+export default function Sidebar({ active }: { active: string }) {
+  const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem("navCollapsed")==="true");
+  useEffect(()=>localStorage.setItem("navCollapsed", String(collapsed)),[collapsed]);
+
+  const W = collapsed ? "w-18" : "w-56"; // 72px vs 224px
+
+  return (
+    <nav aria-label="Primary" className={`${W} hidden sm:flex shrink-0 flex-col border-r border-gray-200 bg-white transition-[width] duration-200`}>
+      {/* Brand */}
+      <a href="/dashboard" className="flex items-center gap-2 px-3 py-3">
+        <div className="grid h-8 w-8 place-items-center rounded-xl bg-blue-600 text-white">□</div>
+        {!collapsed && <span className="text-sm font-semibold text-gray-900">Recruiter Finder</span>}
+      </a>
+
+      {/* MAIN header */}
+      {!collapsed && <div className="px-3 pb-2 pt-1 text-[11px] uppercase tracking-wide text-gray-400">Main</div>}
+
+      {/* Items */}
+      <ul className="flex-1 space-y-1 px-2">
+        {NAV.map(({ key, label, href, icon: Icon }) => {
+          const activeItem = active === key;
+          return (
+            <li key={key}>
+              <a
+                href={href}
+                aria-current={activeItem ? "page" : undefined}
+                className={[
+                  "group relative flex items-center rounded-lg px-2 py-2 text-sm",
+                  activeItem ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+                ].join(" ")}
+              >
+                {/* active accent bar */}
+                <span className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r ${activeItem ? "h-6 w-[3px] bg-blue-600" : "w-0"}`} />
+                <Icon className={`${collapsed ? "mx-auto" : "mr-2"} h-5 w-5 ${activeItem ? "text-blue-600" : "text-gray-500"}`} />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Collapse toggle */}
+      <button
+        onClick={()=>setCollapsed(v=>!v)}
+        aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+        aria-pressed={collapsed}
+        className="m-2 flex items-center justify-center rounded-md border border-gray-200 px-2 py-2 text-gray-600 hover:bg-gray-50"
+      >
+        <ChevronLeft className={`h-5 w-5 transition-transform ${collapsed ? "rotate-180" : ""}`} />
+        {!collapsed && <span className="ml-2 text-sm">Collapse</span>}
+      </button>
+    </nav>
+  );
+}
+Layout note
+
+Wrap main content in a container that pads left equal to sidebar width so toggling doesn’t shift content:
+
+Collapsed: pl-[72px]; Expanded: pl-[224px] (controlled by the same state via context or a CSS variable).
+
+QA
+
+State persists after refresh.
+
+Tooltips show labels in collapsed mode (integrate your tooltip lib).
+
+Keyboard nav works (Tab/Enter/Space); Esc closes mobile drawer.
+
+Visuals match uploads 2 & 3 for both states.
