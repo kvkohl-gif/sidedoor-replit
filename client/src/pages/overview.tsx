@@ -18,7 +18,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { UserDropdown } from "@/components/ui/user-dropdown";
+
 import type { JobSubmissionWithRecruiters } from "@shared/schema";
 
 interface DashboardStats {
@@ -56,9 +56,7 @@ export default function Overview() {
     retry: false,
   });
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
-  };
+
 
   const handleNewSearch = () => {
     setLocation("/search");
@@ -160,23 +158,6 @@ export default function Overview() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Navigation */}
-      <nav className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
-            </div>
-            <div className="flex items-center">
-              <UserDropdown 
-                user={user}
-                onLogout={handleLogout}
-              />
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
