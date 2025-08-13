@@ -224,7 +224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Return the complete submission with recruiters
         const completeSubmission = await storage.getJobSubmissionById(jobSubmission.id);
-        res.json({ submission: completeSubmission, runId });
+        res.json({ id: jobSubmission.id, submission: completeSubmission, runId });
 
         // Remove from active runs on successful completion
         activeRuns.delete(runId);
@@ -783,6 +783,41 @@ LinkedIn message tone: ${tone}`;
 
   // Register contact routes
   registerContactRoutes(app);
+
+  // Debug endpoint for department targeting (no auth for testing)
+  app.post('/api/debug/department-test', async (req, res) => {
+    try {
+      const { company_name, job_title, job_content } = req.body;
+      
+      console.log('=== DEBUG: Testing Department Targeting ===');
+      console.log(`Company: ${company_name}`);
+      console.log(`Job Title: ${job_title}`);
+      console.log(`Content length: ${job_content?.length} chars`);
+      
+      // Import here to avoid circular dependencies
+      const { inferDepartmentTargets } = await import('./departmentRouter');
+      
+      const result = await inferDepartmentTargets(company_name, job_title, job_content);
+      
+      console.log('=== Department Inference Result ===');
+      console.log(`Summary: ${result.summary}`);
+      console.log(`Primary Department: ${result.departments[0]?.label} (${result.departments[0]?.confidence}%)`);
+      console.log(`Primary Titles: ${result.primary_titles.slice(0, 3).map(t => t.title).join(', ')}`);
+      
+      res.json({ 
+        success: true, 
+        result,
+        analysis: {
+          primary_department: result.departments[0],
+          top_titles: result.primary_titles.slice(0, 5),
+          summary: result.summary
+        }
+      });
+    } catch (error) {
+      console.error('Department test error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

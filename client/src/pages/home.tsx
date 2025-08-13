@@ -62,7 +62,9 @@ export default function Home() {
       organizationId?: string;
       companyDomain?: string;
     }) => {
-      const response = await apiRequest("POST", "/api/submissions", data);
+      // Generate a unique runId for this submission
+      const runId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const response = await apiRequest("POST", "/api/submissions", { ...data, runId });
       return response.json();
     },
     onSuccess: (data) => {
