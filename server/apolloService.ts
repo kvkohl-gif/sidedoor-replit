@@ -127,7 +127,8 @@ class ApolloService {
   }
 
   /**
-   * Filter and shape Apollo search results, rejecting non-company domains early
+   * Filter and shape Apollo search results - Allow all contacts through for enrichment
+   * Domain filtering happens AFTER enrichment to prevent losing contacts with no initial emails
    */
   private shapeFromSearch(rawContacts: any[], domainRules: DomainRules): {
     accepted: Array<{
@@ -144,18 +145,20 @@ class ApolloService {
     const skipped = [];
 
     for (const contact of rawContacts) {
-      const email = this.coerceWorkEmailFromSearch(contact);
-      const domain = emailDomain(email || "");
-
-      // Reject non-company domains up-front (core contamination fix)
-      if (!email || !isCompanyDomain(domain, domainRules) || domainRules.personalBlocks.includes(domain)) {
+      // Only reject contacts that are clearly invalid
+      if (!contact.name && !contact.first_name && !contact.last_name) {
         skipped.push({ 
           contact, 
-          reason: `domain_mismatch_or_personal:${domain || "none"}` 
+          reason: `no_name_data` 
         });
         continue;
       }
 
+      const email = this.coerceWorkEmailFromSearch(contact);
+      const domain = emailDomain(email || "");
+
+      // Allow all contacts through for enrichment - domain filtering happens after enrichment
+      // This prevents losing contacts who might have real work emails discovered through enrichment
       accepted.push({
         id: contact.id || contact.person_id || contact.contact_id,
         name: contact.name || `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim(),
@@ -166,7 +169,7 @@ class ApolloService {
       });
     }
 
-    console.log(`Domain filtering: ${accepted.length} accepted, ${skipped.length} skipped from ${rawContacts.length} total`);
+    console.log(`Pre-enrichment filtering: ${accepted.length} accepted for enrichment, ${skipped.length} skipped (no name) from ${rawContacts.length} total`);
     return { accepted, skipped };
   }
 
