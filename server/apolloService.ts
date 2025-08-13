@@ -145,8 +145,12 @@ class ApolloService {
     const skipped = [];
 
     for (const contact of rawContacts) {
+      // Debug: Log the actual contact data structure
+      console.log(`DEBUG: Raw contact data:`, JSON.stringify(contact, null, 2));
+      
       // Only reject contacts that are clearly invalid
       if (!contact.name && !contact.first_name && !contact.last_name) {
+        console.log(`DEBUG: Rejecting contact - no name data: name=${contact.name}, first_name=${contact.first_name}, last_name=${contact.last_name}`);
         skipped.push({ 
           contact, 
           reason: `no_name_data` 
@@ -644,9 +648,13 @@ class ApolloService {
     }
 
     const data: ApolloSearchResponse = await response.json();
+    console.log(`DEBUG: Full Apollo API response:`, JSON.stringify(data, null, 2));
+    
     const contacts = data.people || data.contacts || [];
+    console.log(`DEBUG: Extracted contacts array length: ${contacts ? contacts.length : 'null'}`);
     
     if (!contacts || contacts.length === 0) {
+      console.log(`DEBUG: No contacts found in Apollo response`);
       return { contacts: [], searchPayload };
     }
 
