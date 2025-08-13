@@ -879,7 +879,7 @@ class ApolloService {
       const searchPayload: any = {
         person_titles: RECRUITER_TITLES,
         page: 1,
-        per_page: params.per_page || 2
+        per_page: params.per_page || 3
       };
 
       // Use organization_id for precise matching if available
@@ -934,7 +934,7 @@ class ApolloService {
         person_titles: params.titles,
         person_seniorities: params.seniorities,
         page: 1,
-        per_page: params.per_page || 2
+        per_page: params.per_page || 3
       };
 
       // Use organization_id for precise matching if available

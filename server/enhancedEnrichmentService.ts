@@ -94,7 +94,7 @@ export class EnhancedEnrichmentService {
       console.log(`Apollo API connection test result: ${connectionTest}`);
     }
 
-    // Step 2: Search Apollo using two-bucket approach (2 recruiters + 2 department leads)
+    // Step 2: Search Apollo using two-bucket approach (3 recruiters + 3 department leads)
     let recruiterContacts: ProcessedContact[] = [];
     let departmentLeadContacts: ProcessedContact[] = [];
     
@@ -111,11 +111,11 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 2, // Get 2 recruiting contacts
+          per_page: 3, // Get 3 recruiting contacts
           organization_id: request.organization_id
         });
         
-        // Search for department lead contacts (2 contacts)
+        // Search for department lead contacts (3 contacts)
         console.log("Searching for department lead contacts...");
         departmentLeadContacts = await apolloService.searchDepartmentLeads({
           company_name: request.company_name,
@@ -128,7 +128,7 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 2, // Get 2 department leads
+          per_page: 3, // Get 3 department leads
           organization_id: request.organization_id
         });
         
