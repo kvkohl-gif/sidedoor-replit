@@ -154,6 +154,8 @@ class ApolloService {
       const person = contact.person || contact;
       const contactName = person.name || person.first_name || person.last_name;
       
+      console.log(`DEBUG: Processing contact - person.name: ${person.name}, person.first_name: ${person.first_name}, person.last_name: ${person.last_name}, contactName: ${contactName}`);
+      
       // Only reject contacts that are clearly invalid
       if (!contactName && !person.first_name && !person.last_name) {
         console.log(`DEBUG: Rejecting contact - no name data: name=${person.name}, first_name=${person.first_name}, last_name=${person.last_name}`);
@@ -167,16 +169,20 @@ class ApolloService {
       const email = this.coerceWorkEmailFromSearch(contact);
       const domain = emailDomain(email || "");
 
-      // Allow all contacts through for enrichment - domain filtering happens after enrichment
-      // This prevents losing contacts who might have real work emails discovered through enrichment
-      accepted.push({
+      const processedContact = {
         id: person.id || contact.id || contact.person_id || contact.contact_id,
         name: person.name || `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim(),
         title: person.title || contact.title,
         email,
         email_domain: domain,
         apolloContact: contact
-      });
+      };
+      
+      console.log(`DEBUG: ACCEPTING contact for enrichment:`, JSON.stringify(processedContact, null, 2));
+      
+      // Allow all contacts through for enrichment - domain filtering happens after enrichment
+      // This prevents losing contacts who might have real work emails discovered through enrichment
+      accepted.push(processedContact);
     }
 
     console.log(`Pre-enrichment filtering: ${accepted.length} accepted for enrichment, ${skipped.length} skipped (no name) from ${rawContacts.length} total`);
