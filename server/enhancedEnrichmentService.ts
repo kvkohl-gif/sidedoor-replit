@@ -234,7 +234,7 @@ export class EnhancedEnrichmentService {
         
         // Include ALL contacts (domain filtering already ensured company emails only)
         const enrichedContact: EnrichedContact = {
-          name: contact.full_name,
+          name: contact.full_name || contact.name || 'Unknown',
           title: contact.title,
           email: validatedEmail, // Use validated email to prevent hallucination
           linkedinUrl: contact.linkedin_url,

@@ -707,8 +707,8 @@ class ApolloService {
         console.log(`DEBUG: Processed contact:`, JSON.stringify(processedContact, null, 2));
         return processedContact;
       })
-      .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
-      .slice(0, 3); // Take top 3 candidates for enrichment
+      .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence);
+      // Removed .slice(0, 3) to get all contacts instead of limiting to 3
 
     return { contacts: processedContacts, searchPayload };
   }
