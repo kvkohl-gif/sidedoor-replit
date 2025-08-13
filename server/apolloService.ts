@@ -707,21 +707,14 @@ class ApolloService {
   /**
    * Enrich contacts and prefer company emails from enrichment, with domain validation
    */
-  private async enrichAndOverrideEmail(shapedContacts: Array<{
-    id: string;
-    name: string;
-    title?: string;
-    email?: string;
-    email_domain?: string;
-    apolloContact: any;
-  }>, domainRules: DomainRules): Promise<ProcessedContact[]> {
+  private async enrichAndOverrideEmail(shapedContacts: ProcessedContact[], domainRules: DomainRules): Promise<ProcessedContact[]> {
     const results: ProcessedContact[] = [];
     const skippedEnrichment = [];
 
     for (const item of shapedContacts) {
       try {
         // Try to enrich the contact to get potentially better email
-        const enrichedContact = await this.enrichContactByProfile(item.apolloContact);
+        const enrichedContact = await this.enrichContactByProfile(item.apolloContact!);
         
         // Pick the best company email from enrichment results
         const overrideEmail = this.pickBestCompanyEmail(enrichedContact, domainRules);
@@ -742,14 +735,14 @@ class ApolloService {
         const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
 
         const processedContact: ProcessedContact = {
-          full_name: item.name,
+          full_name: item.full_name,
           title: item.title || "",
           email: finalEmail,
-          linkedin_url: item.apolloContact.linkedin_url,
-          company_name: item.apolloContact.organization_name || 'Unknown',
+          linkedin_url: item.linkedin_url,
+          company_name: item.company_name || 'Unknown',
           is_recruiter_likely: isRecruiter,
           recruiter_confidence: confidence,
-          apolloId: item.id
+          apolloId: item.apolloId
         };
         
         results.push(processedContact);
@@ -758,18 +751,18 @@ class ApolloService {
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
-        console.error(`Enrichment failed for ${item.name}:`, error);
+        console.error(`Enrichment failed for ${item.full_name}:`, error);
         
         // Include contact with original email if enrichment fails (if it's still company domain)
         if (item.email && isCompanyDomain(emailDomain(item.email), domainRules)) {
           const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
           
           const processedContact: ProcessedContact = {
-            full_name: item.name,
+            full_name: item.full_name,
             title: item.title || "",
             email: item.email,
-            linkedin_url: item.apolloContact.linkedin_url,
-            company_name: item.apolloContact.organization_name || 'Unknown',
+            linkedin_url: item.linkedin_url,
+            company_name: item.company_name || 'Unknown',
             is_recruiter_likely: isRecruiter,
             recruiter_confidence: confidence,
             apolloId: item.id
