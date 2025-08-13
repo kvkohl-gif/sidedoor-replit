@@ -3,6 +3,7 @@ import { verifierService, type EmailVerificationResult, type VerificationStatus 
 import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult } from "./emailPatternService";
 import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
 import { extractRecruiterName, generateTwoBucketTargets, type RecruiterNameExtraction, type TwoBucketTargets } from "./openai";
+import { EmailValidationGuardrails, ValidatedEmail } from "./emailValidationGuardrails";
 import type { InsertRecruiterContact } from "@shared/schema";
 
 export interface ContactSearchRequest {
@@ -38,6 +39,7 @@ export interface EnrichedContact {
   outreachBucket: "recruiter" | "department_lead"; // New: two-bucket classification
   department?: string; // New: department for department_lead bucket
   seniority?: string; // New: seniority level for department_lead bucket
+  emailValidation?: ValidatedEmail; // New: email validation guardrail results
 }
 
 export interface ContactSearchResult {
@@ -210,6 +212,17 @@ export class EnhancedEnrichmentService {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
         const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
         
+        // Apply email validation guardrails
+        const emailValidation = contact.email ? 
+          EmailValidationGuardrails.validateApolloEmail(
+            contact.email,
+            'apollo_search',
+            contact
+          ) : null;
+        
+        // Only use validated emails to prevent hallucination
+        const validatedEmail = emailValidation?.isValid ? emailValidation.validatedEmail?.email : undefined;
+        
         // Simplify outreach bucket determination - use title-based detection
         const titleLower = contact.title.toLowerCase();
         const isRecruiter = titleLower.includes('recruiter') || titleLower.includes('talent acquisition') || titleLower.includes('talent sourcing') || titleLower.includes('recruiting');
@@ -217,17 +230,17 @@ export class EnhancedEnrichmentService {
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Include: true (showing all with status badges)`);
+        console.log(`Processing contact: ${contact.full_name} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
         
         // Include ALL contacts (domain filtering already ensured company emails only)
         const enrichedContact: EnrichedContact = {
           name: contact.full_name,
           title: contact.title,
-          email: contact.email,
+          email: validatedEmail, // Use validated email to prevent hallucination
           linkedinUrl: contact.linkedin_url,
           confidenceScore: contact.recruiter_confidence,
           source: "Apollo + AI",
-          emailVerified: verificationStatus.is_valid,
+          emailVerified: verificationStatus.is_valid && !!validatedEmail,
           verificationStatus: this.mapVerificationStatus(verificationStatus.status_label),
           sourcePlatform: "apollo",
           recruiterConfidence: contact.recruiter_confidence,
@@ -235,7 +248,8 @@ export class EnhancedEnrichmentService {
           verificationStatusInfo: verificationStatus,
           outreachBucket,
           department,
-          seniority
+          seniority,
+          emailValidation: emailValidation?.validatedEmail // Store validation metadata
         };
 
         enrichedContacts.push(enrichedContact);

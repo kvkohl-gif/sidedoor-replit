@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DomainRules, emailDomain, isCompanyDomain, buildDomainRules } from "./domainRules";
+import { EmailValidationGuardrails, ValidatedEmail, safeExtractApolloEmail } from "./emailValidationGuardrails";
 
 // Apollo API response types
 export interface ApolloContact {
@@ -875,14 +876,36 @@ class ApolloService {
 
       const data = await response.json();
       
-      if (data.person && data.person.email) {
-        const foundEmail = data.person.email;
-        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${foundEmail} from Apollo`);
-        return data.person;
+      // Apply strict email validation guardrails
+      const extractedEmail = safeExtractApolloEmail(data);
+      const validationResult = EmailValidationGuardrails.validateApolloEmail(
+        extractedEmail,
+        'apollo_enrichment',
+        data
+      );
+      
+      if (validationResult.isValid && validationResult.validatedEmail) {
+        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Validated email ${validationResult.validatedEmail.email} from Apollo (confidence: ${validationResult.validatedEmail.confidence})`);
+        
+        // Return the person data with validated email
+        const personData = data.person || data;
+        personData.email = validationResult.validatedEmail.email;
+        personData._email_validation = validationResult.validatedEmail;
+        return personData;
       } else {
-        console.log(`⚠️ Enrichment result for ${contact.name}: No email found in response`);
+        console.log(`⚠️ Enrichment FAILED validation for ${contact.name}: ${validationResult.rejectionReason}`);
+        if (validationResult.warnings.length > 0) {
+          console.log(`Validation warnings:`, validationResult.warnings);
+        }
         console.log(`Response structure:`, JSON.stringify(data, null, 2));
-        return data.person || null;
+        
+        // Return person data without email to prevent hallucination
+        const personData = data.person || data;
+        if (personData) {
+          delete personData.email; // Remove any invalid email
+          personData._email_validation = EmailValidationGuardrails.createNoEmailResult(validationResult.rejectionReason || 'Validation failed');
+        }
+        return personData;
       }
 
     } catch (error) {
@@ -1077,10 +1100,18 @@ class ApolloService {
         try {
           const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
           
+          // Apply validation guardrails to enriched email
+          const validatedEmail = enrichedContact?.email ? 
+            EmailValidationGuardrails.validateApolloEmail(
+              enrichedContact.email,
+              'apollo_enrichment',
+              enrichedContact
+            ) : null;
+          
           const processedContact: ProcessedContact = {
             full_name: candidate.full_name,
             title: candidate.title,
-            email: enrichedContact?.email || undefined,
+            email: validatedEmail?.isValid ? validatedEmail.validatedEmail!.email : undefined,
             linkedin_url: candidate.linkedin_url,
             company_name: candidate.company_name,
             is_recruiter_likely: candidate.is_recruiter_likely,
@@ -1194,10 +1225,18 @@ class ApolloService {
         try {
           const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
           
+          // Apply validation guardrails to enriched email
+          const validatedEmail = enrichedContact?.email ? 
+            EmailValidationGuardrails.validateApolloEmail(
+              enrichedContact.email,
+              'apollo_enrichment',
+              enrichedContact
+            ) : null;
+          
           const processedContact: ProcessedContact = {
             full_name: candidate.full_name,
             title: candidate.title,
-            email: enrichedContact?.email || undefined,
+            email: validatedEmail?.isValid ? validatedEmail.validatedEmail!.email : undefined,
             linkedin_url: candidate.linkedin_url,
             company_name: candidate.company_name,
             is_recruiter_likely: candidate.is_recruiter_likely,
