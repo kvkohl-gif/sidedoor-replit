@@ -148,8 +148,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Extract optimized Apollo search parameters
         console.log(`Extracting Apollo search parameters for ${companyName}`);
-        const apolloParams = await extractApolloSearchParams(jobContent);
+        const apolloParams = await extractApolloSearchParams({
+          jobContent,
+          jobDataExtraction,
+          organizationId,
+          companyDomain: req.body.companyDomain,
+        });
         console.log(`Apollo search params:`, apolloParams);
+
+        // Update job data extraction with website URL from Apollo params
+        if (apolloParams.website_url && (!jobDataExtraction.company_website || jobDataExtraction.company_website === "Not specified")) {
+          jobDataExtraction.company_website = apolloParams.website_url;
+        }
 
         // Apollo + NeverBounce Enhanced Search
         console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);

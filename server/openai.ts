@@ -478,7 +478,7 @@ Return the extracted data in the JSON format specified.`;
       job_title: result.job_title || "Not specified",
       company_name: result.company_name || "Not specified", 
       job_url: originalJobUrl || "Not specified",
-      company_website: "Not specified", // Not included in new format
+      company_website: "Not specified", // Will be populated from Apollo params in routes.ts
       location: result.location || "Not specified",
       job_description: result.description || "Not specified",
       key_responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities : ["Not specified"],

@@ -39,20 +39,6 @@ export function JobDetailCard({ jobData, className }: JobDetailCardProps) {
           </CollapsibleTrigger>
           
           <CollapsibleContent className="mt-4 space-y-4">
-            {/* Job URL - Display first */}
-            <div>
-              <h3 className="font-medium text-slate-900 mb-2">Job URL</h3>
-              <a 
-                href={jobData.job_url !== "Not specified" ? jobData.job_url : "#"} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-primary hover:text-blue-700 break-all text-sm flex items-center"
-              >
-                {jobData.job_url}
-                {jobData.job_url !== "Not specified" && <ExternalLink className="w-4 h-4 ml-2 flex-shrink-0" />}
-              </a>
-            </div>
-
             {/* Company Website */}
             <div>
               <h3 className="font-medium text-slate-900 mb-2">Company Website</h3>
