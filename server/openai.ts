@@ -267,8 +267,13 @@ Rules:
 - Classify departments (primary + optional secondary) from: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other.
 - Titles to target:
   - Recruiter bucket: "Recruiter", "Technical Recruiter", "Talent Acquisition", "Sourcer", "Senior Technical Recruiter", "Recruiting Manager/Lead/Director", etc.
-  - Department lead bucket: role-relevant leadership (e.g., "Engineering Manager", "Director of Engineering", "VP Product", "Head of Design").
-- Rank every target title with confidence 0–100 based on job context.
+  - Department lead bucket: SPECIFIC role-relevant leadership for the job's primary department:
+    * Product Management jobs: "Product Manager", "Senior Product Manager", "Principal Product Manager", "Director of Product", "VP Product", "Head of Product"
+    * Engineering jobs: "Engineering Manager", "Senior Engineering Manager", "Director of Engineering", "VP Engineering", "Head of Engineering", "CTO"
+    * Design jobs: "Design Manager", "Senior Design Manager", "Director of Design", "VP Design", "Head of Design"
+    * Data/Analytics jobs: "Data Manager", "Analytics Manager", "Director of Data", "Head of Analytics"
+  - EXCLUDE: Customer Success, Sales, Marketing, Operations roles unless explicitly relevant to the job posting
+- Rank every target title with confidence 0–100 based on job context and department relevance.
 - Geography: extract city/region/country if present; infer cautiously from page/company if explicitly indicated (otherwise leave empty).
 - Seniority: "Intern/Entry", "Associate", "Mid", "Senior", "Lead/Staff/Principal", "Manager", "Director", "VP", "C‑level", or "Not specified".
 
@@ -346,8 +351,24 @@ Return the extracted data in the JSON format specified.`;
         { title: "People Operations Manager", confidence: 85 }
       ],
       department_lead_title_targets: Array.isArray(result.department_lead_title_targets) ? result.department_lead_title_targets : [
-        { title: "Director", confidence: 90 },
-        { title: "Manager", confidence: 85 }
+        // Smart defaults based on primary department
+        ...(result.primary_department === "Product Management" ? [
+          { title: "Product Manager", confidence: 95 },
+          { title: "Senior Product Manager", confidence: 90 },
+          { title: "Principal Product Manager", confidence: 85 },
+          { title: "Director of Product", confidence: 80 },
+          { title: "VP Product", confidence: 75 }
+        ] : result.primary_department === "Engineering" ? [
+          { title: "Engineering Manager", confidence: 95 },
+          { title: "Senior Engineering Manager", confidence: 90 },
+          { title: "Director of Engineering", confidence: 85 },
+          { title: "VP Engineering", confidence: 80 },
+          { title: "Head of Engineering", confidence: 75 }
+        ] : [
+          { title: "Manager", confidence: 90 },
+          { title: "Director", confidence: 85 },
+          { title: "Senior Manager", confidence: 80 }
+        ])
       ],
       person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : ["manager", "head", "director", "vp", "c_suite"],
       include_similar_titles: Boolean(result.include_similar_titles === undefined ? false : result.include_similar_titles),
