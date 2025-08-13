@@ -659,28 +659,47 @@ class ApolloService {
     const contacts = data.people || data.contacts || [];
     console.log(`DEBUG: Extracted contacts array length: ${contacts ? contacts.length : 'null'}`);
     
+    // Log each contact structure for debugging
+    if (contacts && contacts.length > 0) {
+      contacts.forEach((contact, index) => {
+        console.log(`DEBUG: Contact ${index} structure:`, JSON.stringify(contact, null, 2));
+      });
+    }
+    
     if (!contacts || contacts.length === 0) {
       console.log(`DEBUG: No contacts found in Apollo response`);
       return { contacts: [], searchPayload };
     }
 
-    // Process and rank contacts by recruiter likelihood
+    // Process and rank contacts by recruiter likelihood with proper nested structure handling
     const processedContacts = contacts
-      .filter(contact => contact.name && contact.title)
+      .filter(contact => {
+        // Handle Apollo's nested person structure
+        const person = contact.person || contact;
+        const name = person.name || person.first_name || person.last_name;
+        const title = person.title || contact.title;
+        console.log(`DEBUG: Filtering contact - name: ${name}, title: ${title}`);
+        return name && title;
+      })
       .map(contact => {
-        const { isRecruiter, confidence } = this.isRecruiterTitle(contact.title);
+        // Handle Apollo's nested person structure
+        const person = contact.person || contact;
+        const title = person.title || contact.title;
+        const { isRecruiter, confidence } = this.isRecruiterTitle(title);
         
-        return {
+        const processedContact = {
           apolloContact: contact,
-          full_name: contact.name,
-          title: contact.title,
-          email: contact.email,
-          linkedin_url: contact.linkedin_url,
-          company_name: contact.organization_name || 'Unknown',
+          full_name: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+          title: title,
+          email: person.email || contact.email,
+          linkedin_url: person.linkedin_url || contact.linkedin_url,
+          company_name: person.organization_name || contact.organization_name || 'Unknown',
           is_recruiter_likely: isRecruiter,
           recruiter_confidence: confidence,
-          apolloId: contact.id
+          apolloId: person.id || contact.id
         };
+        console.log(`DEBUG: Processed contact:`, JSON.stringify(processedContact, null, 2));
+        return processedContact;
       })
       .sort((a, b) => b.recruiter_confidence - a.recruiter_confidence)
       .slice(0, 3); // Take top 3 candidates for enrichment
