@@ -1,0 +1,261 @@
+1) Replit‑ready system prompt (paste into your LLM call)
+Purpose: infer the primary department(s) and exact title targets from a job description. Returns strict JSON your code can consume.
+
+typescript
+Copy
+Edit
+You are a Department Router for recruiter contact discovery.
+
+INPUT:
+- company_name (string)
+- job_title (string)
+- job_description (string)
+
+TASKS:
+1) Infer the MOST LIKELY department(s) that own this role inside the company org chart.
+   Use this canonical taxonomy (id → label):
+   - product            → Product Management
+   - engineering        → Engineering / Software
+   - design             → Design / UX
+   - data               → Data / Analytics / Science
+   - it                 → IT / InfoSec
+   - marketing          → Marketing / Growth
+   - sales              → Sales
+   - customer_success   → Customer Success / Support
+   - operations         → Operations / BizOps
+   - people             → People / HR / Recruiting
+   - finance            → Finance
+   - legal              → Legal
+
+2) Produce a DEPARTMENT-ALIGNED title target list for leadership/decision-maker contacts
+   who would be relevant to the role. Mix IC/manager/leader titles but keep within the chosen
+   department(s). Prefer modern, real-world titles used at tech companies.
+
+3) Also produce a small secondary list of CROSS-FUNCTION titles that commonly collaborate
+   with this role (e.g., Product ↔ Design/Eng, CS ↔ Sales/Support). Keep to 3–6 titles total.
+
+4) Return confidence scores (0–100) for each department and title.
+
+STRICT JSON OUTPUT:
+{
+  "departments": [
+    {"id":"product","label":"Product Management","confidence":95}
+  ],
+  "primary_titles": [
+    {"title":"Director of Product Management","confidence":90},
+    {"title":"Senior Product Manager","confidence":88},
+    {"title":"VP of Product","confidence":85}
+  ],
+  "cross_function_titles": [
+    {"title":"Director of Design","confidence":70},
+    {"title":"Director of Engineering","confidence":70}
+  ],
+  "summary": "One sentence why these picks fit."
+}
+
+RULES:
+- DO NOT include departments or titles that don’t match the role’s function unless placed in cross_function_titles.
+- If job is clearly Customer Success, set departments to customer_success and make CS titles primary.
+- If ambiguous, return up to 2 departments with scores, but keep primary_titles aligned with the TOP department.
+- Always produce valid JSON. No prose outside JSON.
+2) Query‑builder changes (TypeScript pseudo you can paste & adapt)
+Goal: build Apollo queries that prioritize department‑aligned contacts, while still allowing cross‑function as a fallback. Don’t exclude CS globally; we just only query CS when the JD says so (or as cross‑function if relevant).
+
+ts
+Copy
+Edit
+type Dept = 'product'|'engineering'|'design'|'data'|'it'|'marketing'|'sales'|'customer_success'|'operations'|'people'|'finance'|'legal';
+
+const APOLLO_DEPT_MAP: Record<Dept, string[]> = {
+  product: ['product', 'product management'],
+  engineering: ['engineering', 'software engineering', 'technology'],
+  design: ['design', 'ux', 'user experience'],
+  data: ['data', 'analytics', 'data science', 'business intelligence'],
+  it: ['it', 'information technology', 'security'],
+  marketing: ['marketing', 'growth'],
+  sales: ['sales', 'revenue'],
+  customer_success: ['customer success', 'support', 'customer experience'],
+  operations: ['operations', 'business operations'],
+  people: ['people', 'human resources', 'talent', 'recruiting'],
+  finance: ['finance'],
+  legal: ['legal']
+};
+
+// Titles from the model (strings), plus hard stops so we don’t drift:
+const TITLE_STOPWORDS = [
+  // prevent accidental drift when searching product roles
+  'sales development', 'account executive', 'customer success manager',
+  'support specialist', 'marketing coordinator'
+];
+
+function sanitizeTitles(titles: string[]) {
+  return titles
+    .map(t => t.trim())
+    .filter(t => !TITLE_STOPWORDS.some(stop => t.toLowerCase().includes(stop)));
+}
+
+interface DeptInference {
+  departments: { id: Dept; label: string; confidence: number }[];
+  primary_titles: { title: string; confidence: number }[];
+  cross_function_titles: { title: string; confidence: number }[];
+}
+
+// Build a prioritized search plan:
+//  1) Primary dept + primary titles
+//  2) Primary dept + seniorities only (if titles too narrow)
+//  3) Cross-function titles (same org) with a low cap
+//  4) Recruiters/TA as a last resort (people dept)
+function buildApolloPlans(orgId: string, inf: DeptInference) {
+  const topDept = inf.departments.sort((a,b)=>b.confidence-a.confidence)[0];
+  const deptFilters = topDept ? APOLLO_DEPT_MAP[topDept.id] : [];
+
+  const primaryTitles = sanitizeTitles(
+    inf.primary_titles
+      .sort((a,b)=>b.confidence-a.confidence)
+      .map(x => x.title)
+  );
+
+  const crossTitles = sanitizeTitles(
+    inf.cross_function_titles
+      .sort((a,b)=>b.confidence-a.confidence)
+      .map(x => x.title)
+  );
+
+  const SENIORITIES = ['manager','head','director','vp','c_suite','lead','principal'];
+
+  // Apollo has multiple people endpoints; adapt param names you already use.
+  // Prefer department/function filters if available in your Apollo plan.
+  const plan = [
+    // 1) Primary dept + primary titles
+    {
+      label: 'primary-dept+titles',
+      payload: {
+        organization_ids: [orgId],
+        person_titles: primaryTitles,
+        person_seniorities: SENIORITIES,
+        // if your plan has department/function filters, enable them:
+        person_departments: deptFilters,
+        per_page: 10
+      },
+      hardLimit: 10
+    },
+    // 2) Primary dept + seniorities (broaden titles)
+    {
+      label: 'primary-dept+seniorities',
+      payload: {
+        organization_ids: [orgId],
+        person_seniorities: SENIORITIES,
+        person_departments: deptFilters,
+        per_page: 10
+      },
+      hardLimit: 10
+    },
+    // 3) Cross-function titles (still same org)
+    ...(crossTitles.length ? [{
+      label: 'cross-function+titles',
+      payload: {
+        organization_ids: [orgId],
+        person_titles: crossTitles,
+        person_seniorities: SENIORITIES,
+        per_page: 8
+      },
+      hardLimit: 8
+    }] : []),
+    // 4) Talent/Recruiting (only if we still have nothing)
+    {
+      label: 'recruiting-fallback',
+      payload: {
+        organization_ids: [orgId],
+        person_titles: ['Recruiter','Senior Recruiter','Talent Acquisition','Head of Talent','Director of Talent'],
+        person_seniorities: SENIORITIES,
+        person_departments: APOLLO_DEPT_MAP.people,
+        per_page: 6
+      },
+      hardLimit: 6
+    }
+  ];
+
+  return plan;
+}
+
+// Execute until you have enough good contacts:
+async function findDeptAlignedContacts(orgId: string, inference: DeptInference, targetCount = 6) {
+  const plans = buildApolloPlans(orgId, inference);
+  const results: any[] = [];
+
+  for (const step of plans) {
+    if (results.length >= targetCount) break;
+
+    const resp = await apolloSearch(step.payload); // your existing wrapper
+    const deduped = dedupeByPersonId(resp.people);
+    results.push(...deduped.slice(0, step.hardLimit));
+  }
+
+  return results.slice(0, targetCount);
+}
+What this does
+
+Always searches the top inferred department first with the right titles.
+
+Broadens within the same department before stepping outside it.
+
+Only then uses cross‑function titles (collaborators).
+
+Finally, falls back to Recruiting/Talent if we still have too few.
+
+3) Filtering contacts to stay aligned (post‑fetch guardrail)
+Add a simple post‑fetch validator before enrichment so drifted results don’t sneak through (e.g., CS for a Product role unless you’re in cross-function step).
+
+ts
+Copy
+Edit
+function isContactDeptAligned(c: ApolloPerson, topDept: Dept, crossTitles: string[]): boolean {
+  const t = (c.person.title || '').toLowerCase();
+
+  // If title matches any cross-function title, allow:
+  if (crossTitles.some(ct => t.includes(ct.toLowerCase()))) return true;
+
+  // Otherwise require department/function alignment if field exists:
+  const dept = (c.person.department || c.person.functions || '').toLowerCase();
+  const allow = APOLLO_DEPT_MAP[topDept].some(d => dept.includes(d));
+
+  // If Apollo doesn’t send department reliably, fall back to title heuristics:
+  return allow || titleHeuristicMatchesTopDept(t, topDept);
+}
+
+function titleHeuristicMatchesTopDept(title: string, dept: Dept) {
+  const d = title.toLowerCase();
+  if (dept === 'product') return /(product\s(manager|lead|director|vp|head|owner)|pm\b)/.test(d);
+  if (dept === 'customer_success') return /(customer\s(success|experience)|support)/.test(d);
+  if (dept === 'engineering') return /(engineer|engineering|cto|vp engineering)/.test(d);
+  if (dept === 'design') return /(design|ux|ui|product design)/.test(d);
+  // …add simple patterns for others as needed
+  return true; // don’t over-reject if uncertain
+}
+Use it just after each Apollo fetch step:
+
+ts
+Copy
+Edit
+const raw = await apolloSearch(step.payload);
+const aligned = raw.people.filter(p => isContactDeptAligned(p, topDept.id, crossTitles));
+4) Smart fallback policy (so CS isn’t “blocked”)
+If the JD’s primary dept is customer_success, CS titles are primary.
+
+If the JD is product, CS is only allowed through cross_function_titles (e.g., “Head of Customer Success”) — still shown, just lower priority.
+
+If the JD is multi‑disciplinary (e.g., “Product/Design”), return both departments with confidences and search the highest confidence first, then the next.
+
+5) Observability (quick logs you can paste)
+ts
+Copy
+Edit
+log.info('dept-inference', {
+  company: companyName,
+  job_title,
+  top_dept: inference.departments?.[0],
+  primary_title_samples: inference.primary_titles.slice(0,3)
+});
+
+log.info('apollo-step', { label: step.label, params: scrub(step.payload) });
+log.info('apollo-results', { label: step.label, total: raw.total, aligned: aligned.length });

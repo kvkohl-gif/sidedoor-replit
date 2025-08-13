@@ -635,7 +635,7 @@ class ApolloService {
   /**
    * Execute Apollo search and process results
    */
-  private async executeApolloSearch(searchPayload: any): Promise<{contacts: ProcessedContact[], searchPayload: any}> {
+  async executeApolloSearch(searchPayload: any): Promise<{contacts: ProcessedContact[], searchPayload: any}> {
     // Remove undefined fields
     Object.keys(searchPayload).forEach(key => {
       if ((searchPayload as any)[key] === undefined) {

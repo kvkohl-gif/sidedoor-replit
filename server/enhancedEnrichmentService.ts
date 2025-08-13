@@ -3,6 +3,7 @@ import { verifierService, type EmailVerificationResult, type VerificationStatus 
 import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult } from "./emailPatternService";
 import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
 import { extractRecruiterName, generateTwoBucketTargets, type RecruiterNameExtraction, type TwoBucketTargets } from "./openai";
+import { inferDepartmentTargets, buildApolloPlans, isContactDeptAligned, type DepartmentInference, type ApolloSearchPlan } from "./departmentRouter";
 import { EmailValidationGuardrails, ValidatedEmail } from "./emailValidationGuardrails";
 import type { InsertRecruiterContact } from "@shared/schema";
 
@@ -53,7 +54,8 @@ export interface ContactSearchResult {
     neverbounce_configured: boolean;
     apollo_results: number;
     verified_emails: number;
-    two_bucket_strategy: TwoBucketTargets;
+    two_bucket_strategy?: TwoBucketTargets;
+    department_inference?: DepartmentInference;
   };
   emailPatterns?: PatternAnalysisResult;
 }
@@ -66,8 +68,24 @@ export class EnhancedEnrichmentService {
   async searchAndEnrichContacts(request: ContactSearchRequest): Promise<ContactSearchResult> {
     console.log(`Starting enhanced contact search for ${request.company_name}`);
     
-    // Generate two-bucket targets based on job title
-    const twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
+    // Generate department-aligned targets using enhanced router
+    let departmentInference: DepartmentInference | null = null;
+    let twoBucketTargets: TwoBucketTargets | null = null;
+    
+    if (request.job_content && request.job_title) {
+      console.log("Inferring department targets from job content...");
+      departmentInference = await inferDepartmentTargets(
+        request.company_name,
+        request.job_title,
+        request.job_content
+      );
+      console.log(`Department inference: ${departmentInference.summary}`);
+      console.log(`Primary department: ${departmentInference.departments[0]?.label} (${departmentInference.departments[0]?.confidence}%)`);
+      console.log(`Primary titles: ${departmentInference.primary_titles.slice(0, 3).map(t => t.title).join(', ')}`);
+    } else {
+      console.log("Falling back to old two-bucket strategy...");
+      twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
+    }
     
     const searchMetadata = {
       query: `${request.company_name} recruiters and department leads`,
@@ -76,7 +94,8 @@ export class EnhancedEnrichmentService {
       neverbounce_configured: verifierService.isConfigured(),
       apollo_results: 0,
       verified_emails: 0,
-      two_bucket_strategy: twoBucketTargets
+      two_bucket_strategy: twoBucketTargets,
+      department_inference: departmentInference || undefined
     };
 
     // Step 1: Extract recruiter name mentioned in job description
@@ -97,47 +116,98 @@ export class EnhancedEnrichmentService {
       console.log(`Apollo API connection test result: ${connectionTest}`);
     }
 
-    // Step 2: Search Apollo using two-bucket approach (3 recruiters + 3 department leads)
+    // Step 2: Search Apollo using enhanced department-based approach
     let recruiterContacts: ProcessedContact[] = [];
     let departmentLeadContacts: ProcessedContact[] = [];
     
     if (apolloService.isConfigured()) {
       try {
-        // Search for recruiting contacts (2 contacts)
-        console.log("Searching for recruiting contacts...");
-        recruiterContacts = await apolloService.searchRecruitingContacts({
-          company_name: request.company_name,
-          job_title: request.job_title,
-          location: request.location,
-          specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
-          job_country: request.job_country,
-          job_region: request.job_region,
-          company_hq_country: request.company_hq_country,
-          remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 10, // Get up to 10 recruiting contacts
-          organization_id: request.organization_id,
-          website_url: request.website_url
-        });
-        
-        // Search for department lead contacts (3 contacts)
-        console.log("Searching for department lead contacts...");
-        departmentLeadContacts = await apolloService.searchDepartmentLeads({
-          company_name: request.company_name,
-          job_title: request.job_title,
-          location: request.location,
-          department: twoBucketTargets.department_lead_contacts.primary_department,
-          titles: twoBucketTargets.department_lead_contacts.titles,
-          seniorities: twoBucketTargets.department_lead_contacts.seniorities,
-          job_country: request.job_country,
-          job_region: request.job_region,
-          company_hq_country: request.company_hq_country,
-          remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 10, // Get up to 10 department leads
-          organization_id: request.organization_id,
-          website_url: request.website_url
-        });
-        
-        // Process all contacts from both searches
+        if (departmentInference && request.organization_id) {
+          console.log("Using enhanced department-based search strategy...");
+          
+          // Build search plans based on department inference
+          const searchPlans = buildApolloPlans(request.organization_id, departmentInference);
+          const topDept = departmentInference.departments[0];
+          const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
+          
+          console.log(`Search plans: ${searchPlans.map(p => p.label).join(' → ')}`);
+          
+          // Execute search plans in priority order
+          let totalContacts: ProcessedContact[] = [];
+          for (const plan of searchPlans) {
+            if (totalContacts.length >= 12) break; // Stop when we have enough contacts
+            
+            console.log(`Executing search plan: ${plan.label}`);
+            console.log(`Search payload:`, JSON.stringify(plan.payload, null, 2));
+            
+            try {
+              const planResults = await apolloService.executeApolloSearch(plan.payload);
+              console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
+              
+              // Filter contacts for department alignment
+              const alignedContacts = planResults.contacts.filter(contact => 
+                isContactDeptAligned(
+                  contact.title || '',
+                  (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
+                  topDept.id,
+                  crossTitles
+                )
+              );
+              
+              console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} contacts department-aligned`);
+              
+              // Classify contacts into buckets
+              if (plan.label === 'recruiting-fallback') {
+                recruiterContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+              } else {
+                departmentLeadContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+              }
+              
+              totalContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+            } catch (planError) {
+              console.error(`Search plan ${plan.label} failed:`, planError);
+            }
+          }
+          
+          console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);
+          
+        } else {
+          console.log("Falling back to traditional two-bucket search...");
+          
+          // Search for recruiting contacts
+          recruiterContacts = await apolloService.searchRecruitingContacts({
+            company_name: request.company_name,
+            job_title: request.job_title,
+            location: request.location,
+            specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
+            job_country: request.job_country,
+            job_region: request.job_region,
+            company_hq_country: request.company_hq_country,
+            remote_hiring_countries: request.remote_hiring_countries,
+            per_page: 10,
+            organization_id: request.organization_id,
+            website_url: request.website_url
+          });
+          
+          // Search for department lead contacts using fallback
+          if (twoBucketTargets) {
+            departmentLeadContacts = await apolloService.searchDepartmentLeads({
+              company_name: request.company_name,
+              job_title: request.job_title,
+              location: request.location,
+              department: twoBucketTargets.department_lead_contacts.primary_department,
+              titles: twoBucketTargets.department_lead_contacts.titles,
+              seniorities: twoBucketTargets.department_lead_contacts.seniorities,
+              job_country: request.job_country,
+              job_region: request.job_region,
+              company_hq_country: request.company_hq_country,
+              remote_hiring_countries: request.remote_hiring_countries,
+              per_page: 10,
+              organization_id: request.organization_id,
+              website_url: request.website_url
+            });
+          }
+        }
         
       } catch (error) {
         console.error("Apollo search failed:", error);
@@ -227,11 +297,11 @@ export class EnhancedEnrichmentService {
         const titleLower = contact.title.toLowerCase();
         const isRecruiter = titleLower.includes('recruiter') || titleLower.includes('talent acquisition') || titleLower.includes('talent sourcing') || titleLower.includes('recruiting');
         const outreachBucket = isRecruiter ? "recruiter" : "department_lead";
-        const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
+        const department = isRecruiter ? undefined : (twoBucketTargets?.department_lead_contacts.primary_department || 'Unknown');
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
         // Contact names should now come from Apollo's People Enrichment API
-        const contactName = contact.full_name || contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown';
+        const contactName = contact.full_name || 'Unknown';
         console.log(`Processing contact: ${contactName} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
         
         // Include ALL contacts (domain filtering already ensured company emails only)
@@ -357,7 +427,11 @@ export class EnhancedEnrichmentService {
         contacts: topContacts,
         recruiter_contacts: recruiterContacts,
         department_lead_contacts: departmentLeadContacts,
-        searchMetadata,
+        searchMetadata: {
+          ...searchMetadata,
+          two_bucket_strategy: twoBucketTargets || undefined,
+          department_inference: departmentInference || undefined
+        },
         emailPatterns
       };
     }
@@ -368,28 +442,15 @@ export class EnhancedEnrichmentService {
       contacts: [],
       recruiter_contacts: [],
       department_lead_contacts: [],
-      searchMetadata
+      searchMetadata: {
+        ...searchMetadata,
+        two_bucket_strategy: twoBucketTargets || undefined,
+        department_inference: departmentInference || undefined
+      }
     };
   }
 
-  /**
-   * Extract seniority level from job title
-   */
-  private extractSeniority(title: string): string | undefined {
-    const titleLower = title.toLowerCase();
-    
-    if (titleLower.includes('director') || titleLower.includes('vp') || titleLower.includes('vice president')) {
-      return 'Director';
-    } else if (titleLower.includes('senior') || titleLower.includes('sr.') || titleLower.includes('lead')) {
-      return 'Senior';
-    } else if (titleLower.includes('manager') || titleLower.includes('head')) {
-      return 'Manager';
-    } else if (titleLower.includes('junior') || titleLower.includes('jr.') || titleLower.includes('associate')) {
-      return 'Junior';
-    }
-    
-    return undefined;
-  }
+
 
   /**
    * Check if an email is a placeholder from Apollo API
@@ -462,7 +523,7 @@ export class EnhancedEnrichmentService {
   /**
    * Extract seniority level from job title
    */
-  private extractSeniority(title: string): string {
+  private extractSeniority(title: string): string | undefined {
     const titleLower = title.toLowerCase();
     
     if (titleLower.includes('ceo') || titleLower.includes('cto') || titleLower.includes('cfo') || titleLower.includes('cmo') || titleLower.includes('chief')) {
