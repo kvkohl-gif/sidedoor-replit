@@ -998,9 +998,17 @@ class ApolloService {
 
       const result = await this.executeApolloSearch(searchPayload);
       
-      // Apply domain filtering early - reject non-company emails at source
-      const { accepted, skipped } = this.shapeFromSearch(result.contacts, domainRules);
-      console.log(`Recruiting search domain filtering: ${accepted.length} accepted, ${skipped.length} skipped`);
+      // result.contacts are already processed ProcessedContact[] from executeApolloSearch
+      // No need to call shapeFromSearch again - just convert to the expected format
+      const accepted = result.contacts.map(contact => ({
+        id: contact.apolloId,
+        name: contact.full_name,
+        title: contact.title,
+        email: contact.email,
+        email_domain: contact.email ? contact.email.split('@')[1] : '',
+        apolloContact: contact.apolloContact
+      }));
+      console.log(`Recruiting search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
       return await this.enrichAndOverrideEmail(accepted, domainRules);
 
@@ -1063,9 +1071,17 @@ class ApolloService {
 
       const result = await this.executeApolloSearch(searchPayload);
       
-      // Apply domain filtering early - reject non-company emails at source
-      const { accepted, skipped } = this.shapeFromSearch(result.contacts, domainRules);
-      console.log(`Department lead search domain filtering: ${accepted.length} accepted, ${skipped.length} skipped`);
+      // result.contacts are already processed ProcessedContact[] from executeApolloSearch
+      // No need to call shapeFromSearch again - just convert to the expected format
+      const accepted = result.contacts.map(contact => ({
+        id: contact.apolloId,
+        name: contact.full_name,
+        title: contact.title,
+        email: contact.email,
+        email_domain: contact.email ? contact.email.split('@')[1] : '',
+        apolloContact: contact.apolloContact
+      }));
+      console.log(`Department lead search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
       return await this.enrichAndOverrideEmail(accepted, domainRules);
 
