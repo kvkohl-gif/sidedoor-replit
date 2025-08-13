@@ -53,6 +53,24 @@ export function JobDetailCard({ jobData, className }: JobDetailCardProps) {
               </a>
             </div>
 
+            {/* Company Website */}
+            <div>
+              <h3 className="font-medium text-slate-900 mb-2">Company Website</h3>
+              {jobData.company_website && jobData.company_website !== "Not specified" ? (
+                <a 
+                  href={jobData.company_website.startsWith('http') ? jobData.company_website : `https://${jobData.company_website}`}
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:text-blue-700 break-all text-sm flex items-center"
+                >
+                  {jobData.company_website}
+                  <ExternalLink className="w-4 h-4 ml-2 flex-shrink-0" />
+                </a>
+              ) : (
+                <span className="text-slate-500 text-sm">Not specified</span>
+              )}
+            </div>
+
             {/* Company Website - Display second */}
             {jobData.company_website && jobData.company_website !== "Not specified" && (
               <div>
