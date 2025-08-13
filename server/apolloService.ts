@@ -1010,7 +1010,24 @@ class ApolloService {
       }));
       console.log(`Recruiting search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
-      return await this.enrichAndOverrideEmail(accepted, domainRules);
+      // Enrich contacts with People Enrichment API to get names and full details
+      const enrichedContacts = await this.enrichAndOverrideEmail(accepted, domainRules);
+      
+      // Further enrich each contact using People Enrichment endpoint to get names
+      const fullyEnrichedContacts = [];
+      for (const contact of enrichedContacts) {
+        if (contact.email) {
+          console.log(`Enriching recruiting contact with email: ${contact.email}`);
+          const enrichedData = await this.enrichPersonProfile({ email: contact.email });
+          if (enrichedData && (enrichedData.first_name || enrichedData.last_name || enrichedData.name)) {
+            contact.full_name = enrichedData.name || `${enrichedData.first_name || ''} ${enrichedData.last_name || ''}`.trim();
+            console.log(`Enriched recruiting contact name: ${contact.full_name}`);
+          }
+        }
+        fullyEnrichedContacts.push(contact);
+      }
+      
+      return fullyEnrichedContacts;
 
     } catch (error) {
       console.error("Apollo recruiting search error:", error);
@@ -1089,7 +1106,24 @@ class ApolloService {
       });
       console.log(`Department lead search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
-      return await this.enrichAndOverrideEmail(accepted, domainRules);
+      // Enrich contacts with People Enrichment API to get names and full details
+      const enrichedContacts = await this.enrichAndOverrideEmail(accepted, domainRules);
+      
+      // Further enrich each contact using People Enrichment endpoint to get names
+      const fullyEnrichedContacts = [];
+      for (const contact of enrichedContacts) {
+        if (contact.email) {
+          console.log(`Enriching contact with email: ${contact.email}`);
+          const enrichedData = await this.enrichPersonProfile({ email: contact.email });
+          if (enrichedData && (enrichedData.first_name || enrichedData.last_name || enrichedData.name)) {
+            contact.full_name = enrichedData.name || `${enrichedData.first_name || ''} ${enrichedData.last_name || ''}`.trim();
+            console.log(`Enriched contact name: ${contact.full_name}`);
+          }
+        }
+        fullyEnrichedContacts.push(contact);
+      }
+      
+      return fullyEnrichedContacts;
 
     } catch (error) {
       console.error("Apollo department lead search error:", error);
