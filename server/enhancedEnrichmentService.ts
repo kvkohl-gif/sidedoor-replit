@@ -230,10 +230,31 @@ export class EnhancedEnrichmentService {
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
-        // Debug contact structure to see what data we have
-        console.log(`DEBUG: Contact structure:`, JSON.stringify(contact, null, 2));
+        // Extract name from email if no name fields available
+        const extractNameFromEmail = (email: string): string => {
+          if (!email) return 'Unknown';
+          const localPart = email.split('@')[0];
+          
+          // Handle common patterns like firstname.lastname, firstlast, flast
+          if (localPart.includes('.')) {
+            const parts = localPart.split('.');
+            return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+          }
+          
+          // For single names like 'julie', capitalize first letter
+          if (/^[a-zA-Z]+$/.test(localPart)) {
+            return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          }
+          
+          // For patterns like 'tjanss' (first initial + last name), format as T. Janss
+          if (localPart.length > 2 && /^[a-z][a-z]+$/.test(localPart)) {
+            return localPart.charAt(0).toUpperCase() + '. ' + localPart.slice(1).charAt(0).toUpperCase() + localPart.slice(2);
+          }
+          
+          return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+        };
         
-        const contactName = contact.full_name || contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown';
+        const contactName = contact.full_name || contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || extractNameFromEmail(contact.email);
         console.log(`Processing contact: ${contactName} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
         
         // Include ALL contacts (domain filtering already ensured company emails only)
