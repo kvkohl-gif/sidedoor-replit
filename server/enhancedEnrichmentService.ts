@@ -122,51 +122,102 @@ export class EnhancedEnrichmentService {
     
     if (apolloService.isConfigured()) {
       try {
-        if (departmentInference && request.organization_id) {
+        if (departmentInference) {
           console.log("Using enhanced department-based search strategy...");
           
-          // Build search plans based on department inference
-          const searchPlans = buildApolloPlans(request.organization_id, departmentInference);
-          const topDept = departmentInference.departments[0];
-          const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
+          // Log debug info about organization_id
+          console.log(`Organization ID: ${request.organization_id || 'Not provided - will use company name search'}`);
           
-          console.log(`Search plans: ${searchPlans.map(p => p.label).join(' → ')}`);
+          if (!request.organization_id) {
+            console.log("No organization_id provided, will use fallback search method");
+          }
           
-          // Execute search plans in priority order
-          let totalContacts: ProcessedContact[] = [];
-          for (const plan of searchPlans) {
-            if (totalContacts.length >= 12) break; // Stop when we have enough contacts
+          if (request.organization_id) {
+            // Use organization-specific search plans
+            const searchPlans = buildApolloPlans(request.organization_id, departmentInference);
+            const topDept = departmentInference.departments[0];
+            const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
             
-            console.log(`Executing search plan: ${plan.label}`);
-            console.log(`Search payload:`, JSON.stringify(plan.payload, null, 2));
+            console.log(`Search plans: ${searchPlans.map(p => p.label).join(' → ')}`);
             
-            try {
-              const planResults = await apolloService.executeApolloSearch(plan.payload);
-              console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
+            // Execute search plans in priority order
+            let totalContacts: ProcessedContact[] = [];
+            for (const plan of searchPlans) {
+              if (totalContacts.length >= 12) break; // Stop when we have enough contacts
               
-              // Filter contacts for department alignment
-              const alignedContacts = planResults.contacts.filter(contact => 
-                isContactDeptAligned(
-                  contact.title || '',
-                  (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
-                  topDept.id,
-                  crossTitles
-                )
-              );
+              console.log(`Executing search plan: ${plan.label}`);
+              console.log(`Search payload:`, JSON.stringify(plan.payload, null, 2));
               
-              console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} contacts department-aligned`);
-              
-              // Classify contacts into buckets
-              if (plan.label === 'recruiting-fallback') {
-                recruiterContacts.push(...alignedContacts.slice(0, plan.hardLimit));
-              } else {
-                departmentLeadContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+              try {
+                const planResults = await apolloService.executeApolloSearch(plan.payload);
+                console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
+                
+                // Filter contacts for department alignment
+                const alignedContacts = planResults.contacts.filter(contact => 
+                  isContactDeptAligned(
+                    contact.title || '',
+                    (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
+                    topDept.id,
+                    crossTitles
+                  )
+                );
+                
+                console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} contacts department-aligned`);
+                
+                // Classify contacts into buckets
+                if (plan.label === 'recruiting-fallback') {
+                  recruiterContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+                } else {
+                  departmentLeadContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+                }
+                
+                totalContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+              } catch (planError) {
+                console.error(`Search plan ${plan.label} failed:`, planError);
               }
-              
-              totalContacts.push(...alignedContacts.slice(0, plan.hardLimit));
-            } catch (planError) {
-              console.error(`Search plan ${plan.label} failed:`, planError);
             }
+          } else {
+            // Fallback to company name searches with department-specific titles
+            console.log("No organization_id, using company name-based department search...");
+            const topDept = departmentInference.departments[0];
+            const primaryTitles = departmentInference.primary_titles
+              .sort((a, b) => b.confidence - a.confidence)
+              .slice(0, 5)
+              .map(t => t.title);
+            
+            // Search for department leads using company name
+            console.log(`Searching for department leads: ${primaryTitles.join(', ')}`);
+            departmentLeadContacts = await apolloService.searchDepartmentLeads({
+              company_name: request.company_name,
+              job_title: request.job_title,
+              location: request.location,
+              department: topDept.label,
+              titles: primaryTitles,
+              seniorities: ['manager', 'head', 'director', 'vp', 'c_suite'],
+              job_country: request.job_country,
+              job_region: request.job_region,
+              company_hq_country: request.company_hq_country,
+              remote_hiring_countries: request.remote_hiring_countries,
+              per_page: 10,
+              organization_id: undefined,
+              website_url: request.website_url
+            });
+            
+            // Also search for recruiters
+            console.log("Searching for recruiters using company name...");
+            recruiterContacts = await apolloService.searchRecruitingContacts({
+              company_name: request.company_name,
+              job_title: request.job_title,
+              location: request.location,
+              specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
+              job_country: request.job_country,
+              job_region: request.job_region,
+              company_hq_country: request.company_hq_country,
+              remote_hiring_countries: request.remote_hiring_countries,
+              per_page: 10,
+              organization_id: undefined,
+              website_url: request.website_url
+            });
           }
           
           console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);

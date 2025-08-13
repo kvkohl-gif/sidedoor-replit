@@ -160,7 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
           organization_id: organizationId,
-          website_url: jobDataExtraction?.website_url || apolloParams.website_url // Pass website URL for domain filtering
+          website_url: apolloParams.website_url // Pass website URL for domain filtering
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
@@ -227,15 +227,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ id: jobSubmission.id, submission: completeSubmission, runId });
 
         // Remove from active runs on successful completion
-        activeRuns.delete(runId);
-        console.log(`Completed and removed runId ${runId} from active runs`);
+        if (req.body.runId) {
+          activeRuns.delete(req.body.runId);
+          console.log(`Completed and removed runId ${req.body.runId} from active runs`);
+        }
 
       } catch (openaiError) {
         console.error("OpenAI extraction error:", openaiError);
         
         // Remove from active runs on error
-        activeRuns.delete(runId);
-        console.log(`Error occurred, removed runId ${runId} from active runs`);
+        if (req.body.runId) {
+          activeRuns.delete(req.body.runId);
+          console.log(`Error occurred, removed runId ${req.body.runId} from active runs`);
+        }
         
         // Update submission with error status but still return it
         const errorMessage = openaiError instanceof Error ? openaiError.message : "Unknown error";
