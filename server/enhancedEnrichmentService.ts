@@ -230,6 +230,9 @@ export class EnhancedEnrichmentService {
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
+        // Debug contact structure to see what data we have
+        console.log(`DEBUG: Contact structure:`, JSON.stringify(contact, null, 2));
+        
         const contactName = contact.full_name || contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown';
         console.log(`Processing contact: ${contactName} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
         
