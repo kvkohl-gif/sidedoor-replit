@@ -1018,7 +1018,7 @@ class ApolloService {
       for (const contact of enrichedContacts) {
         if (contact.email) {
           console.log(`Enriching recruiting contact with email: ${contact.email}`);
-          const enrichedData = await this.enrichPersonProfile({ email: contact.email });
+          const enrichedData = await this.enrichContact(contact.email);
           if (enrichedData && (enrichedData.first_name || enrichedData.last_name || enrichedData.name)) {
             contact.full_name = enrichedData.name || `${enrichedData.first_name || ''} ${enrichedData.last_name || ''}`.trim();
             console.log(`Enriched recruiting contact name: ${contact.full_name}`);
@@ -1114,7 +1114,7 @@ class ApolloService {
       for (const contact of enrichedContacts) {
         if (contact.email) {
           console.log(`Enriching contact with email: ${contact.email}`);
-          const enrichedData = await this.enrichPersonProfile({ email: contact.email });
+          const enrichedData = await this.enrichContact(contact.email);
           if (enrichedData && (enrichedData.first_name || enrichedData.last_name || enrichedData.name)) {
             contact.full_name = enrichedData.name || `${enrichedData.first_name || ''} ${enrichedData.last_name || ''}`.trim();
             console.log(`Enriched contact name: ${contact.full_name}`);
