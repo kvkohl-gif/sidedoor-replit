@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DomainRules, emailDomain, isCompanyDomain, buildDomainRules } from "./domainRules";
 
 // Apollo API response types
 export interface ApolloContact {
@@ -118,57 +119,74 @@ class ApolloService {
   }
 
   /**
-   * Get the expected email domain for a company name
+   * Extract work email from Apollo contact, preferring work-specific fields
    */
-  private getExpectedEmailDomain(companyName: string): string | null {
-    if (!companyName) return null;
-    
-    const name = companyName.toLowerCase().trim();
-    
-    // Direct company name to domain mapping
-    const domainMappings: Record<string, string> = {
-      'aha!': 'aha.io',
-      'aha': 'aha.io',
-      'dropbox': 'dropbox.com',
-      'google': 'google.com',
-      'microsoft': 'microsoft.com',
-      'apple': 'apple.com',
-      'meta': 'meta.com',
-      'facebook': 'meta.com',
-      'amazon': 'amazon.com',
-      'netflix': 'netflix.com',
-      'spotify': 'spotify.com',
-      'uber': 'uber.com',
-      'airbnb': 'airbnb.com',
-      'stripe': 'stripe.com',
-      'slack': 'slack.com',
-      'zoom': 'zoom.us',
-      'salesforce': 'salesforce.com',
-      'adobe': 'adobe.com',
-      'tesla': 'tesla.com',
-      'twitter': 'twitter.com',
-      'linkedin': 'linkedin.com',
-      'instagram': 'instagram.com',
-      'whatsapp': 'whatsapp.com',
-      'youtube': 'youtube.com'
-    };
-    
-    // Check direct mappings first
-    if (domainMappings[name]) {
-      return domainMappings[name];
+  private coerceWorkEmailFromSearch(contact: any): string | null {
+    return contact.work_email || contact.email || contact.primary_email || null;
+  }
+
+  /**
+   * Filter and shape Apollo search results, rejecting non-company domains early
+   */
+  private shapeFromSearch(rawContacts: any[], domainRules: DomainRules): {
+    accepted: Array<{
+      id: string;
+      name: string;
+      title?: string;
+      email?: string;
+      email_domain?: string;
+      apolloContact: any;
+    }>;
+    skipped: Array<{ contact: any; reason: string }>;
+  } {
+    const accepted = [];
+    const skipped = [];
+
+    for (const contact of rawContacts) {
+      const email = this.coerceWorkEmailFromSearch(contact);
+      const domain = emailDomain(email);
+
+      // Reject non-company domains up-front (core contamination fix)
+      if (!email || !isCompanyDomain(domain, domainRules) || domainRules.personalBlocks.includes(domain)) {
+        skipped.push({ 
+          contact, 
+          reason: `domain_mismatch_or_personal:${domain || "none"}` 
+        });
+        continue;
+      }
+
+      accepted.push({
+        id: contact.id || contact.person_id || contact.contact_id,
+        name: contact.name || `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim(),
+        title: contact.title,
+        email,
+        email_domain: domain,
+        apolloContact: contact
+      });
     }
+
+    console.log(`Domain filtering: ${accepted.length} accepted, ${skipped.length} skipped from ${rawContacts.length} total`);
+    return { accepted, skipped };
+  }
+
+  /**
+   * Pick the best company email from enriched contact data
+   */
+  private pickBestCompanyEmail(enrichedContact: any, domainRules: DomainRules): string | null {
+    if (!enrichedContact) return null;
     
-    // For other companies, try to infer the domain
-    // Remove common suffixes and special characters
-    let cleanName = name
-      .replace(/\s*(inc|llc|ltd|corp|corporation|company|co)\s*\.?\s*$/i, '')
-      .replace(/[^a-z0-9]/g, '');
-    
-    // If the clean name looks reasonable, assume .com domain
-    if (cleanName.length >= 2 && cleanName.length <= 20) {
-      return `${cleanName}.com`;
+    const candidates = [
+      enrichedContact.work_email,
+      enrichedContact.email,
+      ...(enrichedContact.emails || []),
+    ].filter(Boolean) as string[];
+
+    for (const email of candidates) {
+      const domain = emailDomain(email);
+      if (isCompanyDomain(domain, domainRules)) {
+        return email;
+      }
     }
-    
     return null;
   }
 
@@ -687,62 +705,88 @@ class ApolloService {
   }
 
   /**
-   * Enrich a list of processed contacts with email information
+   * Enrich contacts and prefer company emails from enrichment, with domain validation
    */
-  private async enrichContactsList(contacts: Array<{
-    apolloContact: ApolloContact;
-    full_name: string;
-    title: string;
-    email: string | undefined;
-    linkedin_url: string | undefined;
-    company_name: string;
-    is_recruiter_likely: boolean;
-    recruiter_confidence: number;
-  }>): Promise<ProcessedContact[]> {
-    const enrichedContacts: ProcessedContact[] = [];
-    
-    for (const candidate of contacts) {
+  private async enrichAndOverrideEmail(shapedContacts: Array<{
+    id: string;
+    name: string;
+    title?: string;
+    email?: string;
+    email_domain?: string;
+    apolloContact: any;
+  }>, domainRules: DomainRules): Promise<ProcessedContact[]> {
+    const results: ProcessedContact[] = [];
+    const skippedEnrichment = [];
+
+    for (const item of shapedContacts) {
       try {
-        // Try to enrich the contact to get real email
-        const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact);
+        // Try to enrich the contact to get potentially better email
+        const enrichedContact = await this.enrichContactByProfile(item.apolloContact);
         
+        // Pick the best company email from enrichment results
+        const overrideEmail = this.pickBestCompanyEmail(enrichedContact, domainRules);
+        
+        // Prefer enrichment email when it finds a better @company email
+        const finalEmail = overrideEmail ?? item.email;
+
+        // Final safety: still must be company domain (no NB filtering here)
+        if (!finalEmail || !isCompanyDomain(emailDomain(finalEmail), domainRules)) {
+          skippedEnrichment.push({ 
+            item, 
+            reason: "no_company_email_after_enrichment" 
+          });
+          continue;
+        }
+
+        // Determine recruiter likelihood
+        const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
+
         const processedContact: ProcessedContact = {
-          full_name: candidate.full_name,
-          title: candidate.title,
-          email: enrichedContact?.email || undefined,
-          linkedin_url: candidate.linkedin_url,
-          company_name: candidate.company_name,
-          is_recruiter_likely: candidate.is_recruiter_likely,
-          recruiter_confidence: candidate.recruiter_confidence,
-          apolloId: candidate.apolloContact.id
+          full_name: item.name,
+          title: item.title || "",
+          email: finalEmail,
+          linkedin_url: item.apolloContact.linkedin_url,
+          company_name: item.apolloContact.organization_name || 'Unknown',
+          is_recruiter_likely: isRecruiter,
+          recruiter_confidence: confidence,
+          apolloId: item.id
         };
         
-        enrichedContacts.push(processedContact);
+        results.push(processedContact);
         
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
-        console.error(`Enrichment failed for ${candidate.full_name}:`, error);
+        console.error(`Enrichment failed for ${item.name}:`, error);
         
-        // Include contact without email if enrichment fails
-        const processedContact: ProcessedContact = {
-          full_name: candidate.full_name,
-          title: candidate.title,
-          email: undefined,
-          linkedin_url: candidate.linkedin_url,
-          company_name: candidate.company_name,
-          is_recruiter_likely: candidate.is_recruiter_likely,
-          recruiter_confidence: candidate.recruiter_confidence,
-          apolloId: candidate.apolloContact.id
-        };
-        
-        enrichedContacts.push(processedContact);
+        // Include contact with original email if enrichment fails (if it's still company domain)
+        if (item.email && isCompanyDomain(emailDomain(item.email), domainRules)) {
+          const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
+          
+          const processedContact: ProcessedContact = {
+            full_name: item.name,
+            title: item.title || "",
+            email: item.email,
+            linkedin_url: item.apolloContact.linkedin_url,
+            company_name: item.apolloContact.organization_name || 'Unknown',
+            is_recruiter_likely: isRecruiter,
+            recruiter_confidence: confidence,
+            apolloId: item.id
+          };
+          
+          results.push(processedContact);
+        } else {
+          skippedEnrichment.push({ 
+            item, 
+            reason: "enrichment_failed_and_no_valid_original_email" 
+          });
+        }
       }
     }
 
-    console.log(`Processed ${enrichedContacts.length} recruiter contacts with enrichment`);
-    return enrichedContacts;
+    console.log(`Enrichment processing: ${results.length} final contacts, ${skippedEnrichment.length} skipped`);
+    return results;
   }
 
   async enrichContact(email: string): Promise<ApolloContact | null> {
@@ -870,12 +914,17 @@ class ApolloService {
   async searchRecruitingContacts(params: RecruiterSearchParams & { 
     per_page?: number;
     organization_id?: string;
+    website_url?: string;
   }): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required");
     }
 
     try {
+      // Build domain rules for filtering
+      const domainRules = buildDomainRules(params.company_name, params.website_url);
+      console.log(`Domain rules for ${params.company_name}:`, domainRules);
+
       const searchPayload: any = {
         person_titles: RECRUITER_TITLES,
         page: 1,
@@ -900,7 +949,12 @@ class ApolloService {
       console.log(`Searching for recruiting contacts:`, JSON.stringify(searchPayload, null, 2));
 
       const result = await this.executeApolloSearch(searchPayload);
-      return await this.enrichContactsList(result.contacts);
+      
+      // Apply domain filtering early - reject non-company emails at source
+      const { accepted, skipped } = this.shapeFromSearch(result.contacts, domainRules);
+      console.log(`Recruiting search domain filtering: ${accepted.length} accepted, ${skipped.length} skipped`);
+
+      return await this.enrichAndOverrideEmail(accepted, domainRules);
 
     } catch (error) {
       console.error("Apollo recruiting search error:", error);
@@ -924,12 +978,17 @@ class ApolloService {
     remote_hiring_countries?: string[];
     per_page?: number;
     organization_id?: string;
+    website_url?: string;
   }): Promise<ProcessedContact[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required");
     }
 
     try {
+      // Build domain rules for filtering
+      const domainRules = buildDomainRules(params.company_name, params.website_url);
+      console.log(`Domain rules for ${params.company_name}:`, domainRules);
+
       const searchPayload: any = {
         person_titles: params.titles,
         person_seniorities: params.seniorities,
@@ -955,7 +1014,12 @@ class ApolloService {
       console.log(`Searching for ${params.department} department leads:`, JSON.stringify(searchPayload, null, 2));
 
       const result = await this.executeApolloSearch(searchPayload);
-      return await this.enrichContactsList(result.contacts);
+      
+      // Apply domain filtering early - reject non-company emails at source
+      const { accepted, skipped } = this.shapeFromSearch(result.contacts, domainRules);
+      console.log(`Department lead search domain filtering: ${accepted.length} accepted, ${skipped.length} skipped`);
+
+      return await this.enrichAndOverrideEmail(accepted, domainRules);
 
     } catch (error) {
       console.error("Apollo department lead search error:", error);

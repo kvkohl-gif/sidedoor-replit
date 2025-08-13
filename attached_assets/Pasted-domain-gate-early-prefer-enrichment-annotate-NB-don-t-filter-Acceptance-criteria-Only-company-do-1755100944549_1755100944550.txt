@@ -1,0 +1,216 @@
+domain-gate early, prefer enrichment, annotate NB (don’t filter)
+Acceptance criteria
+Only company‑domain emails (aha.io for Aha!) make it into results.
+
+If enrichment finds a better company email, it overrides the search email.
+
+All contacts are kept and labeled with NB status:
+
+valid (green), risky/catchall (yellow), invalid (red), unknown (gray).
+
+Dashboard metrics continue to count valid only; lists still show all.
+
+Pattern inference remains; inferred emails are verified and added with status.
+
+1) Domain helpers (same as before)
+ts
+Copy
+Edit
+// domainRules.ts
+export type DomainRules = {
+  canonical: string;
+  aliases: string[];
+  personalBlocks: string[];
+};
+
+export function hostToDomain(url = "") {
+  try {
+    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
+  }
+}
+
+export function emailDomain(email?: string) {
+  return (email || "").toLowerCase().split("@")[1] || "";
+}
+
+export function isCompanyDomain(dom: string, rules: DomainRules) {
+  const d = dom.toLowerCase();
+  return d === rules.canonical || rules.aliases.includes(d);
+}
+2) Build rules after org selection
+ts
+Copy
+Edit
+const canonical = hostToDomain(chosen.website_url || ""); // => "aha.io"
+const companyDomainRules: DomainRules = {
+  canonical,
+  aliases: [canonical], // extend if you have legit alternates
+  personalBlocks: ["gmail.com","yahoo.com","outlook.com","hotmail.com","icloud.com"]
+};
+3) Gate at search ingestion (but don’t filter by NB)
+Fixes the root cause: we never accept non‑company domains from the Apollo search payload.
+
+ts
+Copy
+Edit
+// server/apolloService.ts
+function coerceWorkEmailFromSearch(contact: any) {
+  return contact.work_email || contact.email || contact.primary_email || null;
+}
+
+function shapeFromSearch(raw: any[], rules: DomainRules) {
+  const accepted = [] as Array<{
+    id: string;
+    name: string;
+    title?: string;
+    email?: string;
+    email_domain?: string;
+    reasons?: string[];
+  }>;
+  const skipped = [];
+
+  for (const c of raw) {
+    const email = coerceWorkEmailFromSearch(c);
+    const dom = emailDomain(email);
+
+    // Reject non-company domains up-front (core contamination fix)
+    if (!email || !isCompanyDomain(dom, rules) || rules.personalBlocks.includes(dom)) {
+      skipped.push({ c, reason: `domain_mismatch_or_personal:${dom || "none"}` });
+      continue;
+    }
+
+    accepted.push({
+      id: c.id || c.person_id || c.contact_id,
+      name: c.name || `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
+      title: c.title,
+      email,
+      email_domain: dom,
+    });
+  }
+  return { accepted, skipped };
+}
+4) Prefer enrichment email when it’s better (override)
+ts
+Copy
+Edit
+function pickBestCompanyEmail(enriched: any, rules: DomainRules): string | null {
+  const candidates = [
+    enriched.work_email,
+    enriched.email,
+    ...(enriched.emails || []),
+  ].filter(Boolean) as string[];
+
+  for (const e of candidates) {
+    if (isCompanyDomain(emailDomain(e), rules)) return e;
+  }
+  return null;
+}
+
+async function enrichAndOverrideEmail(shaped: any[], rules: DomainRules) {
+  const results = [];
+  const skippedEnrichment = [];
+
+  for (const item of shaped) {
+    const enriched = await enrichContactByProfile(item); // your existing function
+    const override = pickBestCompanyEmail(enriched, rules);
+
+    // prefer enrichment when it finds a better @company email
+    const finalEmail = override ?? item.email;
+
+    // final safety: still must be company domain (no NB filtering here)
+    if (!finalEmail || !isCompanyDomain(emailDomain(finalEmail), rules)) {
+      skippedEnrichment.push({ item, reason: "no_company_email_after_enrichment" });
+      continue;
+    }
+
+    results.push({ ...item, email: finalEmail });
+  }
+
+  return { results, skippedEnrichment };
+}
+5) NeverBounce: annotate status, don’t filter
+ts
+Copy
+Edit
+type NBResult = "valid" | "invalid" | "risky" | "catchall" | "unknown";
+
+async function annotateDeliverability(contacts: any[]) {
+  const withNB = [];
+  const nbErrors = [];
+
+  for (const c of contacts) {
+    try {
+      const status: NBResult = await validateEmail(c.email); // your NB call
+      withNB.push({ ...c, verificationStatus: status, emailVerified: status === "valid" });
+    } catch (e) {
+      nbErrors.push({ email: c.email, error: String(e) });
+      withNB.push({ ...c, verificationStatus: "unknown", emailVerified: false });
+    }
+  }
+  return { withNB, nbErrors };
+}
+UI continues to render Valid / Risky / Invalid / Unknown chips.
+Success metrics can keep counting valid only.
+
+6) Pattern inference stays intact
+After you annotate NB, maintain your existing flow to infer emails for contacts without any.
+
+Verify inferred emails with NB; add them with verificationStatus and show their confidence.
+
+(Your current emailPatternService.ts + emailPatternInference.ts logic already matches this; no changes needed.)
+
+7) End‑to‑end wiring
+ts
+Copy
+Edit
+// 1) Apollo search
+const apolloRaw = await apolloSearchPeople(searchParams);
+
+// 2) Domain gate at ingestion
+const { accepted: seeded, skipped: s1 } = shapeFromSearch(apolloRaw, companyDomainRules);
+
+// 3) Enrich + prefer company email
+const { results: enriched, skippedEnrichment: s2 } =
+  await enrichAndOverrideEmail(seeded, companyDomainRules);
+
+// 4) Annotate with NeverBounce (DO NOT FILTER)
+const { withNB, nbErrors } = await annotateDeliverability(enriched);
+
+// 5) (Optional) Run pattern inference for missing emails → verify with NB → append
+
+return {
+  contacts: withNB,                 // includes valid/risky/invalid/unknown
+  skipped: [...s1, ...s2],          // domain or enrichment skips (not NB)
+  nbErrors,
+};
+8) UI confirmations (no changes to your visuals)
+Badges remain:
+
+✅ Valid (green)
+
+⚠️ Risky/Catchall (yellow)
+
+❌ Invalid (red)
+
+❓ Unknown (gray)
+
+Dashboard KPIs: only valid count toward success; lists show all.
+
+Optional: show a tiny note on the results header: “Showing all statuses. Filters: [All | Valid | Risky | Invalid | Unknown]”.
+
+9) Apollo tightening (optional)
+If your plan exposes it, add domain constraints in the search:
+
+ts
+Copy
+Edit
+// Pseudo only; use if available in your tenant
+const payload = {
+  organization_ids: [orgId],
+  // email_domains: ["aha.io"],        // include if supported
+  per_page: 25, page: 1,
+};
+Even without that, the ingestion gate above guarantees we only keep @aha.io.

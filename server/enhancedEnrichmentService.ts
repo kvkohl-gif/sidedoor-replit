@@ -16,6 +16,7 @@ export interface ContactSearchRequest {
   company_hq_country?: string; // New: company headquarters country
   remote_hiring_countries?: string[]; // New: countries where company hires remotely
   organization_id?: string; // New: Apollo organization ID for precise matching
+  website_url?: string; // New: company website URL for domain filtering
 }
 
 export interface EnrichedContact {
@@ -112,7 +113,8 @@ export class EnhancedEnrichmentService {
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
           per_page: 3, // Get 3 recruiting contacts
-          organization_id: request.organization_id
+          organization_id: request.organization_id,
+          website_url: request.website_url
         });
         
         // Search for department lead contacts (3 contacts)
@@ -129,7 +131,8 @@ export class EnhancedEnrichmentService {
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
           per_page: 3, // Get 3 department leads
-          organization_id: request.organization_id
+          organization_id: request.organization_id,
+          website_url: request.website_url
         });
         
         // Process all contacts from both searches
@@ -178,16 +181,16 @@ export class EnhancedEnrichmentService {
       }
     }
 
-    // Step 2: Verify emails with NeverBounce (only real emails, not placeholders)
+    // Step 2: Annotate emails with NeverBounce status (don't filter - show all with status badges)
     const enrichedContacts: EnrichedContact[] = [];
     
     if (apolloContacts.length > 0) {
-      // Get emails for verification (Apollo enrichment should now provide real emails)
+      // Get emails for verification (Domain-filtered Apollo contacts now only have company emails)
       const emailsToVerify = apolloContacts
         .filter(contact => contact.email) // Has email
         .map(contact => contact.email!);
 
-      console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with real emails`);
+      console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with company domain emails`);
 
       let verificationResults = new Map<string, EmailVerificationResult | null>();
       
@@ -202,7 +205,7 @@ export class EnhancedEnrichmentService {
         console.warn("NeverBounce API not configured - using basic email validation");
       }
 
-      // Step 3: Process and filter contacts
+      // Step 3: Process contacts (include all with NeverBounce status annotation)
       for (const contact of apolloContacts) {
         const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
         const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
@@ -214,33 +217,31 @@ export class EnhancedEnrichmentService {
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Should include: ${!contact.email || verificationStatus.should_include}`);
+        console.log(`Processing contact: ${contact.full_name} - Email: ${contact.email || 'None'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Include: true (showing all with status badges)`);
         
-        // Include contacts with LinkedIn URL OR verified emails 
-        if (!contact.email || verificationStatus.should_include || contact.linkedin_url) {
-          const enrichedContact: EnrichedContact = {
-            name: contact.full_name,
-            title: contact.title,
-            email: contact.email,
-            linkedinUrl: contact.linkedin_url,
-            confidenceScore: contact.recruiter_confidence,
-            source: "Apollo + AI",
-            emailVerified: verificationStatus.is_valid,
-            verificationStatus: this.mapVerificationStatus(verificationStatus.status_label),
-            sourcePlatform: "apollo",
-            recruiterConfidence: contact.recruiter_confidence,
-            verificationData: verificationResult || undefined,
-            verificationStatusInfo: verificationStatus,
-            outreachBucket,
-            department,
-            seniority
-          };
+        // Include ALL contacts (domain filtering already ensured company emails only)
+        const enrichedContact: EnrichedContact = {
+          name: contact.full_name,
+          title: contact.title,
+          email: contact.email,
+          linkedinUrl: contact.linkedin_url,
+          confidenceScore: contact.recruiter_confidence,
+          source: "Apollo + AI",
+          emailVerified: verificationStatus.is_valid,
+          verificationStatus: this.mapVerificationStatus(verificationStatus.status_label),
+          sourcePlatform: "apollo",
+          recruiterConfidence: contact.recruiter_confidence,
+          verificationData: verificationResult || undefined,
+          verificationStatusInfo: verificationStatus,
+          outreachBucket,
+          department,
+          seniority
+        };
 
-          enrichedContacts.push(enrichedContact);
-          
-          if (verificationStatus.is_valid) {
-            searchMetadata.verified_emails++;
-          }
+        enrichedContacts.push(enrichedContact);
+        
+        if (verificationStatus.is_valid) {
+          searchMetadata.verified_emails++;
         }
       }
 

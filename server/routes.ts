@@ -153,13 +153,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           company_name: apolloParams.company_name || companyName,
           job_title: apolloParams.job_title || jobTitle,
           location: apolloParams.location || jobDataExtraction?.location,
-          departments: apolloParams.relevant_departments || jobDataExtraction?.likely_departments,
+          departments: apolloParams.fallback_departments || jobDataExtraction?.likely_departments,
           job_content: jobContent, // Pass job content for recruiter name extraction
           job_country: apolloParams.job_country,
           job_region: apolloParams.job_region,
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
-          organization_id: organizationId
+          organization_id: organizationId,
+          website_url: jobDataExtraction?.website_url || apolloParams.website_url // Pass website URL for domain filtering
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
