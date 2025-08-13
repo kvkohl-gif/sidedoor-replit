@@ -144,7 +144,7 @@ class ApolloService {
 
     for (const contact of rawContacts) {
       const email = this.coerceWorkEmailFromSearch(contact);
-      const domain = emailDomain(email);
+      const domain = emailDomain(email || "");
 
       // Reject non-company domains up-front (core contamination fix)
       if (!email || !isCompanyDomain(domain, domainRules) || domainRules.personalBlocks.includes(domain)) {
@@ -598,14 +598,14 @@ class ApolloService {
         
         const domainResponse = await this.executeApolloSearch(domainPayload);
         if (domainResponse.contacts.length > 0) {
-          return await this.enrichContactsList(domainResponse.contacts);
+          return await this.enrichAndOverrideEmail(domainResponse.contacts, buildDomainRules(params.company_name));
         }
       }
       
       console.log(`Searching Apollo for ${strategy.name}:`, JSON.stringify(searchPayload, null, 2));
       
       const result = await this.executeApolloSearch(searchPayload);
-      return await this.enrichContactsList(result.contacts);
+      return await this.enrichAndOverrideEmail(result.contacts, buildDomainRules(params.company_name));
     } catch (error) {
       console.error(`Error in location strategy ${strategy.name}:`, error);
       return [];
@@ -693,7 +693,7 @@ class ApolloService {
       }
 
       console.log(`Found ${candidateContacts.length} candidate contacts in fallback, enriching emails...`);
-      return await this.enrichContactsList(candidateContacts);
+      return await this.enrichAndOverrideEmail(candidateContacts, buildDomainRules(params.company_name));
 
     } catch (error) {
       console.error("Apollo search error:", error);
@@ -883,18 +883,8 @@ class ApolloService {
       const data = await response.json();
       
       if (data.person && data.person.email) {
-        // Validate that the email domain matches the expected company domain
         const foundEmail = data.person.email;
-        const emailDomain = foundEmail.split('@')[1]?.toLowerCase();
-        const expectedDomain = this.getExpectedEmailDomain(contact.organization_name);
-        
-        if (expectedDomain && emailDomain !== expectedDomain) {
-          console.log(`⚠️ Domain mismatch for ${contact.name}: Found ${foundEmail} but expected @${expectedDomain} domain`);
-          // Still return the person data but flag the email issue
-          return { ...data.person, email: null, domain_mismatch: true, found_email: foundEmail };
-        }
-        
-        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${foundEmail}`);
+        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${foundEmail} from Apollo`);
         return data.person;
       } else {
         console.log(`⚠️ Enrichment result for ${contact.name}: No email found in response`);
@@ -1289,155 +1279,6 @@ class ApolloService {
 
   isConfigured(): boolean {
     return !!this.apiKey;
-  }
-
-  /**
-   * Search for department lead contacts using two-bucket approach
-   */
-  async searchDepartmentLeads(params: DepartmentLeadSearchParams): Promise<ProcessedContact[]> {
-    if (!this.apiKey) {
-      console.log("Apollo API key not configured - skipping department lead search");
-      return [];
-    }
-
-    try {
-      console.log(`Searching for ${params.department} department leads at ${params.company_name}`);
-      
-      // Create search payload for department leads
-      const searchPayload: any = {
-        q_organization_name: params.company_name,
-        person_titles: params.titles,
-        person_seniorities: params.seniorities,
-        page: 1,
-        per_page: 10
-      };
-
-      // Add geographic filtering if available
-      if (params.job_country) {
-        searchPayload.person_locations = [params.job_country];
-      }
-
-      console.log(`Department lead search payload:`, searchPayload);
-
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          "x-api-key": this.apiKey
-        },
-        body: JSON.stringify(searchPayload)
-      });
-
-      if (!response.ok) {
-        console.error(`Apollo department lead search failed: ${response.status}`);
-        return [];
-      }
-
-      const data: ApolloSearchResponse = await response.json();
-      const contacts = data.people || data.contacts || [];
-
-      if (!contacts || contacts.length === 0) {
-        console.log("No department lead contacts found");
-        return [];
-      }
-
-      // Process contacts and calculate confidence scores
-      const processedContacts = contacts
-        .filter(contact => contact.name && contact.title)
-        .map(contact => {
-          const confidenceScore = this.calculateDepartmentLeadConfidence(contact.title, params.department);
-          
-          return {
-            full_name: contact.name,
-            title: contact.title,
-            email: contact.email,
-            linkedin_url: contact.linkedin_url,
-            company_name: contact.organization_name || params.company_name,
-            is_recruiter_likely: false, // These are department leads, not recruiters
-            recruiter_confidence: 0.0,
-            apolloId: contact.id,
-            apolloContact: contact
-          };
-        })
-        .sort((a, b) => this.calculateDepartmentLeadConfidence(b.title, params.department) - 
-                        this.calculateDepartmentLeadConfidence(a.title, params.department))
-        .slice(0, 3); // Take top 3 department leads
-
-      console.log(`Found ${processedContacts.length} department lead contacts, enriching emails...`);
-
-      // Enrich contacts to get real email addresses
-      const enrichedContacts: ProcessedContact[] = [];
-      
-      for (const candidate of processedContacts) {
-        try {
-          const enrichedContact = await this.enrichContactByProfile(candidate.apolloContact!);
-          
-          const processedContact: ProcessedContact = {
-            full_name: candidate.full_name,
-            title: candidate.title,
-            email: enrichedContact?.email || undefined,
-            linkedin_url: candidate.linkedin_url,
-            company_name: candidate.company_name,
-            is_recruiter_likely: candidate.is_recruiter_likely,
-            recruiter_confidence: candidate.recruiter_confidence,
-            apolloId: candidate.apolloId
-          };
-          
-          enrichedContacts.push(processedContact);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-        } catch (error) {
-          console.error(`Enrichment failed for ${candidate.full_name}:`, error);
-          
-          const processedContact: ProcessedContact = {
-            full_name: candidate.full_name,
-            title: candidate.title,
-            email: undefined,
-            linkedin_url: candidate.linkedin_url,
-            company_name: candidate.company_name,
-            is_recruiter_likely: candidate.is_recruiter_likely,
-            recruiter_confidence: candidate.recruiter_confidence,
-            apolloId: candidate.apolloId
-          };
-          
-          enrichedContacts.push(processedContact);
-        }
-      }
-
-      console.log(`Department lead search returned ${enrichedContacts.length} enriched contacts`);
-      return enrichedContacts;
-
-    } catch (error) {
-      console.error("Apollo department lead search error:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Calculate confidence score for department lead based on title and department
-   */
-  private calculateDepartmentLeadConfidence(title: string, department: string): number {
-    const titleLower = title.toLowerCase();
-    const departmentLower = department.toLowerCase();
-    
-    // Higher scores for exact department matches
-    if (titleLower.includes(departmentLower)) {
-      if (titleLower.includes('head') || titleLower.includes('director')) return 0.95;
-      if (titleLower.includes('manager') || titleLower.includes('lead')) return 0.90;
-      if (titleLower.includes('vp') || titleLower.includes('vice president')) return 0.98;
-      if (titleLower.includes('cto') || titleLower.includes('cfo') || titleLower.includes('cmo')) return 0.99;
-      return 0.85;
-    }
-    
-    // Medium scores for leadership roles in any department
-    if (titleLower.includes('director') || titleLower.includes('head')) return 0.75;
-    if (titleLower.includes('manager') || titleLower.includes('lead')) return 0.70;
-    if (titleLower.includes('vp') || titleLower.includes('vice president')) return 0.80;
-    if (titleLower.includes('chief') || titleLower.includes('ceo') || titleLower.includes('president')) return 0.85;
-    
-    // Lower scores for non-leadership roles
-    return 0.50;
   }
 }
 
