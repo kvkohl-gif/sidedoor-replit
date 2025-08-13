@@ -117,6 +117,61 @@ class ApolloService {
     }
   }
 
+  /**
+   * Get the expected email domain for a company name
+   */
+  private getExpectedEmailDomain(companyName: string): string | null {
+    if (!companyName) return null;
+    
+    const name = companyName.toLowerCase().trim();
+    
+    // Direct company name to domain mapping
+    const domainMappings: Record<string, string> = {
+      'aha!': 'aha.io',
+      'aha': 'aha.io',
+      'dropbox': 'dropbox.com',
+      'google': 'google.com',
+      'microsoft': 'microsoft.com',
+      'apple': 'apple.com',
+      'meta': 'meta.com',
+      'facebook': 'meta.com',
+      'amazon': 'amazon.com',
+      'netflix': 'netflix.com',
+      'spotify': 'spotify.com',
+      'uber': 'uber.com',
+      'airbnb': 'airbnb.com',
+      'stripe': 'stripe.com',
+      'slack': 'slack.com',
+      'zoom': 'zoom.us',
+      'salesforce': 'salesforce.com',
+      'adobe': 'adobe.com',
+      'tesla': 'tesla.com',
+      'twitter': 'twitter.com',
+      'linkedin': 'linkedin.com',
+      'instagram': 'instagram.com',
+      'whatsapp': 'whatsapp.com',
+      'youtube': 'youtube.com'
+    };
+    
+    // Check direct mappings first
+    if (domainMappings[name]) {
+      return domainMappings[name];
+    }
+    
+    // For other companies, try to infer the domain
+    // Remove common suffixes and special characters
+    let cleanName = name
+      .replace(/\s*(inc|llc|ltd|corp|corporation|company|co)\s*\.?\s*$/i, '')
+      .replace(/[^a-z0-9]/g, '');
+    
+    // If the clean name looks reasonable, assume .com domain
+    if (cleanName.length >= 2 && cleanName.length <= 20) {
+      return `${cleanName}.com`;
+    }
+    
+    return null;
+  }
+
   private isRecruiterTitle(title: string): { isRecruiter: boolean; confidence: number } {
     const titleLower = title.toLowerCase().trim();
     
@@ -784,7 +839,18 @@ class ApolloService {
       const data = await response.json();
       
       if (data.person && data.person.email) {
-        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${data.person.email}`);
+        // Validate that the email domain matches the expected company domain
+        const foundEmail = data.person.email;
+        const emailDomain = foundEmail.split('@')[1]?.toLowerCase();
+        const expectedDomain = this.getExpectedEmailDomain(contact.organization_name);
+        
+        if (expectedDomain && emailDomain !== expectedDomain) {
+          console.log(`⚠️ Domain mismatch for ${contact.name}: Found ${foundEmail} but expected @${expectedDomain} domain`);
+          // Still return the person data but flag the email issue
+          return { ...data.person, email: null, domain_mismatch: true, found_email: foundEmail };
+        }
+        
+        console.log(`✅ Enrichment SUCCESS for ${contact.name}: Found email ${foundEmail}`);
         return data.person;
       } else {
         console.log(`⚠️ Enrichment result for ${contact.name}: No email found in response`);
