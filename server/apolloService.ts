@@ -1068,6 +1068,8 @@ class ApolloService {
       }
 
       console.log(`Searching for ${params.department} department leads:`, JSON.stringify(searchPayload, null, 2));
+      console.log(`Department lead titles being searched: ${params.titles.join(', ')}`);
+      console.log(`Department lead seniorities being searched: ${params.seniorities.join(', ')}`);
 
       const result = await this.executeApolloSearch(searchPayload);
       
@@ -1081,6 +1083,10 @@ class ApolloService {
         email_domain: contact.email ? contact.email.split('@')[1] : '',
         apolloContact: contact.apolloContact
       }));
+      console.log(`Department lead search: Found ${result.contacts.length} from Apollo`);
+      result.contacts.forEach((contact, index) => {
+        console.log(`  Contact ${index + 1}: ${contact.full_name} - ${contact.title} - Email: ${contact.email || 'None'}`);
+      });
       console.log(`Department lead search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
       return await this.enrichAndOverrideEmail(accepted, domainRules);
