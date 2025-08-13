@@ -114,7 +114,7 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 3, // Get 3 recruiting contacts
+          per_page: 10, // Get up to 10 recruiting contacts
           organization_id: request.organization_id,
           website_url: request.website_url
         });
@@ -132,7 +132,7 @@ export class EnhancedEnrichmentService {
           job_region: request.job_region,
           company_hq_country: request.company_hq_country,
           remote_hiring_countries: request.remote_hiring_countries,
-          per_page: 3, // Get 3 department leads
+          per_page: 10, // Get up to 10 department leads
           organization_id: request.organization_id,
           website_url: request.website_url
         });
@@ -230,11 +230,12 @@ export class EnhancedEnrichmentService {
         const department = isRecruiter ? undefined : twoBucketTargets.department_lead_contacts.primary_department;
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
-        console.log(`Processing contact: ${contact.full_name} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
+        const contactName = contact.full_name || contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unknown';
+        console.log(`Processing contact: ${contactName} - Email: ${validatedEmail || 'None (validation failed)'} - LinkedIn: ${contact.linkedin_url || 'None'} - Bucket: ${outreachBucket} - Status: ${verificationStatus.status_label} - Validation: ${emailValidation?.isValid ? 'PASSED' : 'FAILED'}`);
         
         // Include ALL contacts (domain filtering already ensured company emails only)
         const enrichedContact: EnrichedContact = {
-          name: contact.full_name || contact.name || 'Unknown',
+          name: contactName,
           title: contact.title,
           email: validatedEmail, // Use validated email to prevent hallucination
           linkedinUrl: contact.linkedin_url,
@@ -269,8 +270,8 @@ export class EnhancedEnrichmentService {
         return b.recruiterConfidence - a.recruiterConfidence;
       });
 
-      // Take top 3 matches as specified in requirements
-      const topContacts = enrichedContacts.slice(0, 3);
+      // Return all contacts instead of limiting to 3
+      const topContacts = enrichedContacts;
       
       searchMetadata.results_found = topContacts.length;
       
