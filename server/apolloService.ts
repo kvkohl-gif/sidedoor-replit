@@ -104,8 +104,19 @@ const RECRUITER_TITLES = [
   "acquisition manager",
   "acquisition specialist",
   "people operations manager",
+  "people operations",
+  "people operations specialist",
+  "people operations coordinator",
+  "people operations lead",
+  "people operations director",
   "people partner",
-  "people experience lead"
+  "people experience lead",
+  "people experience manager",
+  "hr business partner",
+  "human resources business partner",
+  "talent partner",
+  "talent sourcer",
+  "senior talent sourcer"
 ];
 
 class ApolloService {

@@ -348,7 +348,10 @@ Return the extracted data in the JSON format specified.`;
       recruiter_title_targets: Array.isArray(result.recruiter_title_targets) ? result.recruiter_title_targets : [
         { title: "Technical Recruiter", confidence: 95 },
         { title: "Talent Acquisition Manager", confidence: 90 },
-        { title: "People Operations Manager", confidence: 85 }
+        { title: "People Operations Manager", confidence: 85 },
+        { title: "People Operations", confidence: 85 },
+        { title: "HR Business Partner", confidence: 80 },
+        { title: "Talent Partner", confidence: 80 }
       ],
       department_lead_title_targets: Array.isArray(result.department_lead_title_targets) ? result.department_lead_title_targets : [
         // Smart defaults based on primary department
@@ -372,7 +375,7 @@ Return the extracted data in the JSON format specified.`;
       ],
       person_seniorities: Array.isArray(result.person_seniorities) ? result.person_seniorities : ["manager", "head", "director", "vp", "c_suite"],
       include_similar_titles: Boolean(result.include_similar_titles === undefined ? false : result.include_similar_titles),
-      fallback_recruiter_titles: Array.isArray(result.fallback_recruiter_titles) ? result.fallback_recruiter_titles : ["Recruiter", "HR Manager"],
+      fallback_recruiter_titles: Array.isArray(result.fallback_recruiter_titles) ? result.fallback_recruiter_titles : ["Recruiter", "HR Manager", "People Operations", "Talent Sourcer"],
       fallback_departments: Array.isArray(result.fallback_departments) ? result.fallback_departments : ["People", "Recruiting", "Talent"]
     };
   } catch (error) {
