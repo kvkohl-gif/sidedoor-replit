@@ -344,9 +344,22 @@ export class EnhancedEnrichmentService {
         // Only use validated emails to prevent hallucination
         const validatedEmail = emailValidation?.isValid ? emailValidation.validatedEmail?.email : undefined;
         
-        // Simplify outreach bucket determination - use title-based detection
+        // Enhanced outreach bucket determination - use both title-based detection AND Apollo confidence
         const titleLower = contact.title.toLowerCase();
-        const isRecruiter = titleLower.includes('recruiter') || titleLower.includes('talent acquisition') || titleLower.includes('talent sourcing') || titleLower.includes('recruiting');
+        const hasRecruiterKeywords = titleLower.includes('recruiter') || 
+                                   titleLower.includes('talent acquisition') || 
+                                   titleLower.includes('talent sourcing') || 
+                                   titleLower.includes('recruiting') ||
+                                   titleLower.includes('people operations') ||
+                                   titleLower.includes('people ops') ||
+                                   titleLower.includes('hr business partner') ||
+                                   titleLower.includes('talent partner') ||
+                                   titleLower.includes('people partner') ||
+                                   titleLower.includes('talent sourcer');
+        
+        // Use Apollo's recruiter confidence as primary indicator, title keywords as secondary
+        const isHighConfidenceRecruiter = contact.recruiter_confidence >= 70;
+        const isRecruiter = isHighConfidenceRecruiter || hasRecruiterKeywords;
         const outreachBucket = isRecruiter ? "recruiter" : "department_lead";
         const department = isRecruiter ? undefined : (twoBucketTargets?.department_lead_contacts.primary_department || 'Unknown');
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
