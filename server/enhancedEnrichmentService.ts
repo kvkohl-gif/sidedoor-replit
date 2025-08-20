@@ -122,7 +122,9 @@ export class EnhancedEnrichmentService {
     
     if (apolloService.isConfigured()) {
       try {
+        console.log(`Department inference check: ${departmentInference ? 'Available' : 'NULL'}`);
         if (departmentInference) {
+          console.log(`Department inference details: ${departmentInference.departments.length} departments, ${departmentInference.primary_titles.length} titles`);
           console.log("Using enhanced department-based search strategy...");
           
           // Log debug info about organization_id
@@ -234,7 +236,8 @@ export class EnhancedEnrichmentService {
           console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);
           
         } else {
-          console.log("Falling back to traditional two-bucket search...");
+          console.log("Department inference is NULL - falling back to traditional two-bucket search...");
+          console.log(`Two bucket targets: ${twoBucketTargets ? 'Available' : 'NULL'}`);
           
           // Search for recruiting contacts
           recruiterContacts = await apolloService.searchRecruitingContacts({
