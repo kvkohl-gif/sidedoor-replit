@@ -187,6 +187,13 @@ export class EnhancedEnrichmentService {
             
             // Search for department leads using company name
             console.log(`Searching for department leads: ${primaryTitles.join(', ')}`);
+            console.log(`Department search params:`, {
+              company_name: request.company_name,
+              department: topDept.label,
+              titles: primaryTitles,
+              seniorities: ['manager', 'head', 'director', 'vp', 'c_suite']
+            });
+            
             departmentLeadContacts = await apolloService.searchDepartmentLeads({
               company_name: request.company_name,
               job_title: request.job_title,
@@ -203,6 +210,8 @@ export class EnhancedEnrichmentService {
               website_url: request.website_url
             });
             
+            console.log(`Department lead search completed: Found ${departmentLeadContacts.length} contacts`);
+            
             // Also search for recruiters
             console.log("Searching for recruiters using company name...");
             recruiterContacts = await apolloService.searchRecruitingContacts({
@@ -218,6 +227,8 @@ export class EnhancedEnrichmentService {
               organization_id: undefined,
               website_url: request.website_url
             });
+            
+            console.log(`Recruiter search completed: Found ${recruiterContacts.length} contacts`);
           }
           
           console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);
