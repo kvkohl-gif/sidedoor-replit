@@ -133,10 +133,9 @@ class ApolloService {
   /**
    * Extract work email from Apollo contact, preferring work-specific fields
    */
-  private coerceWorkEmailFromSearch(contact: any): string | null {
-    // Handle Apollo's nested person structure
-    const person = contact.person || contact;
-    return person.work_email || person.email || person.primary_email || contact.email || contact.work_email || null;
+  private coerceWorkEmailFromSearch(contact: any): string | undefined {
+    // Handle Apollo's contact structure - contacts are direct objects
+    return contact.work_email || contact.email || contact.primary_email || undefined;
   }
 
   /**
@@ -161,15 +160,14 @@ class ApolloService {
       // Debug: Log the actual contact data structure
       console.log(`DEBUG: Raw contact data:`, JSON.stringify(contact, null, 2));
       
-      // Handle Apollo's nested person structure
-      const person = contact.person || contact;
-      const contactName = person.name || person.first_name || person.last_name;
+      // Handle Apollo's contact structure - contacts are direct objects
+      const contactName = contact.name || contact.first_name || contact.last_name;
       
-      console.log(`DEBUG: Processing contact - person.name: ${person.name}, person.first_name: ${person.first_name}, person.last_name: ${person.last_name}, contactName: ${contactName}`);
+      console.log(`DEBUG: Processing contact - contact.name: ${contact.name}, contact.first_name: ${contact.first_name}, contact.last_name: ${contact.last_name}, contactName: ${contactName}`);
       
       // Only reject contacts that are clearly invalid
-      if (!contactName && !person.first_name && !person.last_name) {
-        console.log(`DEBUG: Rejecting contact - no name data: name=${person.name}, first_name=${person.first_name}, last_name=${person.last_name}`);
+      if (!contactName && !contact.first_name && !contact.last_name) {
+        console.log(`DEBUG: Rejecting contact - no name data: name=${contact.name}, first_name=${contact.first_name}, last_name=${contact.last_name}`);
         skipped.push({ 
           contact, 
           reason: `no_name_data` 
@@ -181,9 +179,9 @@ class ApolloService {
       const domain = emailDomain(email || "");
 
       const processedContact = {
-        id: person.id || contact.id || contact.person_id || contact.contact_id,
-        name: person.name || `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim(),
-        title: person.title || contact.title,
+        id: contact.id || contact.person_id || contact.contact_id,
+        name: contact.name || `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim(),
+        title: contact.title || contact.current_title,
         email,
         email_domain: domain,
         apolloContact: contact
@@ -673,7 +671,7 @@ class ApolloService {
     const data: ApolloSearchResponse = await response.json();
     console.log(`DEBUG: Full Apollo API response:`, JSON.stringify(data, null, 2));
     
-    const contacts = data.people || data.contacts || [];
+    const contacts = data.contacts || data.people || [];
     console.log(`DEBUG: Extracted contacts array length: ${contacts ? contacts.length : 'null'}`);
     
     // Log each contact structure for debugging
@@ -691,29 +689,27 @@ class ApolloService {
     // Process and rank contacts by recruiter likelihood with proper nested structure handling
     const processedContacts = contacts
       .filter(contact => {
-        // Handle Apollo's nested person structure
-        const person = contact.person || contact;
-        const name = person.name || person.first_name || person.last_name;
-        const title = person.title || contact.title;
-        console.log(`DEBUG: Filtering contact - name: ${name}, title: ${title}`);
+        // Handle Apollo's contact structure - contacts are direct objects, not nested
+        const name = contact.name || contact.first_name || contact.last_name;
+        const title = contact.title || contact.current_title;
+        console.log(`DEBUG: Filtering contact - name: ${name}, title: ${title}, structure:`, Object.keys(contact));
         return name && title;
       })
       .map(contact => {
-        // Handle Apollo's nested person structure
-        const person = contact.person || contact;
-        const title = person.title || contact.title;
+        // Handle Apollo's contact structure - contacts are direct objects
+        const title = contact.title || contact.current_title;
         const { isRecruiter, confidence } = this.isRecruiterTitle(title);
         
         const processedContact = {
           apolloContact: contact,
-          full_name: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+          full_name: contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
           title: title,
-          email: person.email || contact.email,
-          linkedin_url: person.linkedin_url || contact.linkedin_url,
-          company_name: person.organization_name || contact.organization_name || 'Unknown',
+          email: contact.email || contact.work_email,
+          linkedin_url: contact.linkedin_url,
+          company_name: contact.organization_name || 'Unknown',
           is_recruiter_likely: isRecruiter,
           recruiter_confidence: confidence,
-          apolloId: person.id || contact.id
+          apolloId: contact.id
         };
         console.log(`DEBUG: Processed contact:`, JSON.stringify(processedContact, null, 2));
         return processedContact;
