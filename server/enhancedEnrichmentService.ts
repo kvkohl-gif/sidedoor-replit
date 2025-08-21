@@ -72,6 +72,10 @@ export class EnhancedEnrichmentService {
     let departmentInference: DepartmentInference | null = null;
     let twoBucketTargets: TwoBucketTargets | null = null;
     
+    console.log(`=== DEPARTMENT INFERENCE SETUP ===`);
+    console.log(`Job content provided: ${!!request.job_content}`);
+    console.log(`Job title provided: ${!!request.job_title}`);
+    
     if (request.job_content && request.job_title) {
       console.log("Inferring department targets from job content...");
       departmentInference = await inferDepartmentTargets(
@@ -83,7 +87,7 @@ export class EnhancedEnrichmentService {
       console.log(`Primary department: ${departmentInference.departments[0]?.label} (${departmentInference.departments[0]?.confidence}%)`);
       console.log(`Primary titles: ${departmentInference.primary_titles.slice(0, 3).map(t => t.title).join(', ')}`);
     } else {
-      console.log("Falling back to old two-bucket strategy...");
+      console.log("Missing job content or job title - falling back to old two-bucket strategy...");
       twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
     }
     
@@ -119,6 +123,11 @@ export class EnhancedEnrichmentService {
     // Step 2: Search Apollo using enhanced department-based approach
     let recruiterContacts: ProcessedContact[] = [];
     let departmentLeadContacts: ProcessedContact[] = [];
+    
+    console.log(`=== APOLLO SEARCH FLOW DEBUG ===`);
+    console.log(`Apollo configured: ${apolloService.isConfigured()}`);
+    console.log(`Department inference: ${departmentInference ? 'AVAILABLE' : 'NULL'}`);
+    console.log(`Two bucket targets: ${twoBucketTargets ? 'AVAILABLE' : 'NULL'}`);
     
     if (apolloService.isConfigured()) {
       try {
@@ -236,6 +245,7 @@ export class EnhancedEnrichmentService {
           console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);
           
         } else {
+          console.log("=== TRADITIONAL TWO-BUCKET FALLBACK ===");
           console.log("Department inference is NULL - falling back to traditional two-bucket search...");
           console.log(`Two bucket targets: ${twoBucketTargets ? 'Available' : 'NULL'}`);
           
