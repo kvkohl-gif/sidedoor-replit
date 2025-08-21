@@ -1,0 +1,71 @@
+Got it—here’s the minimum set of artifacts I need to pinpoint why searchDepartmentLeads() isn’t firing and fix the dual‑search flow:
+
+The code around the branch
+
+server/enhancedEnrichmentService.ts lines 125–275 in full.
+
+Include any helpers referenced there (signatures + bodies if short):
+searchRecruitingContacts, searchDepartmentLeads, build*Query utilities, gating/feature‑flag checks.
+
+The exact if (departmentInference) block at/around line 134 plus the code that triggers both searches (sequential or Promise.all).
+
+One full debug run (Property Meld)
+
+The complete log output for a single run, with timestamps, showing these sections:
+
+=== DEPARTMENT INFERENCE SETUP ===
+
+=== APOLLO SEARCH FLOW DEBUG ===
+
+Department search parameter logging (the exact params)
+
+Result counts per branch
+
+Make sure the log includes the resolved departmentInference object (department name, confidence) and any booleans like hasDeptInference, skipRecruiters, skipDeptLeads, etc.
+
+Exact input payload for that run
+
+Company identifiers (name, domain, Apollo org id if used)
+
+Role title, job content/snippet, seniority, location, department hints
+
+Any request‑level options (e.g., maxContacts, includeRecruiters, includeDeptLeads).
+
+Effective config/flags at runtime
+
+Values for things like:
+ENABLE_DEPT_LEADS, APOLLO_CONFIDENCE_THRESHOLD, MAX_CONTACTS, SKIP_EXISTING_CONTACTS, APOLLO_CONTACT_SEARCH_MODE, rate‑limit/backoff toggles.
+
+Environment (dev/stage/prod) & Node version.
+
+Apollo call details
+
+The actual request params sent for both branches (titles/keywords, department filters, seniority ranges, location, confidence filters).
+
+The raw responses (HTTP status + body) or sanitized excerpts showing whether dept‑lead results existed vs. the branch not called.
+
+Recent diffs that might affect branching
+
+Commits touching: contact structure handling, bucket classification, and the dual‑search logic (a short diff or summary).
+
+Repro info
+
+The exact command/job id you run for “Property Meld”, and any deterministic seed or cache settings.
+
+If there’s any early‑return path (e.g., “already have recruiter → return”), point me to it.
+
+Expected merge behavior
+
+How results from both branches should be combined (ordering, dedupe keys, per‑bucket caps).
+
+If you paste the code slice (125–275) and the full log from one failing run, I can usually spot whether:
+
+the if (departmentInference) path skips the recruiter/dept‑lead parallelization,
+
+there’s an early return after recruiters,
+
+a flag/threshold is gating dept‑leads,
+
+or await/Promise.all isn’t used (i.e., only one branch executes).
+
+Send those two first (code + logs), and I’ll dive straight in.
