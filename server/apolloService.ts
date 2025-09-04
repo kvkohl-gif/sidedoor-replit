@@ -717,13 +717,13 @@ class ApolloService {
       })
       .map(contact => {
         // Handle Apollo's contact structure - contacts are direct objects
-        const title = contact.title || contact.current_title;
+        const title = contact.title || contact.current_title || "";
         const { isRecruiter, confidence } = this.isRecruiterTitle(title);
         
         const processedContact = {
           apolloContact: contact,
           full_name: contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
-          title: title,
+          title: title || "",
           email: contact.email || contact.work_email,
           linkedin_url: contact.linkedin_url,
           company_name: contact.organization_name || 'Unknown',
@@ -1026,19 +1026,11 @@ class ApolloService {
       const result = await this.executeApolloSearch(searchPayload);
       
       // result.contacts are already processed ProcessedContact[] from executeApolloSearch
-      // No need to call shapeFromSearch again - just convert to the expected format
-      const accepted = result.contacts.map(contact => ({
-        id: contact.apolloId,
-        name: contact.full_name,
-        title: contact.title,
-        email: contact.email,
-        email_domain: contact.email ? contact.email.split('@')[1] : '',
-        apolloContact: contact.apolloContact
-      }));
-      console.log(`Recruiting search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
+      // They already have all required properties, so just enrich them directly
+      console.log(`Recruiting search found ${result.contacts.length} contacts (already processed)`);
 
-      // Enrich contacts with People Enrichment API to get names and full details
-      const enrichedContacts = await this.enrichAndOverrideEmail(accepted, domainRules);
+      // Enrich contacts with People Enrichment API to get better emails
+      const enrichedContacts = await this.enrichAndOverrideEmail(result.contacts, domainRules);
       
       // Further enrich each contact using People Enrichment endpoint to get names
       const fullyEnrichedContacts = [];
@@ -1118,23 +1110,14 @@ class ApolloService {
       const result = await this.executeApolloSearch(searchPayload);
       
       // result.contacts are already processed ProcessedContact[] from executeApolloSearch
-      // No need to call shapeFromSearch again - just convert to the expected format
-      const accepted = result.contacts.map(contact => ({
-        id: contact.apolloId,
-        name: contact.full_name,
-        title: contact.title,
-        email: contact.email,
-        email_domain: contact.email ? contact.email.split('@')[1] : '',
-        apolloContact: contact.apolloContact
-      }));
+      // They already have all required properties, so log and enrich them directly
       console.log(`Department lead search: Found ${result.contacts.length} from Apollo`);
       result.contacts.forEach((contact, index) => {
         console.log(`  Contact ${index + 1}: ${contact.full_name} - ${contact.title} - Email: ${contact.email || 'None'}`);
       });
-      console.log(`Department lead search domain filtering: ${accepted.length} accepted, 0 skipped (already processed)`);
 
-      // Enrich contacts with People Enrichment API to get names and full details
-      const enrichedContacts = await this.enrichAndOverrideEmail(accepted, domainRules);
+      // Enrich contacts with People Enrichment API to get better emails
+      const enrichedContacts = await this.enrichAndOverrideEmail(result.contacts, domainRules);
       
       // Further enrich each contact using People Enrichment endpoint to get names
       const fullyEnrichedContacts = [];

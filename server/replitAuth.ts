@@ -62,9 +62,6 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  console.log(`=== DEBUG: upsertUser ===`);
-  console.log(`claims:`, claims);
-  
   const userData = {
     id: claims["sub"],
     email: claims["email"],
@@ -73,10 +70,7 @@ async function upsertUser(
     profileImageUrl: claims["profile_image_url"],
   };
   
-  console.log(`userData to upsert:`, userData);
-  
-  const result = await storage.upsertUser(userData);
-  console.log(`upserted user result:`, result);
+  await storage.upsertUser(userData);
 }
 
 export async function setupAuth(app: Express) {

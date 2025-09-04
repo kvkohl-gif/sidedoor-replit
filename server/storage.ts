@@ -54,12 +54,7 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations - mandatory for Replit Auth
   async getUser(id: string): Promise<User | undefined> {
-    console.log(`=== DEBUG: storage.getUser ===`);
-    console.log(`Looking for user with id:`, id);
-    
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    console.log(`Found user:`, user);
-    
     return user;
   }
 
