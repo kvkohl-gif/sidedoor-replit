@@ -781,25 +781,49 @@ class ApolloService {
     const results: ProcessedContact[] = [];
     const skippedEnrichment = [];
 
+    console.log(`=== EMAIL DISCOVERY DEBUG ===`);
+    console.log(`Processing ${shapedContacts.length} contacts for email enrichment`);
+
     for (const item of shapedContacts) {
       try {
+        console.log(`\n--- Contact: ${item.full_name} ---`);
+        console.log(`Original email: ${item.email || 'NONE'}`);
+        console.log(`Title: ${item.title}`);
+        
         // Try to enrich the contact to get potentially better email
         const enrichedContact = await this.enrichContactByProfile(item.apolloContact!);
         
+        console.log(`Enrichment result:`, enrichedContact ? {
+          name: enrichedContact.name,
+          email: enrichedContact.email,
+          work_email: enrichedContact.work_email,
+          emails: enrichedContact.emails,
+          primary_email: enrichedContact.primary_email
+        } : 'ENRICHMENT_FAILED');
+        
         // Pick the best company email from enrichment results
         const overrideEmail = this.pickBestCompanyEmail(enrichedContact, domainRules);
+        console.log(`Best company email from enrichment: ${overrideEmail || 'NONE'}`);
         
         // Prefer enrichment email when it finds a better @company email
         const finalEmail = overrideEmail ?? item.email;
+        console.log(`Final email decision: ${finalEmail || 'NONE'}`);
+        
+        const emailDomainResult = finalEmail ? emailDomain(finalEmail) : 'NO_EMAIL';
+        const isCompanyDomainResult = finalEmail ? isCompanyDomain(emailDomainResult, domainRules) : false;
+        console.log(`Email domain: ${emailDomainResult}, Is company domain: ${isCompanyDomainResult}`);
 
         // Final safety: still must be company domain (no NB filtering here)
         if (!finalEmail || !isCompanyDomain(emailDomain(finalEmail), domainRules)) {
+          console.log(`❌ SKIPPING: ${item.full_name} - Reason: no_company_email_after_enrichment`);
           skippedEnrichment.push({ 
             item, 
             reason: "no_company_email_after_enrichment" 
           });
           continue;
         }
+        
+        console.log(`✅ ACCEPTING: ${item.full_name} with email ${finalEmail}`);
 
         // Determine recruiter likelihood
         const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
@@ -821,10 +845,12 @@ class ApolloService {
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
-        console.error(`Enrichment failed for ${item.full_name}:`, error);
+        console.log(`❌ ENRICHMENT ERROR for ${item.full_name}:`, error);
+        console.log(`Original email for fallback: ${item.email || 'NONE'}`);
         
         // Include contact with original email if enrichment fails (if it's still company domain)
         if (item.email && isCompanyDomain(emailDomain(item.email), domainRules)) {
+          console.log(`✅ FALLBACK ACCEPTED: ${item.full_name} with original email ${item.email}`);
           const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
           
           const processedContact: ProcessedContact = {
@@ -840,6 +866,7 @@ class ApolloService {
           
           results.push(processedContact);
         } else {
+          console.log(`❌ FALLBACK REJECTED: ${item.full_name} - original email not company domain`);
           skippedEnrichment.push({ 
             item, 
             reason: "enrichment_failed_and_no_valid_original_email" 
@@ -848,7 +875,24 @@ class ApolloService {
       }
     }
 
-    console.log(`Enrichment processing: ${results.length} final contacts, ${skippedEnrichment.length} skipped`);
+    console.log(`\n=== ENRICHMENT SUMMARY ===`);
+    console.log(`Final contacts: ${results.length}`);
+    console.log(`Skipped contacts: ${skippedEnrichment.length}`);
+    
+    if (skippedEnrichment.length > 0) {
+      console.log(`\nSkipped contacts breakdown:`);
+      skippedEnrichment.forEach((skipped, index) => {
+        console.log(`  ${index + 1}. ${skipped.item.full_name} - ${skipped.reason}`);
+      });
+    }
+    
+    if (results.length > 0) {
+      console.log(`\nAccepted contacts:`);
+      results.forEach((contact, index) => {
+        console.log(`  ${index + 1}. ${contact.full_name} - ${contact.email}`);
+      });
+    }
+    
     return results;
   }
 
