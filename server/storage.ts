@@ -48,7 +48,6 @@ export interface IStorage {
   
   // Extended contact operations for global contacts page
   getAllUserContacts(userId: string): Promise<any[]>;
-  updateContact(contactId: number, userId: string, updates: any): Promise<any>;
   generateContactMessage(contactId: number, userId: string, messageType: string, tone: string): Promise<any>;
 }
 
@@ -243,7 +242,14 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async updateContact(contactId: number, userId: string, updates: any): Promise<any> {
+  async updateContact(id: number, updates: Partial<RecruiterContact>): Promise<RecruiterContact>;
+  async updateContact(contactId: number, userId: string, updates: any): Promise<any>;
+  async updateContact(contactId: number, userId?: string | any, updates?: any): Promise<any> {
+    // Handle overloaded signatures
+    if (typeof userId === 'object' && updates === undefined) {
+      updates = userId;
+      userId = undefined;
+    }
     // First verify the contact belongs to the user
     const [contact] = await db
       .select()

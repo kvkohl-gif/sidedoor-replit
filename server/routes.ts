@@ -23,7 +23,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -38,7 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Job submission routes
   app.post("/api/submissions", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { runId } = req.body;
 
       // Validate runId is provided
@@ -148,18 +148,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Extract optimized Apollo search parameters
         console.log(`Extracting Apollo search parameters for ${companyName}`);
-        const apolloParams = await extractApolloSearchParams({
-          jobContent,
-          jobDataExtraction,
-          organizationId,
-          companyDomain: req.body.companyDomain,
-        });
+        const apolloParams = await extractApolloSearchParams(jobContent);
         console.log(`Apollo search params:`, apolloParams);
 
-        // Update job data extraction with website URL from Apollo params
-        if (apolloParams.website_url && (!jobDataExtraction.company_website || jobDataExtraction.company_website === "Not specified")) {
-          jobDataExtraction.company_website = apolloParams.website_url;
-        }
+        // Apollo params provide search terms for contact lookup
 
         // Apollo + NeverBounce Enhanced Search
         console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);
@@ -174,8 +166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           job_region: apolloParams.job_region,
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
-          organization_id: organizationId,
-          website_url: apolloParams.website_url // Pass website URL for domain filtering
+          organization_id: organizationId
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
@@ -271,8 +262,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating submission:", error);
       
       // Ensure runId is removed from active runs on any error
-      if (runId) {
-        activeRuns.delete(runId);
+      if (req.body.runId) {
+        activeRuns.delete(req.body.runId);
       }
       
       if (error instanceof z.ZodError) {
@@ -287,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setInterval(() => {
     const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
     let cleanedCount = 0;
-    for (const [id, run] of activeRuns.entries()) {
+    for (const [id, run] of Array.from(activeRuns.entries())) {
       if (run.startTime < tenMinutesAgo) {
         activeRuns.delete(id);
         cleanedCount++;
@@ -300,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/submissions", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const submissions = await storage.getJobSubmissionsByUser(userId);
       res.json(submissions);
     } catch (error) {
@@ -311,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/submissions/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const submissionId = parseInt(req.params.id);
       
       if (isNaN(submissionId)) {
@@ -339,7 +330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update job submission (status, notes, etc.)
   app.patch("/api/submissions/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const submissionId = parseInt(req.params.id);
       
       if (isNaN(submissionId)) {
@@ -367,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get enhanced job data for a submission
   app.get("/api/submissions/:id/job-data", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const submissionId = parseInt(req.params.id);
       
       if (isNaN(submissionId)) {
@@ -410,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get email pattern analysis for a submission
   app.get("/api/submissions/:id/email-patterns", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const submissionId = parseInt(req.params.id);
       
       if (isNaN(submissionId)) {
@@ -434,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Message template routes
   app.post("/api/recruiters/:recruiterId/messages", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const recruiterId = parseInt(req.params.recruiterId);
       const { messageType, subject, content, version } = req.body;
       
@@ -470,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/recruiters/:recruiterId/messages", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const recruiterId = parseInt(req.params.recruiterId);
       
       if (isNaN(recruiterId)) {
@@ -498,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/messages/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const messageId = parseInt(req.params.id);
       
       if (isNaN(messageId)) {
@@ -532,7 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/recruiters/:recruiterId/generate-messages", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const recruiterId = parseInt(req.params.recruiterId);
       
       if (isNaN(recruiterId)) {
@@ -610,9 +601,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Search Apollo organizations
       const { apolloService } = await import("./apolloService");
       const organizations = await apolloService.searchOrganizations({
-        company_name: companyInfo.company_name,
-        domain: companyInfo.company_domain,
-        fallback_query: companyInfo.fallback_query
+        company_name: companyInfo.company_name || undefined,
+        domain: companyInfo.company_domain || undefined,
+        fallback_query: companyInfo.fallback_query || undefined
       });
 
       res.json({
@@ -705,7 +696,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
       
       // Update the contact in the database
-      const updatedContact = await storage.updateContact(contactId, updates);
+      const userId = req.user?.claims?.sub || 'anonymous';
+      const updatedContact = await storage.updateContact(contactId, userId, updates);
       
       res.json(updatedContact);
     } catch (error) {
@@ -791,7 +783,8 @@ LinkedIn message tone: ${tone}`;
         updateFields.linkedinMessage = generatedMessage;
       }
       
-      await storage.updateContact(contactId, req.user?.claims?.sub, updateFields);
+      const userId = req.user?.claims?.sub || 'anonymous';
+      await storage.updateContact(contactId, userId, updateFields);
 
       res.json({ message: generatedMessage });
     } catch (error) {
