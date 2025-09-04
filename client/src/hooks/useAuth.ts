@@ -7,5 +7,9 @@ export function useAuth() {
     queryFn: () => api('/api/auth/user'),
     retry: false,
   });
-  return { user, isLoading };
+  return { 
+    user, 
+    isLoading,
+    isAuthenticated: !!user 
+  };
 }
