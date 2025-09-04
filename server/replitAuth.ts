@@ -71,8 +71,7 @@ async function upsertUser(
 }
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
-  app.use(getSession());
+  // Session middleware is now configured in server/index.ts
   app.use(passport.initialize());
   app.use(passport.session());
 
