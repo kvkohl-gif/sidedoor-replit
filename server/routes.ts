@@ -24,7 +24,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      console.log(`=== DEBUG: /api/auth/user ===`);
+      console.log(`req.user:`, req.user);
+      console.log(`userId:`, userId);
+      
       const user = await storage.getUser(userId);
+      console.log(`user from database:`, user);
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
