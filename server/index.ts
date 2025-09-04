@@ -1,10 +1,35 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from 'express-session';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+app.set('trust proxy', 1); // required behind Replit proxy
+
+app.use(session({
+  name: 'connect.sid',
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: true,        // required with SameSite=None on HTTPS
+    sameSite: 'none',    // supports Replit iframe/cross-site
+    path: '/',
+    maxAge: 1000 * 60 * 60 * 24 * 7
+    // DO NOT set "domain"
+  }
+}));
+
+// Temporary diagnostics (remove after test)
+app.use((req, _res, next) => {
+  console.log('cookie header ->', req.headers.cookie ? '[present]' : '[none]');
+  console.log('session exists ->', (req as any).session ? 'yes' : 'no');
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

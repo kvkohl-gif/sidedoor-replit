@@ -1,0 +1,135 @@
+You are editing a full-stack app (Express backend + React frontend with TanStack Query) deployed on Replit.
+Problem: After OAuth login, the server sets `connect.sid` correctly, but the app returns to the homepage “not logged in”.
+Root cause: frontend requests don’t send cookies; and cookie attributes must support Replit’s HTTPS + possible iframe.
+
+Make the following minimal, robust, and reversible changes:
+
+1) Backend — session middleware (server/replitAuth.ts or server entry)
+   - Ensure session middleware is registered BEFORE any routes that read auth, and AFTER `app.set('trust proxy', 1)`.
+   - Configure the cookie for HTTPS and cross-site safely; do NOT set a `domain`.
+
+   ```ts
+   // server/index.ts (or equivalent)
+   import session from 'express-session';
+
+   app.set('trust proxy', 1); // required behind Replit proxy
+
+   app.use(session({
+     name: 'connect.sid',
+     secret: process.env.SESSION_SECRET!,
+     resave: false,
+     saveUninitialized: false,
+     cookie: {
+       httpOnly: true,
+       secure: true,        // required with SameSite=None on HTTPS
+       sameSite: 'none',    // supports Replit iframe/cross-site
+       path: '/',
+       maxAge: 1000 * 60 * 60 * 24 * 7
+       // DO NOT set "domain"
+     }
+   }));
+Keep the default in-memory store for dev only. Do not introduce new deps.
+
+Confirm OAuth redirect_uri and the SPA host are the SAME origin (e.g. https://<sub>.picard.replit.dev).
+
+Frontend — central API client (no global fetch patch)
+
+Add a small API helper that always includes credentials.
+
+Use this helper in the auth query; avoid direct fetch('/api/auth/...') calls.
+
+ts
+Copy code
+// client/src/lib/api.ts
+export async function api<T = unknown>(path: string, init: RequestInit = {}) {
+  const res = await fetch(path, {
+    credentials: 'include', // ensure cookie is sent
+    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
+    ...init,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.headers.get('content-type')?.includes('application/json')
+    ? await res.json() as T
+    : (await res.text() as unknown as T);
+}
+ts
+Copy code
+// client/src/hooks/useAuth.ts
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+
+export function useAuth() {
+  const { data: user, isLoading } = useQuery({
+    queryKey: ['/api/auth/user'],
+    queryFn: () => api('/api/auth/user'),
+    retry: false,
+  });
+  return { user, isLoading };
+}
+If Axios is used anywhere, set once at bootstrap:
+
+ts
+Copy code
+import axios from 'axios';
+axios.defaults.withCredentials = true;
+CORS (only if frontend and backend are on DIFFERENT origins)
+
+If they are same origin, DO NOT add CORS.
+
+If different, enable credentials and a precise origin (no "*"):
+
+ts
+Copy code
+import cors from 'cors';
+app.use(cors({
+  origin: ['https://<your-frontend-origin>'],
+  credentials: true
+}));
+Temporary diagnostics (remove after test)
+
+Add immediately AFTER the session middleware to verify the browser sends the cookie and the server loads the session:
+
+ts
+Copy code
+app.use((req, _res, next) => {
+  console.log('cookie header ->', req.headers.cookie ? '[present]' : '[none]');
+  console.log('session exists ->', (req as any).session ? 'yes' : 'no');
+  next();
+});
+Test plan (must pass all)
+
+Open app in a NEW TAB (not embedded preview).
+
+Login → DevTools → Network → click /api/auth/user.
+
+Request Headers MUST include: Cookie: connect.sid=...
+
+Response MUST be your user JSON (not “unauthenticated”).
+
+DevTools → Application → Cookies: connect.sid exists after login and after a refresh.
+
+Rollback instructions:
+
+All changes are localized to session() config, api.ts, and useAuth.ts.
+
+To revert, remove the API helper and restore prior cookie settings.
+
+Do NOT:
+
+Patch window.fetch globally.
+
+Set a domain attribute on the cookie.
+
+Use wildcard CORS with credentials: true.
+
+Deliverables:
+
+Updated session config as shown.
+
+New client/src/lib/api.ts.
+
+Updated client/src/hooks/useAuth.ts.
+
+(Optional) Axios defaults if Axios is present.
+
+Log lines show [present] cookie header and session exists -> yes on /api/auth/user.
