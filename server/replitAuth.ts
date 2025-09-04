@@ -53,6 +53,7 @@ function updateUserSession(
   tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
 ) {
   user.claims = tokens.claims();
+  user.id = user.claims.sub; // Add direct access to user ID
   user.access_token = tokens.access_token;
   user.refresh_token = tokens.refresh_token;
   user.expires_at = user.claims?.exp;

@@ -690,13 +690,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update contact information
-  app.patch("/api/contacts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/contacts/:id", isAuthenticated, async (req: any, res) => {
     try {
       const contactId = parseInt(req.params.id);
       const updates = req.body;
       
       // Update the contact in the database
-      const userId = req.user?.claims?.sub || 'anonymous';
+      const userId = req.user.id;
       const updatedContact = await storage.updateContact(contactId, userId, updates);
       
       res.json(updatedContact);
@@ -707,7 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate message for contact
-  app.post("/api/contacts/:id/generate-message", isAuthenticated, async (req, res) => {
+  app.post("/api/contacts/:id/generate-message", isAuthenticated, async (req: any, res) => {
     try {
       const contactId = parseInt(req.params.id);
       const { messageType, tone = "professional" } = req.body;
@@ -783,7 +783,7 @@ LinkedIn message tone: ${tone}`;
         updateFields.linkedinMessage = generatedMessage;
       }
       
-      const userId = req.user?.claims?.sub || 'anonymous';
+      const userId = req.user.id;
       await storage.updateContact(contactId, userId, updateFields);
 
       res.json({ message: generatedMessage });
