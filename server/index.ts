@@ -24,12 +24,6 @@ app.use(session({
   }
 }));
 
-// Temporary diagnostics (remove after test)
-app.use((req, _res, next) => {
-  console.log('cookie header ->', req.headers.cookie ? '[present]' : '[none]');
-  console.log('session exists ->', (req as any).session ? 'yes' : 'no');
-  next();
-});
 
 app.use((req, res, next) => {
   const start = Date.now();
