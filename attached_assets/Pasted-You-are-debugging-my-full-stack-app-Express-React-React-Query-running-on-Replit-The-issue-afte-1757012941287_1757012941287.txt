@@ -1,0 +1,65 @@
+You are debugging my full-stack app (Express + React/React Query) running on Replit.
+The issue: after login, the server sets a `connect.sid` cookie correctly, but my frontend is always redirected back to the homepage as "not logged in".
+
+Steps you must perform in my code:
+
+1. **Backend (Express / server/replitAuth.ts)**  
+   - Ensure session middleware is configured like this:
+     ```ts
+     app.set("trust proxy", 1);
+     app.use(session({
+       name: "connect.sid",
+       secret: process.env.SESSION_SECRET!,
+       resave: false,
+       saveUninitialized: false,
+       cookie: {
+         httpOnly: true,
+         secure: true,         // required with SameSite=None on HTTPS
+         sameSite: "none",     // needed for Replit iframe / cross-site
+         path: "/",
+         maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+       }
+     }));
+     ```
+   - Do NOT set a `domain` attribute on the cookie.
+
+2. **Frontend (React / TanStack Query)**  
+   - Wrap `fetch` so all API calls send cookies:
+     ```ts
+     // client/src/lib/api.ts
+     export async function api<T = unknown>(path: string, init: RequestInit = {}) {
+       const res = await fetch(path, {
+         credentials: "include", // <-- required to send connect.sid
+         headers: { "content-type": "application/json", ...(init.headers || {}) },
+         ...init,
+       });
+       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+       return (await res.json()) as T;
+     }
+     ```
+   - Update the auth hook to use this:
+     ```ts
+     // client/src/hooks/useAuth.ts
+     import { api } from "../lib/api";
+     import { useQuery } from "@tanstack/react-query";
+
+     export function useAuth() {
+       const { data: user, isLoading } = useQuery({
+         queryKey: ["/api/auth/user"],
+         queryFn: () => api("/api/auth/user"),
+         retry: false,
+       });
+       return { user, isLoading };
+     }
+     ```
+
+3. **Test procedure after changes**  
+   - Open the app in a **new tab** (not the Replit iframe).  
+   - Log in → open DevTools → Network → check `/api/auth/user`.  
+   - Confirm Request Headers include:
+     ```
+     Cookie: connect.sid=...
+     ```
+   - Confirm the Response contains your user JSON.
+
+The goal: after login, the frontend correctly sends the cookie back on `/api/auth/user`, the server validates the session, and the user stays logged in across refreshes.
