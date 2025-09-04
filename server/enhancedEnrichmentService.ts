@@ -118,6 +118,10 @@ export class EnhancedEnrichmentService {
       console.log("Testing Apollo API connection...");
       const connectionTest = await apolloService.testApiConnection();
       console.log(`Apollo API connection test result: ${connectionTest}`);
+      
+      // Debug: Test basic search functionality
+      console.log("DEBUG: Running Apollo search diagnostics...");
+      await apolloService.debugApolloSearch(request.company_name);
     }
 
     // Step 2: Search Apollo using enhanced department-based approach

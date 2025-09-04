@@ -9,7 +9,10 @@ export interface ApolloContact {
   last_name: string;
   name: string;
   title: string;
+  current_title?: string;
   email?: string;
+  work_email?: string;
+  primary_email?: string;
   linkedin_url?: string;
   organization_name?: string;
   employment_history?: Array<{
@@ -72,6 +75,7 @@ export interface DepartmentLeadSearchParams {
 }
 
 export interface ProcessedContact {
+  id?: string;
   full_name: string;
   title: string;
   email?: string;
@@ -289,6 +293,8 @@ class ApolloService {
         per_page: 1
       };
 
+      console.log(`Testing Apollo API connection with payload:`, JSON.stringify(testPayload, null, 2));
+
       const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
         headers: {
@@ -300,8 +306,12 @@ class ApolloService {
       });
 
       const data = await response.json();
-      console.log(`Apollo API test with Google: ${response.status}, contacts: ${data.contacts?.length || 0}`);
-      return response.ok && data.contacts && data.contacts.length > 0;
+      console.log(`Apollo API test response - Status: ${response.status}`);
+      console.log(`Apollo API test response - Full data:`, JSON.stringify(data, null, 2));
+      console.log(`Apollo API test - Contacts length: ${data.contacts?.length || 0}`);
+      console.log(`Apollo API test - People length: ${data.people?.length || 0}`);
+      
+      return response.ok && (data.contacts?.length > 0 || data.people?.length > 0);
     } catch (error) {
       console.error("Apollo API connection test failed:", error);
       return false;
@@ -331,7 +341,7 @@ class ApolloService {
           per_page: 10
         };
 
-        const domainResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+        const domainResponse = await fetch(`${this.baseUrl}/mixed_companies/search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -360,7 +370,7 @@ class ApolloService {
           per_page: 10
         };
 
-        const nameResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+        const nameResponse = await fetch(`${this.baseUrl}/mixed_companies/search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -389,7 +399,7 @@ class ApolloService {
           per_page: 10
         };
 
-        const fallbackResponse = await fetch(`${this.baseUrl}/organizations/search`, {
+        const fallbackResponse = await fetch(`${this.baseUrl}/mixed_companies/search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -670,9 +680,19 @@ class ApolloService {
 
     const data: ApolloSearchResponse = await response.json();
     console.log(`DEBUG: Full Apollo API response:`, JSON.stringify(data, null, 2));
+    console.log(`DEBUG: Response structure - contacts: ${data.contacts ? data.contacts.length : 'undefined'}, people: ${data.people ? data.people.length : 'undefined'}`);
     
-    const contacts = data.contacts || data.people || [];
-    console.log(`DEBUG: Extracted contacts array length: ${contacts ? contacts.length : 'null'}`);
+    // Apollo returns contacts in BOTH data.contacts AND data.people - combine them
+    const contactsArray = data.contacts || [];
+    const peopleArray = data.people || [];
+    const contacts = [...contactsArray, ...peopleArray];
+    console.log(`DEBUG: Extracted contacts: ${contactsArray.length} from contacts + ${peopleArray.length} from people = ${contacts.length} total`);
+    
+    if (contacts && contacts.length === 0) {
+      console.log(`DEBUG: Zero contacts returned - checking if this is a API limit or search issue`);
+      console.log(`DEBUG: Search payload was:`, JSON.stringify(searchPayload, null, 2));
+      console.log(`DEBUG: Response pagination:`, data.pagination);
+    }
     
     // Log each contact structure for debugging
     if (contacts && contacts.length > 0) {
@@ -1416,6 +1436,82 @@ class ApolloService {
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  /**
+   * Simple test function to debug why Apollo returns 0 contacts
+   */
+  async debugApolloSearch(companyName: string): Promise<any> {
+    if (!this.apiKey) {
+      console.log("DEBUG: No Apollo API key configured");
+      return null;
+    }
+
+    try {
+      // Test 1: Very simple search
+      console.log(`DEBUG TEST 1: Simple company name search for ${companyName}`);
+      const simplePayload = {
+        q_organization_name: companyName,
+        per_page: 5
+      };
+
+      const simpleResponse = await fetch(`${this.baseUrl}/mixed_people/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey
+        },
+        body: JSON.stringify(simplePayload)
+      });
+
+      if (simpleResponse.ok) {
+        const simpleData = await simpleResponse.json();
+        const contactsCount = (simpleData.contacts?.length || 0);
+        const peopleCount = (simpleData.people?.length || 0);
+        const totalCount = contactsCount + peopleCount;
+        
+        console.log(`DEBUG TEST 1 Results: ${contactsCount} in contacts + ${peopleCount} in people = ${totalCount} total found`);
+        
+        if (totalCount > 0) {
+          const sampleContact = simpleData.contacts?.[0] || simpleData.people?.[0];
+          console.log("DEBUG TEST 1: Sample contact:", JSON.stringify(sampleContact, null, 2));
+        }
+        
+        // Test 2: If simple search works, try with organization_ids
+        if (simpleData.contacts?.length > 0) {
+          console.log(`DEBUG TEST 2: Testing with organization_ids constraint`);
+          
+          const orgPayload = {
+            organization_ids: ["6256dca78c9ab500d9ca97ff"], // Replicant's ID from logs
+            per_page: 5
+          };
+
+          const orgResponse = await fetch(`${this.baseUrl}/mixed_people/search`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": this.apiKey
+            },
+            body: JSON.stringify(orgPayload)
+          });
+
+          if (orgResponse.ok) {
+            const orgData = await orgResponse.json();
+            console.log(`DEBUG TEST 2 Results: ${orgData.contacts?.length || 0} contacts found with org ID constraint`);
+          }
+        }
+        
+        return simpleData;
+      } else {
+        console.error(`DEBUG TEST 1 Failed: ${simpleResponse.status} ${simpleResponse.statusText}`);
+        const errorText = await simpleResponse.text();
+        console.error("DEBUG TEST 1 Error body:", errorText);
+      }
+    } catch (error) {
+      console.error("DEBUG Apollo search test failed:", error);
+    }
+    
+    return null;
   }
 }
 

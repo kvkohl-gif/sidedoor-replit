@@ -834,7 +834,43 @@ LinkedIn message tone: ${tone}`;
       });
     } catch (error) {
       console.error('Department test error:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Debug endpoint for testing Apollo API
+  app.post('/api/debug/apollo-test', async (req, res) => {
+    try {
+      const { company_name = "Replicant" } = req.body;
+      
+      console.log('=== DEBUG: Testing Apollo API ===');
+      console.log(`Company: ${company_name}`);
+      
+      // Import Apollo service
+      const { apolloService } = await import('./apolloService');
+      
+      // Test basic connection
+      console.log('Testing Apollo API connection...');
+      const connectionTest = await apolloService.testApiConnection();
+      console.log(`Apollo API connection test result: ${connectionTest}`);
+      
+      // Run debug search
+      console.log('Running Apollo debug search...');
+      const debugResult = await apolloService.debugApolloSearch(company_name);
+      
+      res.json({ 
+        success: true, 
+        connection_test: connectionTest,
+        debug_result: debugResult ? {
+          contacts_found: debugResult.contacts?.length || 0,
+          people_found: debugResult.people?.length || 0,
+          pagination: debugResult.pagination
+        } : null,
+        apollo_configured: apolloService.isConfigured()
+      });
+    } catch (error) {
+      console.error('Apollo test error:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
