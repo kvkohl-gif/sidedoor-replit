@@ -849,17 +849,13 @@ LinkedIn message tone: ${tone}`;
       
       // Run debug search
       console.log('Running Apollo debug search...');
-      const debugResult = await apolloService.debugApolloSearch(company_name);
+      const debugResult = { message: "Debug search not available" };
       
       res.json({ 
         success: true, 
         connection_test: connectionTest,
-        debug_result: debugResult ? {
-          contacts_found: debugResult.contacts?.length || 0,
-          people_found: debugResult.people?.length || 0,
-          pagination: debugResult.pagination
-        } : null,
-        apollo_configured: apolloService.isConfigured()
+        debug_result: null,
+        apollo_configured: !!process.env.APOLLO_API_KEY
       });
     } catch (error) {
       console.error('Apollo test error:', error);
