@@ -210,16 +210,6 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                     <p>AI confidence score for recruiter identification</p>
                   </TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant={verificationBadge.variant} className={`${verificationBadge.className} cursor-help`}>
-                      {verificationBadge.text.includes('⚠️') ? '⚠️ Risky' : verificationBadge.text}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{verificationBadge.description}</p>
-                  </TooltipContent>
-                </Tooltip>
               </div>
             </div>
 
@@ -259,9 +249,31 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                         <p>Copy email address</p>
                       </TooltipContent>
                     </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant={verificationBadge.variant} className={`${verificationBadge.className} cursor-help ml-2`}>
+                          {verificationBadge.text.includes('⚠️') ? '⚠️ Risky' : verificationBadge.text}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{verificationBadge.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ) : (
-                  <span className="text-gray-400">email_not_unlocked@domain.com</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">email_not_unlocked@domain.com</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="secondary" className="bg-gray-50 text-gray-600 border-gray-200 cursor-help ml-2">
+                          ? Unverified
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Email verification status unknown</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 )}
               </div>
 

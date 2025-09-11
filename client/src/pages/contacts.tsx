@@ -177,9 +177,9 @@ export default function ContactsPage() {
 
   // Filter contacts based on search term
   const filteredContacts = (contacts as Contact[]).filter((contact: Contact) =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contact.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contact.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -266,8 +266,11 @@ export default function ContactsPage() {
                 <th className="w-[100px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
                   Confidence
                 </th>
-                <th className="w-[280px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                <th className="w-[220px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
                   Email
+                </th>
+                <th className="w-[100px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Status
                 </th>
                 <th className="w-[200px] px-4 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
                   Job & Company
@@ -345,26 +348,23 @@ export default function ContactsPage() {
                       {/* Email */}
                       <td className="px-4 py-4">
                         {contact.email ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => copyToClipboard(contact.email, "Email")}
-                              className="text-blue-600 hover:text-blue-700 font-mono bg-blue-50 px-2 py-1 rounded border hover:bg-blue-100 transition-colors text-left truncate text-sm flex-1 min-w-0"
-                              title={`Copy ${contact.email}`}
-                            >
-                              {contact.email}
-                            </button>
-                            <Badge variant={verificationBadge.variant} className={`text-xs px-2 py-0.5 ${verificationBadge.className} flex-shrink-0`}>
-                              {verificationBadge.icon}
-                            </Badge>
-                          </div>
+                          <button
+                            onClick={() => copyToClipboard(contact.email, "Email")}
+                            className="text-blue-600 hover:text-blue-700 font-mono bg-blue-50 px-2 py-1 rounded border hover:bg-blue-100 transition-colors w-full text-left truncate text-sm"
+                            title={`Copy ${contact.email}`}
+                          >
+                            {contact.email}
+                          </button>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400 text-sm flex-1">No email</span>
-                            <Badge variant="secondary" className="bg-gray-50 text-gray-600 border-gray-200 text-xs px-2 py-0.5 flex-shrink-0">
-                              ?
-                            </Badge>
-                          </div>
+                          <span className="text-gray-400 text-sm">No email</span>
                         )}
+                      </td>
+
+                      {/* Email Status */}
+                      <td className="px-4 py-4">
+                        <Badge variant={verificationBadge.variant} className={`text-xs px-2 py-0.5 ${verificationBadge.className}`}>
+                          {verificationBadge.icon}
+                        </Badge>
                       </td>
 
                       {/* Job & Company */}
@@ -489,7 +489,7 @@ export default function ContactsPage() {
                     {/* Generated Messages Dropdown - Same as in ContactTable */}
                     {hasMessages && (
                       <tr className={isExpanded ? '' : 'hidden'}>
-                        <td colSpan={10} className="px-4 py-6 bg-blue-50/30 border-t border-blue-200">
+                        <td colSpan={11} className="px-4 py-6 bg-blue-50/30 border-t border-blue-200">
                           <div className="max-w-6xl mx-auto">
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-semibold text-gray-900">Generated Outreach Messages</h3>
