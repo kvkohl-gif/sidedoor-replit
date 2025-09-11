@@ -7,9 +7,12 @@ import OpenAI from "openai";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
+import { supplementalEmailService } from "./supplementalEmailService";
 import { urlScrapingService } from "./urlScrapingService";
-import { insertJobSubmissionSchema } from "@shared/schema";
+import { insertJobSubmissionSchema, contactEmailsSupplemental, recruiterContacts } from "@shared/schema";
 import { z } from "zod";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for Replit Preview
@@ -202,6 +205,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           console.log(`Saved ${apolloSearchResult.contacts.length} Apollo contacts to database`);
+          
+          // NEW: Run supplemental email pattern inference (additive enhancement)
+          try {
+            console.log(`[ENHANCEMENT] Starting supplemental email pattern inference...`);
+            await supplementalEmailService.addPatternInferredEmails(updatedSubmission.id);
+            console.log(`[ENHANCEMENT] Supplemental email pattern inference completed`);
+          } catch (error) {
+            console.error(`[ENHANCEMENT] Supplemental email pattern inference failed (non-critical):`, error);
+            // Continue normally - this is just an enhancement
+          }
         }
 
         // If no Apollo contacts found, create a placeholder message
@@ -860,6 +873,52 @@ LinkedIn message tone: ${tone}`;
     } catch (error) {
       console.error('Apollo test error:', error);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // NEW: Supplemental emails endpoint - fetch pattern-inferred emails for a submission
+  app.get("/api/submissions/:id/supplemental-emails", isAuthenticated, async (req: any, res) => {
+    try {
+      const submissionId = parseInt(req.params.id);
+      const userId = req.user.id;
+      
+      if (isNaN(submissionId)) {
+        return res.status(400).json({ message: "Invalid submission ID" });
+      }
+      
+      // Verify ownership of the submission
+      const submission = await storage.getJobSubmissionById(submissionId);
+      if (!submission || submission.userId !== userId) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      
+      // Get supplemental emails for all contacts in this submission
+      const supplementalEmails = await db
+        .select({
+          contactId: contactEmailsSupplemental.recruiterContactId,
+          email: contactEmailsSupplemental.emailAddress,
+          emailType: contactEmailsSupplemental.emailType,
+          verificationStatus: contactEmailsSupplemental.verificationStatus,
+          confidenceScore: contactEmailsSupplemental.confidenceScore,
+          patternReasoning: contactEmailsSupplemental.patternReasoning,
+          isVerified: contactEmailsSupplemental.isVerified,
+          createdAt: contactEmailsSupplemental.createdAt,
+        })
+        .from(contactEmailsSupplemental)
+        .innerJoin(recruiterContacts, eq(contactEmailsSupplemental.recruiterContactId, recruiterContacts.id))
+        .where(eq(recruiterContacts.jobSubmissionId, submissionId))
+        .orderBy(contactEmailsSupplemental.createdAt);
+      
+      console.log(`[API] Fetched ${supplementalEmails.length} supplemental emails for submission ${submissionId}`);
+      
+      res.json({ 
+        submissionId,
+        supplementalEmails,
+        totalCount: supplementalEmails.length
+      });
+    } catch (error) {
+      console.error("Error fetching supplemental emails:", error);
+      res.status(500).json({ message: "Failed to fetch supplemental emails" });
     }
   });
 

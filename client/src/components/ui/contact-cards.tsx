@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,18 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const [editingNotes, setEditingNotes] = useState<number | null>(null);
   const [notesValue, setNotesValue] = useState("");
+
+  // NEW: Fetch supplemental emails (pattern-inferred emails)
+  const { data: supplementalData } = useQuery({
+    queryKey: [`/api/submissions/${submissionId}/supplemental-emails`],
+    enabled: !!submissionId,
+  });
+
+  // Helper to get supplemental emails for a contact
+  const getSupplementalEmails = (contactId: number) => {
+    if (!supplementalData?.supplementalEmails) return [];
+    return supplementalData.supplementalEmails.filter((e: any) => e.contactId === contactId);
+  };
 
   // Helper functions
   const copyToClipboard = async (text: string, type: string) => {
@@ -276,6 +288,77 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                   </div>
                 )}
               </div>
+
+              {/* Pattern-Inferred Emails (NEW) */}
+              {(() => {
+                const supplementalEmails = getSupplementalEmails(contact.id);
+                if (supplementalEmails.length === 0) return null;
+                
+                return (
+                  <div className="border-l-2 border-blue-200 pl-4 ml-7">
+                    <div className="text-xs font-medium text-blue-600 mb-2 flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      Pattern-Inferred Emails
+                    </div>
+                    <div className="space-y-2">
+                      {supplementalEmails.map((suppEmail: any, idx: number) => {
+                        const suppBadge = getVerificationBadge(suppEmail.verificationStatus);
+                        return (
+                          <div key={idx} className="flex items-center gap-2 text-sm">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => copyToClipboard(suppEmail.email, "Pattern-inferred email")}
+                                  className="text-blue-600 hover:text-blue-800 transition-colors font-medium"
+                                  data-testid={`button-copy-supplemental-email-${idx}`}
+                                >
+                                  {suppEmail.email}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Copy pattern-inferred email to clipboard</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Copy 
+                              className="h-3 w-3 text-gray-400 hover:text-blue-600 cursor-pointer" 
+                              onClick={() => copyToClipboard(suppEmail.email, "Pattern-inferred email")}
+                              data-testid={`icon-copy-supplemental-email-${idx}`}
+                            />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant={suppBadge.variant} 
+                                  className={`${suppBadge.className} cursor-help text-xs`}
+                                  data-testid={`badge-verification-supplemental-${idx}`}
+                                >
+                                  {suppBadge.text}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{suppBadge.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant="outline" 
+                                  className="bg-blue-50 text-blue-700 border-blue-200 cursor-help text-xs"
+                                  data-testid={`badge-confidence-supplemental-${idx}`}
+                                >
+                                  {Math.round((suppEmail.confidenceScore || 0) * 100)}%
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Pattern inference confidence: {suppEmail.patternReasoning || 'Based on company email patterns'}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* LinkedIn */}
               <div className="flex items-center gap-3">

@@ -110,6 +110,32 @@ export const messageTemplates = pgTable("message_templates", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// NEW: Supplemental email tables for pattern inference
+export const contactEmailsSupplemental = pgTable("contact_emails_supplemental", {
+  id: serial("id").primaryKey(),
+  recruiterContactId: integer("recruiter_contact_id").notNull().references(() => recruiterContacts.id),
+  emailAddress: varchar("email_address").notNull(),
+  emailType: varchar("email_type").default("pattern_inferred"), // Only pattern-inferred emails
+  verificationStatus: varchar("verification_status").default("unknown"), // valid, risky, invalid, unknown
+  verificationData: jsonb("verification_data"), // Full NeverBounce response
+  confidenceScore: real("confidence_score"), // Pattern confidence 0.0 to 1.0
+  patternReasoning: text("pattern_reasoning"), // Why this pattern was chosen
+  isVerified: varchar("is_verified").default("false"), // NeverBounce verified
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const companyEmailPatterns = pgTable("company_email_patterns", {
+  id: serial("id").primaryKey(),
+  jobSubmissionId: integer("job_submission_id").notNull().references(() => jobSubmissions.id),
+  companyDomain: varchar("company_domain").notNull(),
+  detectedPattern: varchar("detected_pattern"), // e.g., "firstname.lastname"
+  patternConfidence: real("pattern_confidence"), // 0.0 to 1.0
+  validEmailSampleCount: integer("valid_email_sample_count"), // Number of valid emails used for analysis
+  lastAnalyzed: timestamp("last_analyzed").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   jobSubmissions: many(jobSubmissions),
@@ -129,12 +155,28 @@ export const recruiterContactsRelations = relations(recruiterContacts, ({ one, m
     references: [jobSubmissions.id],
   }),
   messageTemplates: many(messageTemplates),
+  supplementalEmails: many(contactEmailsSupplemental), // NEW: Supplemental emails
 }));
 
 export const messageTemplatesRelations = relations(messageTemplates, ({ one }) => ({
   recruiterContact: one(recruiterContacts, {
     fields: [messageTemplates.recruiterContactId],
     references: [recruiterContacts.id],
+  }),
+}));
+
+// NEW: Relations for supplemental email tables
+export const contactEmailsSupplementalRelations = relations(contactEmailsSupplemental, ({ one }) => ({
+  recruiterContact: one(recruiterContacts, {
+    fields: [contactEmailsSupplemental.recruiterContactId],
+    references: [recruiterContacts.id],
+  }),
+}));
+
+export const companyEmailPatternsRelations = relations(companyEmailPatterns, ({ one }) => ({
+  jobSubmission: one(jobSubmissions, {
+    fields: [companyEmailPatterns.jobSubmissionId],
+    references: [jobSubmissions.id],
   }),
 }));
 
@@ -157,6 +199,19 @@ export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).
   createdAt: true,
 });
 
+// NEW: Insert schemas for supplemental email tables
+export const insertContactEmailSupplementalSchema = createInsertSchema(contactEmailsSupplemental).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCompanyEmailPatternSchema = createInsertSchema(companyEmailPatterns).omit({
+  id: true,
+  createdAt: true,
+  lastAnalyzed: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -169,6 +224,12 @@ export type InsertEmailPatternAnalysis = z.infer<typeof insertEmailPatternAnalys
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
 
+// NEW: Types for supplemental email tables
+export type ContactEmailSupplemental = typeof contactEmailsSupplemental.$inferSelect;
+export type InsertContactEmailSupplemental = z.infer<typeof insertContactEmailSupplementalSchema>;
+export type CompanyEmailPattern = typeof companyEmailPatterns.$inferSelect;
+export type InsertCompanyEmailPattern = z.infer<typeof insertCompanyEmailPatternSchema>;
+
 // Extended types with relations
 export type JobSubmissionWithRecruiters = JobSubmission & {
   recruiters: RecruiterContact[];
@@ -176,4 +237,9 @@ export type JobSubmissionWithRecruiters = JobSubmission & {
 
 export type RecruiterContactWithMessages = RecruiterContact & {
   messageTemplates: MessageTemplate[];
+};
+
+// NEW: Extended type with supplemental emails
+export type RecruiterContactWithSupplementalEmails = RecruiterContact & {
+  supplementalEmails: ContactEmailSupplemental[];
 };
