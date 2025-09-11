@@ -94,7 +94,7 @@ export class EnhancedEnrichmentService {
     const searchMetadata = {
       query: `${request.company_name} recruiters and department leads`,
       results_found: 0,
-      apollo_configured: apolloService.isConfigured(),
+      apollo_configured: !!process.env.APOLLO_API_KEY,
       neverbounce_configured: verifierService.isConfigured(),
       apollo_results: 0,
       verified_emails: 0,
@@ -114,14 +114,13 @@ export class EnhancedEnrichmentService {
     }
 
     // Step 1: Test Apollo API connection first
-    if (apolloService.isConfigured()) {
+    if (!!process.env.APOLLO_API_KEY) {
       console.log("Testing Apollo API connection...");
       const connectionTest = await apolloService.testApiConnection();
       console.log(`Apollo API connection test result: ${connectionTest}`);
       
       // Debug: Test basic search functionality
-      console.log("DEBUG: Running Apollo search diagnostics...");
-      await apolloService.debugApolloSearch(request.company_name);
+      console.log("DEBUG: Apollo API is configured and ready");
     }
 
     // Step 2: Search Apollo using enhanced department-based approach
@@ -129,11 +128,11 @@ export class EnhancedEnrichmentService {
     let departmentLeadContacts: ProcessedContact[] = [];
     
     console.log(`=== APOLLO SEARCH FLOW DEBUG ===`);
-    console.log(`Apollo configured: ${apolloService.isConfigured()}`);
+    console.log(`Apollo configured: ${!!process.env.APOLLO_API_KEY}`);
     console.log(`Department inference: ${departmentInference ? 'AVAILABLE' : 'NULL'}`);
     console.log(`Two bucket targets: ${twoBucketTargets ? 'AVAILABLE' : 'NULL'}`);
     
-    if (apolloService.isConfigured()) {
+    if (!!process.env.APOLLO_API_KEY) {
       try {
         console.log(`Department inference check: ${departmentInference ? 'Available' : 'NULL'}`);
         if (departmentInference) {
@@ -666,9 +665,9 @@ export class EnhancedEnrichmentService {
    */
   getServiceStatus() {
     return {
-      apollo_configured: apolloService.isConfigured(),
+      apollo_configured: !!process.env.APOLLO_API_KEY,
       neverbounce_configured: verifierService.isConfigured(),
-      services_available: apolloService.isConfigured() || verifierService.isConfigured()
+      services_available: !!process.env.APOLLO_API_KEY || verifierService.isConfigured()
     };
   }
 
