@@ -51,7 +51,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
           text: '✅ Valid',
           variant: 'default' as const,
           className: 'bg-green-50 text-green-700 border-green-200',
-          description: 'Email verified as valid and deliverable'
+          description: 'The email has been verified and can receive mail.'
         };
       case 'risky':
       case 'catchall':
@@ -59,21 +59,21 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
           text: '⚠️ Risky',
           variant: 'outline' as const,
           className: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-          description: 'Email may be valid but has potential delivery issues'
+          description: 'The email may work but is flagged as unreliable.'
         };
       case 'invalid':
         return {
           text: '❌ Invalid',
           variant: 'destructive' as const,
           className: 'bg-red-50 text-red-700 border-red-200',
-          description: 'Email verified as invalid or undeliverable'
+          description: 'The email is invalid or will bounce.'
         };
       default:
         return {
-          text: '? Unverified',
+          text: '❓ Unknown',
           variant: 'secondary' as const,
           className: 'bg-gray-50 text-gray-700 border-gray-200',
-          description: 'Email verification status unknown'
+          description: 'The email could not be verified.'
         };
     }
   };
@@ -266,11 +266,11 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Badge variant="secondary" className="bg-gray-50 text-gray-600 border-gray-200 cursor-help ml-2">
-                          ? Unverified
+                          ❓ Unknown
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Email verification status unknown</p>
+                        <p>The email could not be verified.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
