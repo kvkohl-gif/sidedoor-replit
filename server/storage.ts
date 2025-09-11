@@ -218,6 +218,7 @@ export class DatabaseStorage implements IStorage {
         department: recruiterContacts.department,
         sourcePlatform: recruiterContacts.sourcePlatform,
         confidenceScore: recruiterContacts.confidenceScore,
+        recruiterConfidence: recruiterContacts.recruiterConfidence,
         emailVerified: recruiterContacts.emailVerified,
         verificationStatus: recruiterContacts.verificationStatus,
         notes: recruiterContacts.notes,
