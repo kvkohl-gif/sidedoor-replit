@@ -42,8 +42,8 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
 
   // Helper to get supplemental emails for a contact
   const getSupplementalEmails = (contactId: number) => {
-    if (!supplementalData?.supplementalEmails) return [];
-    return supplementalData.supplementalEmails.filter((e: any) => e.contactId === contactId);
+    if (!supplementalData || typeof supplementalData !== 'object' || !('supplementalEmails' in supplementalData)) return [];
+    return (supplementalData as any).supplementalEmails?.filter((e: any) => e.contactId === contactId) || [];
   };
 
   // Helper functions
@@ -215,7 +215,7 @@ export default function ContactCards({ contacts, submissionId }: ContactCardsPro
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 cursor-help">
-                      {Math.round((contact.recruiterConfidence || contact.confidenceScore || 0) * 100)}% confidence
+                      {Math.round((contact.recruiterConfidence || contact.confidenceScore || 0) * 100)}% match confidence
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>

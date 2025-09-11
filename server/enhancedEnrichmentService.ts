@@ -401,12 +401,12 @@ export class EnhancedEnrichmentService {
           title: contact.title,
           email: validatedEmail, // Use validated email to prevent hallucination
           linkedinUrl: contact.linkedin_url,
-          confidenceScore: contact.recruiter_confidence,
+          confidenceScore: contact.recruiter_confidence / 100.0, // Convert 0-100 to 0.0-1.0 scale
           source: "Apollo + AI",
           emailVerified: verificationStatus.is_valid && !!validatedEmail,
           verificationStatus: this.mapVerificationStatus(verificationStatus.status_label),
           sourcePlatform: "apollo",
-          recruiterConfidence: contact.recruiter_confidence,
+          recruiterConfidence: contact.recruiter_confidence / 100.0, // Convert 0-100 to 0.0-1.0 scale
           verificationData: verificationResult || undefined,
           verificationStatusInfo: verificationStatus,
           outreachBucket,
