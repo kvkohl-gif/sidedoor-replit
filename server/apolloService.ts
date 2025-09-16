@@ -369,7 +369,8 @@ class ApolloService {
       const testPayload = {
         q_organization_name: "Google",
         page: 1,
-        per_page: 1
+        per_page: 1,
+        reveal_personal_emails: true
       };
 
       console.log(`Testing Apollo API connection with payload:`, JSON.stringify(testPayload, null, 2));
@@ -525,7 +526,8 @@ class ApolloService {
       const searchPayload: any = {
         q_organization_name: params.company_name,
         page: 1,
-        per_page: 5
+        per_page: 5,
+        reveal_personal_emails: true
       };
 
       // Add name filters
@@ -533,6 +535,11 @@ class ApolloService {
       if (lastName) searchPayload.person_last_names = [lastName];
 
       console.log(`Searching Apollo for specific recruiter: ${params.recruiter_name} at ${params.company_name}`);
+
+      // Add reveal_personal_emails if not already present
+      if (!searchPayload.reveal_personal_emails) {
+        searchPayload.reveal_personal_emails = true;
+      }
 
       const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
         method: "POST",
@@ -772,71 +779,92 @@ class ApolloService {
   }
 
   /**
-   * Smart email discovery with pattern inference - keeps all contacts and infers emails when needed
+   * Smart email discovery with Apollo-first priority logic:
+   * 1. Use Apollo email → 2. Verify with NeverBounce → 3. Keep if valid → 4. Pattern only if Apollo fails
    */
   private async enrichAndInferEmails(shapedContacts: ProcessedContact[], companyDomain: string): Promise<ProcessedContact[]> {
     const results: ProcessedContact[] = [];
     const foundEmails: string[] = [];
     
-    console.log(`=== SMART EMAIL DISCOVERY ===`);
+    console.log(`=== APOLLO-FIRST EMAIL DISCOVERY ===`);
     console.log(`Processing ${shapedContacts.length} contacts with company domain: ${companyDomain}`);
+    console.log(`Priority: Apollo email → NeverBounce verify → keep if valid → pattern only if Apollo fails`);
 
-    // Step 1: Try to find verified emails through enrichment
+    // Step 1: Process each contact with Apollo-first priority
     for (const item of shapedContacts) {
       console.log(`\n--- Contact: ${item.full_name} ---`);
-      console.log(`Original email: ${item.email || 'NONE'}`);
+      console.log(`Apollo search email: ${item.email || 'NONE'}`);
       console.log(`Title: ${item.title}`);
       
       let finalEmail: string | null = null;
+      let emailSource: 'apollo_verified' | 'apollo_failed_pattern' | 'none' = 'none';
       
       try {
-        // Try enrichment first
-        const enrichedContact = await this.enrichContactByProfile(item.apolloContact!);
+        // PRIORITY 1: Try Apollo email first (from search or enrichment)
+        let apolloEmail: string | null = null;
         
-        if (enrichedContact) {
-          console.log(`Enrichment found:`, {
-            email: enrichedContact.email || 'NONE',
-            work_email: enrichedContact.work_email || 'NONE', 
-            primary_email: enrichedContact.primary_email || 'NONE'
-          });
+        // Check if search already gave us a real email (not placeholder)
+        if (item.email && !item.email.includes('email_not_unlocked') && !item.email.includes('placeholder')) {
+          apolloEmail = item.email;
+          console.log(`✅ Apollo search provided real email: ${apolloEmail}`);
+        } else {
+          // Try enrichment to get real Apollo email
+          console.log(`🔍 Apollo search gave placeholder, trying enrichment...`);
+          const enrichedContact = await this.enrichContactByProfile(item.apolloContact!);
           
-          // Check all enriched emails for company domain match
-          const candidates = [
-            enrichedContact.work_email,
-            enrichedContact.email,
-            enrichedContact.primary_email,
-          ].filter(email => email && typeof email === 'string' && email.includes(companyDomain));
-          
-          if (candidates.length > 0) {
-            finalEmail = candidates[0] || null;
-            if (finalEmail) {
-              foundEmails.push(finalEmail);
-            }
-            console.log(`✅ Found verified company email: ${finalEmail}`);
+          if (enrichedContact?.email && enrichedContact.email !== 'NONE') {
+            apolloEmail = enrichedContact.email;
+            console.log(`✅ Apollo enrichment provided email: ${apolloEmail}`);
+          } else {
+            console.log(`❌ Apollo enrichment returned no email`);
           }
         }
         
-        // If enrichment didn't find company email, check original
-        if (!finalEmail && item.email && item.email.includes(companyDomain)) {
-          finalEmail = item.email;
-          foundEmails.push(finalEmail);
-          console.log(`✅ Using original company email: ${finalEmail}`);
+        // PRIORITY 2: If we have Apollo email, verify with NeverBounce
+        if (apolloEmail) {
+          console.log(`🔍 Verifying Apollo email with NeverBounce: ${apolloEmail}`);
+          
+          // Import verifierService here to avoid circular dependency
+          const { verifierService } = await import('./verifierService');
+          const verification = await verifierService.verifyEmail(apolloEmail);
+          
+          if (verification) {
+            console.log(`NeverBounce result: ${verification.result} (execution time: ${verification.execution_time}ms)`);
+            
+            // PRIORITY 3: Keep Apollo email if valid or catchall (reject invalid/disposable/unknown)
+            const acceptedResults = ['valid', 'catchall'];
+            const rejectedResults = ['invalid', 'disposable', 'unknown'];
+            
+            if (acceptedResults.includes(verification.result)) {
+              finalEmail = apolloEmail;
+              emailSource = 'apollo_verified';
+              foundEmails.push(finalEmail);
+              console.log(`✅ APOLLO EMAIL ACCEPTED: ${finalEmail} (${verification.result})`);
+            } else if (rejectedResults.includes(verification.result)) {
+              console.log(`❌ Apollo email rejected: ${apolloEmail} (${verification.result})`);
+              console.log(`Will try pattern generation as fallback...`);
+            } else {
+              // Unknown result - be conservative and reject
+              console.log(`⚠️ Unknown NeverBounce result '${verification.result}', rejecting Apollo email`);
+              console.log(`Will try pattern generation as fallback...`);
+            }
+          } else {
+            console.log(`⚠️ NeverBounce API unavailable - accepting Apollo email as fallback (unverified)`);
+            finalEmail = apolloEmail;
+            emailSource = 'apollo_verified';
+            foundEmails.push(finalEmail);
+          }
+        } else {
+          console.log(`❌ No Apollo email available, will try pattern generation...`);
         }
         
         await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
         
       } catch (error) {
-        console.log(`⚠️ Enrichment failed for ${item.full_name}:`, error);
-        
-        // Check if original email is company email
-        if (item.email && item.email.includes(companyDomain)) {
-          finalEmail = item.email;
-          foundEmails.push(finalEmail);
-          console.log(`✅ Using original company email (enrichment failed): ${finalEmail}`);
-        }
+        console.log(`⚠️ Apollo processing failed for ${item.full_name}:`, error);
       }
       
-      // Add to results with whatever email we found (or null)
+      // Add to results - pattern generation will happen in Step 2 if needed
       const { isRecruiter, confidence } = this.isRecruiterTitle(item.title || "");
       
       results.push({
@@ -848,9 +876,10 @@ class ApolloService {
         is_recruiter_likely: isRecruiter,
         recruiter_confidence: confidence,
         apolloId: item.apolloId
+        // Note: emailSource tracked in logs for debugging
       });
       
-      console.log(`${finalEmail ? '✅ ACCEPTED' : '⚠️ NO EMAIL'}: ${item.full_name}`);
+      console.log(`${finalEmail ? '✅ APOLLO SUCCESS' : '⚠️ APOLLO FAILED'}: ${item.full_name}`);
     }
     
     // Step 2: Infer email patterns for contacts without emails
@@ -902,6 +931,10 @@ class ApolloService {
         delete (searchPayload as any)[key];
       }
     });
+
+    // CRITICAL: Always ensure email unlocking is enabled for all Apollo search calls
+    searchPayload.reveal_personal_emails = true;
+    console.log(`🔑 Email unlocking enabled: reveal_personal_emails = true`);
 
     const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
       method: "POST",

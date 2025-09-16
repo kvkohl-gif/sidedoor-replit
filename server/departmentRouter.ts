@@ -164,6 +164,7 @@ export interface ApolloSearchPlan {
     person_seniorities?: string[];
     person_departments?: string[];
     per_page: number;
+    reveal_personal_emails?: boolean;
   };
   hardLimit: number;
 }
@@ -198,7 +199,8 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
         person_titles: primaryTitles,
         person_seniorities: SENIORITIES,
         person_departments: deptFilters,
-        per_page: 10
+        per_page: 10,
+        reveal_personal_emails: true
       },
       hardLimit: 10
     },
@@ -209,7 +211,8 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
         organization_ids: [orgId],
         person_seniorities: SENIORITIES,
         person_departments: deptFilters,
-        per_page: 10
+        per_page: 10,
+        reveal_personal_emails: true
       },
       hardLimit: 10
     }
@@ -223,7 +226,8 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
         organization_ids: [orgId],
         person_titles: crossTitles,
         person_seniorities: SENIORITIES,
-        per_page: 8
+        per_page: 8,
+        reveal_personal_emails: true
       },
       hardLimit: 8
     });
@@ -237,7 +241,8 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       person_titles: ['Recruiter', 'Senior Recruiter', 'Talent Acquisition', 'Head of Talent', 'Director of Talent'],
       person_seniorities: SENIORITIES,
       person_departments: APOLLO_DEPT_MAP.people,
-      per_page: 6
+      per_page: 6,
+      reveal_personal_emails: true
     },
     hardLimit: 6
   });
