@@ -515,12 +515,14 @@ export class EnhancedEnrichmentService {
         }
       }
       
-      // Split contacts into two buckets
+      // Split contacts into two buckets with hard cap of 5 department leads
       const recruiterContacts = topContacts.filter(c => c.outreachBucket === "recruiter");
-      const departmentLeadContacts = topContacts.filter(c => c.outreachBucket === "department_lead");
+      const departmentLeadContacts = topContacts.filter(c => c.outreachBucket === "department_lead").slice(0, 5);
+      
+      console.log(`Final contact counts: ${recruiterContacts.length} recruiters, ${departmentLeadContacts.length} department leads (capped at 5)`);
       
       return {
-        contacts: topContacts,
+        contacts: [...recruiterContacts, ...departmentLeadContacts], // Combine with capped department leads
         recruiter_contacts: recruiterContacts,
         department_lead_contacts: departmentLeadContacts,
         searchMetadata: {
