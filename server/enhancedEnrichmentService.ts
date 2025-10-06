@@ -388,7 +388,12 @@ export class EnhancedEnrichmentService {
         const isHighConfidenceRecruiter = contact.recruiter_confidence >= 70;
         const isRecruiter = isHighConfidenceRecruiter || hasRecruiterKeywords;
         const outreachBucket = isRecruiter ? "recruiter" : "department_lead";
-        const department = isRecruiter ? undefined : (twoBucketTargets?.department_lead_contacts.primary_department || 'Unknown');
+        // FIX: Use AI-inferred department from departmentInference first, then fall back to twoBucketTargets
+        const department = isRecruiter ? undefined : (
+          departmentInference?.departments[0]?.label || 
+          twoBucketTargets?.department_lead_contacts.primary_department || 
+          'Unknown'
+        );
         const seniority = isRecruiter ? undefined : this.extractSeniority(contact.title);
         
         // Contact names should now come from Apollo's People Enrichment API
