@@ -188,10 +188,11 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       .map(x => x.title)
   );
 
-  const SENIORITIES = ['manager', 'head', 'director', 'vp', 'c_suite', 'lead', 'principal'];
+  // Focus on senior decision-makers only - remove manager and principal
+  const SENIORITIES = ['director', 'vp', 'c_suite', 'head', 'lead'];
 
   const plans: ApolloSearchPlan[] = [
-    // 1) Primary dept + primary titles
+    // 1) Primary dept + primary titles (reduced to 3 contacts)
     {
       label: 'primary-dept+titles',
       payload: {
@@ -199,26 +200,26 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
         person_titles: primaryTitles,
         person_seniorities: SENIORITIES,
         person_departments: deptFilters,
-        per_page: 10,
+        per_page: 3,
         reveal_personal_emails: true
       },
-      hardLimit: 10
+      hardLimit: 3
     },
-    // 2) Primary dept + seniorities (broaden titles)
+    // 2) Primary dept + seniorities (reduced to 3 contacts)
     {
       label: 'primary-dept+seniorities',
       payload: {
         organization_ids: [orgId],
         person_seniorities: SENIORITIES,
         person_departments: deptFilters,
-        per_page: 10,
+        per_page: 3,
         reveal_personal_emails: true
       },
-      hardLimit: 10
+      hardLimit: 3
     }
   ];
 
-  // 3) Cross-function titles (still same org)
+  // 3) Cross-function titles (reduced to 2 contacts, only if needed)
   if (crossTitles.length) {
     plans.push({
       label: 'cross-function+titles',
@@ -226,14 +227,14 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
         organization_ids: [orgId],
         person_titles: crossTitles,
         person_seniorities: SENIORITIES,
-        per_page: 8,
+        per_page: 2,
         reveal_personal_emails: true
       },
-      hardLimit: 8
+      hardLimit: 2
     });
   }
 
-  // 4) Talent/Recruiting (only as fallback)
+  // 4) Talent/Recruiting (reduced to 2 contacts as fallback)
   plans.push({
     label: 'recruiting-fallback',
     payload: {
@@ -241,10 +242,10 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       person_titles: ['Recruiter', 'Senior Recruiter', 'Talent Acquisition', 'Head of Talent', 'Director of Talent'],
       person_seniorities: SENIORITIES,
       person_departments: APOLLO_DEPT_MAP.people,
-      per_page: 6,
+      per_page: 2,
       reveal_personal_emails: true
     },
-    hardLimit: 6
+    hardLimit: 2
   });
 
   return plans;
