@@ -1,21 +1,16 @@
 import { Search, Sparkles, Loader2, Zap } from "lucide-react";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "../lib/queryClient";
+import { nanoid } from "nanoid";
 
 interface SearchPageProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, data?: any) => void;
 }
 
 export function SearchPage({ onNavigate }: SearchPageProps) {
   const [jobDescription, setJobDescription] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState(0);
-
-  const processingSteps = [
-    "Analyzing job description...",
-    "Searching for contacts...",
-    "Verifying emails...",
-    "Generating outreach messages...",
-  ];
+  const [isInputLocked, setIsInputLocked] = useState(false);
 
   const sampleJobDescription = `Senior Product Manager - TechCorp Inc.
 Location: San Francisco, CA (Hybrid)
@@ -35,24 +30,35 @@ Requirements:
 • Excellent communication
 • MBA or technical degree preferred`;
 
-  const handleSubmit = () => {
-    setIsProcessing(true);
-    setProcessingStep(0);
-
-    // Simulate processing steps
-    const interval = setInterval(() => {
-      setProcessingStep((prev) => {
-        if (prev >= processingSteps.length - 1) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsProcessing(false);
-            onNavigate("job-details");
-          }, 1000);
-          return prev;
-        }
-        return prev + 1;
+  const submitJobMutation = useMutation({
+    mutationFn: async (data: { input: string; runId: string }) => {
+      const isUrl = data.input.trim().startsWith('http');
+      return await apiRequest("POST", "/api/submissions", { 
+        jobInput: data.input,
+        inputType: isUrl ? "url" : "text",
+        runId: data.runId
       });
-    }, 1500);
+    },
+    onSuccess: async (response) => {
+      const data = await response.json();
+      setIsInputLocked(false);
+      onNavigate("job-details", { submissionId: data.submission.id });
+    },
+    onError: (error: any) => {
+      setIsInputLocked(false);
+      alert(error.message || "Failed to submit job. Please try again.");
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!jobDescription.trim() || jobDescription.trim().length < 12) {
+      alert("Please enter at least 12 characters to continue.");
+      return;
+    }
+
+    const runId = nanoid();
+    setIsInputLocked(true);
+    submitJobMutation.mutate({ input: jobDescription.trim(), runId });
   };
 
   const loadSampleData = () => {
@@ -83,7 +89,7 @@ Requirements:
               <label className="text-[#1A202C] font-medium">Job Description</label>
               <button
                 onClick={loadSampleData}
-                disabled={isProcessing}
+                disabled={submitJobMutation.isPending || isInputLocked}
                 className="flex items-center gap-1 text-sm text-[#6B46C1] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Zap className="w-4 h-4" />
@@ -96,13 +102,13 @@ Requirements:
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the full job posting here including title, company, location, responsibilities, and requirements..."
-                disabled={isProcessing}
+                disabled={isInputLocked || submitJobMutation.isPending}
                 className="w-full h-64 p-4 border border-[#E2E8F0] rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent disabled:bg-[#F9FAFB] disabled:cursor-not-allowed text-[#1A202C] placeholder:text-[#A0AEC0]"
               />
             </div>
 
             {/* Helper Text */}
-            {!isProcessing && (
+            {!submitJobMutation.isPending && (
               <p className="mt-3 text-sm text-[#718096]">
                 <span className="font-medium">💡 Tip:</span> Include job title, company name, requirements, and
                 responsibilities for best results.
@@ -110,19 +116,13 @@ Requirements:
             )}
 
             {/* Processing Status */}
-            {isProcessing && (
+            {submitJobMutation.isPending && (
               <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3">
                   <Loader2 className="w-5 h-5 text-[#6B46C1] animate-spin" />
                   <span className="font-medium text-[#6B46C1]">
-                    {processingSteps[processingStep]}
+                    Processing job submission and finding contacts...
                   </span>
-                </div>
-                <div className="w-full bg-white rounded-full h-2">
-                  <div
-                    className="bg-[#6B46C1] h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${((processingStep + 1) / processingSteps.length) * 100}%` }}
-                  ></div>
                 </div>
               </div>
             )}
@@ -130,10 +130,10 @@ Requirements:
             {/* Submit Button */}
             <button
               onClick={handleSubmit}
-              disabled={!jobDescription.trim() || isProcessing}
+              disabled={!jobDescription.trim() || submitJobMutation.isPending || isInputLocked}
               className="w-full mt-6 bg-[#6B46C1] text-white py-3 px-6 rounded-lg hover:bg-[#5a3ba1] transition-colors disabled:bg-[#E2E8F0] disabled:text-[#A0AEC0] disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
             >
-              {isProcessing ? (
+              {submitJobMutation.isPending ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
                   Processing...
