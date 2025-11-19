@@ -1,35 +1,52 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import { Layout } from "./components/Layout";
+import { Dashboard } from "./components/Dashboard";
+import { SearchPage } from "./components/SearchPage";
+import { JobHistory } from "./components/JobHistory";
+import { JobDetails } from "./components/JobDetails";
+import { AllContacts } from "./components/AllContacts";
+import { ContactDetail } from "./components/ContactDetail";
+import { Subscription } from "./components/Subscription";
+import { Credits } from "./components/Credits";
+import { Settings } from "./components/Settings";
+import { BillingHistory } from "./components/BillingHistory";
+import { OutreachProfile } from "./components/OutreachProfile";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [currentPage, setCurrentPage] = useState("dashboard");
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case "dashboard":
+        return <Dashboard onNavigate={setCurrentPage} />;
+      case "search":
+        return <SearchPage onNavigate={setCurrentPage} />;
+      case "job-history":
+        return <JobHistory onNavigate={setCurrentPage} />;
+      case "job-details":
+        return <JobDetails onNavigate={setCurrentPage} />;
+      case "contacts":
+        return <AllContacts onNavigate={setCurrentPage} />;
+      case "contact-detail":
+        return <ContactDetail onNavigate={setCurrentPage} />;
+      case "outreach-profile":
+        return <OutreachProfile />;
+      case "billing":
+        return <Subscription />;
+      case "credits":
+        return <Credits />;
+      case "settings":
+        return <Settings />;
+      case "billing-history":
+        return <BillingHistory />;
+      default:
+        return <Dashboard onNavigate={setCurrentPage} />;
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+      {renderPage()}
+    </Layout>
+  );
 }
-
-export default App
