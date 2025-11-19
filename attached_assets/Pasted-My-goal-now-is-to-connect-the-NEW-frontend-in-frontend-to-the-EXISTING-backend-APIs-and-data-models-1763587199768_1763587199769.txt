@@ -1,0 +1,110 @@
+My goal now is to connect the NEW frontend in /frontend to the EXISTING backend APIs and data models that were already working with the OLD frontend in /frontend_old.
+
+Project layout (important):
+
+- backend/
+  - (Express + TypeScript backend with all API routes)
+  - shared schemas/types may exist here (e.g. backend/shared/schema.ts)
+
+- frontend_old/
+  - Old React/Vite app that ALREADY talks correctly to the backend
+  - Contains working API client and React Query setup
+
+- frontend/
+  - New React/Vite app generated from Figma
+  - Has components:
+    - src/components/Dashboard.tsx
+    - src/components/SearchPage.tsx
+    - src/components/JobHistory.tsx
+    - src/components/AllContacts.tsx
+    - src/components/ContactDetail.tsx
+    - src/components/FollowUp.tsx
+    - src/components/Reports.tsx
+    - src/components/Settings.tsx
+    - src/components/Upgrade.tsx
+    - src/components/Profile.tsx
+    - src/components/Inbox.tsx
+    - src/components/Notifications.tsx
+    - src/components/Credits.tsx
+  - Currently these use mostly mock/hardcoded data
+
+Please do the following ONLY inside frontend/ (and optionally a shared/ folder for types), reusing logic from frontend_old/ where possible:
+
+1. Reuse the existing API client and utilities from the old frontend:
+   - Locate the API and auth utilities in frontend_old, for example:
+       frontend_old/src/lib/api.ts
+       frontend_old/src/lib/authUtils.ts
+       frontend_old/src/lib/queryClient.ts
+   - Copy the relevant files into the new frontend under:
+       frontend/src/lib/
+     adjusting import paths as needed (e.g. "@/lib/..." or relative paths).
+   - If there is a React Query setup in frontend_old (e.g. a configured QueryClient), set up the same pattern in frontend/src:
+       - Ensure frontend/src/main.tsx wraps the app in <QueryClientProvider> with a shared queryClient.
+       - Keep the same query keys if possible.
+
+2. Reuse shared schemas/types for strong typing if available:
+   - Check backend/shared/ or similar for Zod schemas or TypeScript types that define API contracts.
+   - If such schemas exist, create a shared/ folder at the project root:
+       shared/schema.ts (or similar)
+     and move or mirror those schemas there.
+   - Update both backend and frontend imports to use the shared/ path so they agree on types.
+   - In the new frontend, use these schemas/types in the API client functions to parse/validate responses where practical.
+
+3. Wire the new key pages to real data (replace mock data with live API calls):
+
+   Focus on these components first (core flows):
+
+   a) SearchPage.tsx
+      - Find how the OLD frontend triggers a search (routes and functions in frontend_old/src/lib/api.ts and any search page/component).
+      - Implement the same behavior in frontend/src/components/SearchPage.tsx:
+        - Use React Query or useEffect + useState with the new API client.
+        - Replace any hardcoded arrays for search results, recent searches, etc. with data from the backend.
+        - Make sure it calls the same backend endpoint(s) as the old frontend (e.g. /api/search, /api/jobs, /api/leads, etc.).
+        - Preserve loading and error states.
+
+   b) JobHistory.tsx
+      - Identify the old job history API calls in frontend_old (e.g. getJobHistory, getApplications, etc.).
+      - In frontend/src/components/JobHistory.tsx, replace mock job history data with data from those API calls.
+      - Ensure pagination/filtering uses real backend data if the backend supports it.
+
+   c) AllContacts.tsx and ContactDetail.tsx
+      - Find how the old frontend listed contacts and fetched a single contact (e.g. getContacts, getContactById).
+      - Replace hardcoded contact lists and details in AllContacts.tsx and ContactDetail.tsx with live data from the backend.
+      - Wire up navigation so clicking a contact in AllContacts loads ContactDetail with the real contact object.
+      - Keep loading/error/empty states.
+
+   d) Dashboard.tsx
+      - Inspect the old dashboard page (if one exists) or any API endpoints that provide summary stats (e.g. total contacts, recent searches, jobs, credits).
+      - In frontend/src/components/Dashboard.tsx, replace any mock metrics with real metrics from the backend.
+      - If no single “dashboard” API exists, compose it from multiple existing endpoints.
+
+4. Keep the UI design intact while swapping data:
+   - Do NOT remove or significantly alter the JSX layout or classNames from the new Figma-based components.
+   - Only replace the mock data sources and state with live data from the API client.
+   - Make sure that any existing props or state shape matches what the backend returns (or adapt via mapping functions).
+
+5. Centralize configuration and base URL:
+   - In frontend/src/lib/api.ts, ensure there is a single place where the API base URL is defined.
+   - For development inside Replit, this can likely be relative (e.g. fetch("/api/...")) since frontend and backend are on the same origin.
+   - If environment variables are already used in frontend_old (like VITE_API_URL), mirror that pattern.
+
+6. Do NOT modify:
+   - backend routes or business logic
+   - frontend_old code (leave it as a reference)
+   - Only adjust files under frontend/src and optionally a shared/ folder for shared types.
+
+7. After wiring these components:
+   - Run:
+       cd frontend
+       npm run build
+     and ensure the build still passes.
+   - Then start the app with the usual Run button and verify that:
+       - SearchPage shows real search results from the backend.
+       - JobHistory shows real job history from the backend.
+       - AllContacts and ContactDetail show real contact data.
+       - Dashboard shows real metrics instead of mock numbers.
+
+8. Finally, provide a summary of:
+   - Which files you created or copied under frontend/src/lib.
+   - Which components you changed (SearchPage, JobHistory, AllContacts, ContactDetail, Dashboard, etc.).
+   - Which backend endpoints each of these components now call.
