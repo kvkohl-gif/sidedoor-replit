@@ -149,7 +149,7 @@ Requirements:
         </div>
 
         {/* Feature Highlights */}
-        {!isProcessing && (
+        {!submitJobMutation.isPending && (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
               <div className="text-[#6B46C1] font-medium mb-1">AI-Powered</div>

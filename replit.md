@@ -3,6 +3,17 @@
 ## Overview
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
+## Recent Changes (November 19, 2025)
+*   **Frontend Migration**: Integrated Figma-exported UI components as the new frontend, replacing the previous React implementation.
+*   **Directory Restructure**: Reorganized project with `/backend` and `/frontend` directories; maintained compatibility symlinks (`server→backend`, `client→frontend`).
+*   **API Integration**: Wired all Figma components to existing backend APIs using React Query:
+    *   SearchPage: POST /api/submissions for job searches
+    *   JobHistory: GET /api/submissions for submission history with status management
+    *   AllContacts: GET /api/contacts/all for contact listing
+    *   ContactDetail: PATCH /api/contacts/:id and POST /api/contacts/:id/generate-message
+    *   Dashboard: Real-time metrics from submissions and contacts endpoints
+*   **Build System**: Frontend builds successfully with Vite, no TypeScript errors, production-ready output.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 

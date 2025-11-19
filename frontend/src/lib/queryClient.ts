@@ -26,7 +26,7 @@ export async function apiRequest(
 type UnauthorizedBehavior = "returnNull" | "throw";
 
 interface QueryFunctionContext {
-  queryKey: unknown[];
+  queryKey: readonly unknown[];
 }
 
 export const getQueryFn = <T,>(options: { on401: UnauthorizedBehavior }) =>

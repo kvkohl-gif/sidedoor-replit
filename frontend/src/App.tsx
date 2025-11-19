@@ -12,23 +12,36 @@ import { Settings } from "./components/Settings";
 import { BillingHistory } from "./components/BillingHistory";
 import { OutreachProfile } from "./components/OutreachProfile";
 
+interface NavigationState {
+  page: string;
+  params?: Record<string, any>;
+}
+
 export default function App() {
-  const [currentPage, setCurrentPage] = useState("dashboard");
+  const [navigationState, setNavigationState] = useState<NavigationState>({ 
+    page: "dashboard" 
+  });
+
+  const handleNavigate = (page: string, params?: Record<string, any>) => {
+    setNavigationState({ page, params });
+  };
 
   const renderPage = () => {
-    switch (currentPage) {
+    const { page, params } = navigationState;
+    
+    switch (page) {
       case "dashboard":
-        return <Dashboard onNavigate={setCurrentPage} />;
+        return <Dashboard onNavigate={handleNavigate} />;
       case "search":
-        return <SearchPage onNavigate={setCurrentPage} />;
+        return <SearchPage onNavigate={handleNavigate} />;
       case "job-history":
-        return <JobHistory onNavigate={setCurrentPage} />;
+        return <JobHistory onNavigate={handleNavigate} />;
       case "job-details":
-        return <JobDetails onNavigate={setCurrentPage} />;
+        return <JobDetails submissionId={params?.submissionId} onNavigate={handleNavigate} />;
       case "contacts":
-        return <AllContacts onNavigate={setCurrentPage} />;
+        return <AllContacts onNavigate={handleNavigate} />;
       case "contact-detail":
-        return <ContactDetail onNavigate={setCurrentPage} />;
+        return <ContactDetail contactId={params?.contactId} onNavigate={handleNavigate} />;
       case "outreach-profile":
         return <OutreachProfile />;
       case "billing":
@@ -40,12 +53,12 @@ export default function App() {
       case "billing-history":
         return <BillingHistory />;
       default:
-        return <Dashboard onNavigate={setCurrentPage} />;
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
   return (
-    <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+    <Layout currentPage={navigationState.page} onNavigate={handleNavigate}>
       {renderPage()}
     </Layout>
   );
