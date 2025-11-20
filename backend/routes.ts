@@ -12,6 +12,8 @@ import { supplementalEmailService } from "./supplementalEmailService";
 import { urlScrapingService } from "./urlScrapingService";
 import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+import { nanoid } from "nanoid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for Replit Preview
@@ -46,6 +48,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Email/password registration endpoint
+  app.post('/api/auth/register', async (req: any, res) => {
+    try {
+      const { email, password, firstName, lastName } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Check if user already exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Create user with a generated ID
+      const userId = nanoid();
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email,
+          password_hash: passwordHash,
+          first_name: firstName || null,
+          last_name: lastName || null,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        throw createError;
+      }
+
+      // Auto-login: create session
+      req.login({ id: userId, email, claims: { sub: userId, email } }, (err: any) => {
+        if (err) {
+          return res.status(500).json({ message: "Registration successful but login failed" });
+        }
+        res.json({ 
+          message: "Registration successful", 
+          user: { id: newUser.id, email: newUser.email }
+        });
+      });
+    } catch (error) {
+      console.error("Error during registration:", error);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // Email/password login endpoint
+  app.post('/api/auth/login', async (req: any, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Find user by email
+      const { data: user, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (fetchError || !user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Check if user has a password (might be OIDC-only user)
+      if (!user.password_hash) {
+        return res.status(401).json({ message: "This account uses a different login method" });
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Create session
+      req.login({ id: user.id, email: user.email, claims: { sub: user.id, email: user.email } }, (err: any) => {
+        if (err) {
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json({ 
+          message: "Login successful", 
+          user: { id: user.id, email: user.email }
+        });
+      });
+    } catch (error) {
+      console.error("Error during login:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Logout endpoint
+  app.post('/api/auth/logout', (req: any, res) => {
+    req.logout((err: any) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      req.session.destroy((destroyErr: any) => {
+        if (destroyErr) {
+          return res.status(500).json({ message: "Session destruction failed" });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ message: "Logout successful" });
+      });
+    });
   });
 
   // Active run IDs for session-based duplicate prevention
