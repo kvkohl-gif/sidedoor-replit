@@ -3,6 +3,18 @@
 ## Overview
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
+## Recent Changes (November 20, 2025)
+*   **Supabase Migration (Phase 1)**: Successfully migrated 4 core job submission routes from Drizzle/Neon to Supabase:
+    *   POST /api/submissions - Creates job submissions, recruiter contacts, and email pattern analysis in Supabase
+    *   GET /api/submissions - Fetches all submissions with recruiter relationships from Supabase
+    *   GET /api/submissions/:id - Fetches single submission with recruiters from Supabase
+    *   PATCH /api/submissions/:id - Updates submission fields via Supabase with empty update guard
+    *   **Field Mapping**: Implemented complete camelCase→snake_case mapping for all 25+ fields across job_submissions, recruiter_contacts, and email_pattern_analysis tables
+    *   **Business Logic Preserved**: OpenAI extraction, Apollo.io enrichment, NeverBounce verification, geographic filtering, and email pattern inference all function identically
+    *   **No Mixed Storage**: These 4 routes are fully isolated from Drizzle storage
+    *   **Production Ready**: Architect-approved migration with comprehensive field mapping documented in backend/SUPABASE_MIGRATION_LOG.md
+    *   ⚠️ **Remaining Work**: Other routes (contacts, dashboard, job-data) still use Drizzle and should be migrated for consistency
+
 ## Recent Changes (November 19, 2025)
 *   **Frontend Migration Complete**: Successfully integrated Figma-exported UI components as the new frontend, replacing the previous React implementation.
 *   **Directory Restructure**: Reorganized project with `/backend` and `/frontend` directories; maintained compatibility symlinks (`server→backend`, `client→frontend`) due to immutable vite.config.ts.
@@ -29,8 +41,11 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
 ### Key Architectural Decisions:
 *   **Monorepo Structure**: Facilitates co-development and shared type management between frontend and backend.
 *   **Type Safety**: Utilizes TypeScript across the stack for improved code quality and maintainability.
-*   **Database**: PostgreSQL with Drizzle ORM for type-safe and efficient data management, hosted on Neon for serverless capabilities.
-*   **Authentication**: Integrated with Replit's OpenID Connect for secure user authentication and session management.
+*   **Database**: Transitioning from Drizzle ORM + Neon PostgreSQL to Supabase PostgreSQL for improved serverless capabilities and built-in features. 
+    *   **Migration Status**: Job submission routes (POST/GET/GET:id/PATCH) fully migrated to Supabase
+    *   **Pending Migration**: Contact routes, dashboard routes, and other endpoints still use Drizzle
+    *   **Data Layer**: Supabase client configured with both regular and admin access for service-level operations
+*   **Authentication**: Integrated with Replit's OpenID Connect for secure user authentication and session management (not using Supabase auth).
 *   **UI/UX**: Employs Shadcn/ui and Radix UI with Tailwind CSS for a modern, consistent, and accessible user interface. Components are designed for compactness and clarity, including consistent header structures and a collapsible sidebar.
 *   **AI Integration**: OpenAI GPT-4o is central to extracting initial recruiter data and generating outreach parameters.
 *   **Contact Enrichment**: A multi-stage process involving:
@@ -60,8 +75,9 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
 ## External Dependencies
 
 ### Core Dependencies
-*   **@neondatabase/serverless**: PostgreSQL database connection
-*   **drizzle-orm**: Type-safe database ORM
+*   **@supabase/supabase-js**: Supabase PostgreSQL client (primary database for migrated routes)
+*   **@neondatabase/serverless**: PostgreSQL database connection (legacy, being phased out)
+*   **drizzle-orm**: Type-safe database ORM (legacy, being phased out)
 *   **openai**: OpenAI API client for GPT-4o
 *   **passport**: Authentication middleware
 *   **express-session**: Session management
