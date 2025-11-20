@@ -1,0 +1,161 @@
+I want to implement server-side authentication using my existing Express backend, Supabase database tables, and session-based login system.
+
+We are **not** using Supabase Auth.  
+We are using our existing Supabase tables:
+
+- users
+- sessions
+
+Please add the following backend functionality:
+
+──────────────────────────────────────────
+1) Create auth routes:
+──────────────────────────────────────────
+
+Add three new Express routes:
+
+POST /api/auth/register  
+POST /api/auth/login  
+POST /api/auth/logout  
+
+Place them under a new file:
+backend/routes/auth.ts
+
+Register the router inside backend/server.ts.
+
+──────────────────────────────────────────
+2) Registration (POST /api/auth/register)
+──────────────────────────────────────────
+
+Implement the following behavior:
+
+Inputs (from SignupScreen):
+- firstName
+- lastName
+- email
+- password
+
+Steps:
+
+1. Validate required fields.
+2. Check if a user with this email already exists in Supabase "users" table.
+3. Hash the password using bcrypt (10 salt rounds).
+4. Insert a new row into Supabase "users" table with:
+   - first_name
+   - last_name
+   - email
+   - password_hash
+   - created_at (default now)
+5. Create a new session in the "sessions" table:
+   - id (UUID)
+   - user_id
+   - created_at (default now)
+6. Set a cookie named "session_id" with the session ID.
+   - HttpOnly
+   - Secure if in production
+   - SameSite: strict
+7. Return { success: true }.
+
+Do NOT return the password hash or user object to the frontend.
+
+──────────────────────────────────────────
+3) Login (POST /api/auth/login)
+──────────────────────────────────────────
+
+Inputs:
+- email
+- password
+
+Steps:
+
+1. Look up the user in Supabase by email.
+2. If not found, return 401.
+3. Compare plaintext password with bcrypt.compare() using stored password_hash.
+4. If invalid, return 401.
+5. Create a new session in "sessions" table.
+6. Set a cookie named "session_id" exactly as in register.
+7. Return { success: true }.
+
+──────────────────────────────────────────
+4) Logout (POST /api/auth/logout)
+──────────────────────────────────────────
+
+1. Read session_id from cookie.
+2. Delete the session row in Supabase.
+3. Clear the cookie by setting it to empty + expired.
+4. Return { success: true }.
+
+──────────────────────────────────────────
+5) Session Middleware
+──────────────────────────────────────────
+
+Create middleware: backend/middleware/sessionAuth.ts
+
+Behavior:
+
+1. Read "session_id" cookie.
+2. If no cookie → req.user = null.
+3. If cookie exists:
+   - Query Supabase "sessions" table for that ID.
+   - If session exists, attach:
+       req.user = { id: <user_id> }
+   - Otherwise req.user = null.
+
+Export this middleware and apply it globally in backend/server.ts so that all routes have access to req.user.
+
+──────────────────────────────────────────
+6) Protect existing routes
+──────────────────────────────────────────
+
+Any route that previously required login should now check:
+
+if (!req.user) {
+   return res.status(401).json({ error: "Unauthorized" });
+}
+
+Do NOT rewrite business logic inside those routes.  
+ONLY update the authentication mechanism.
+
+──────────────────────────────────────────
+7) Frontend Integration Notes
+──────────────────────────────────────────
+
+My LoginScreen.tsx and SignupScreen.tsx both call:
+
+onLogin()
+onSignup()
+
+You DO NOT need to change these files.
+
+Instead, create two helper functions on the frontend:
+
+- loginUser(email, password) → calls POST /api/auth/login
+- registerUser(firstName, lastName, email, password) → calls POST /api/auth/register
+
+and call these inside onLogin/onSignup handlers.
+
+If needed, create a new file:
+frontend/lib/auth.ts
+
+But DO NOT modify LoginScreen.tsx or SignupScreen.tsx.
+
+──────────────────────────────────────────
+8) Final Deliverables
+──────────────────────────────────────────
+
+After completing the changes, please summarize:
+
+- All files created
+- All files modified
+- The exact Supabase queries used for:
+    - user lookup
+    - user insert
+    - session insert
+    - session lookup
+    - session delete
+- How the middleware attaches req.user
+- How cookies are set and cleared
+
+Do NOT modify any non-auth business logic.
+
+This completes the authentication system.
