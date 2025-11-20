@@ -70,7 +70,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
 
       {/* Signup Card */}
       <div className="w-full max-w-md relative z-10">
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg p-8">
+        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg px-8 py-10 sm:px-10 sm:py-12">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <div className="flex items-center gap-2.5">
@@ -88,7 +88,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4" style={{ maxWidth: '384px', marginLeft: 'auto', marginRight: 'auto' }}>
+          <form onSubmit={handleSubmit} className="space-y-6" style={{ maxWidth: '384px', marginLeft: 'auto', marginRight: 'auto' }}>
             {/* Name Row */}
             <div className="grid grid-cols-2 gap-3">
               {/* First Name */}
@@ -195,7 +195,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#6B46C1] hover:bg-[#5a3ba1] disabled:bg-[#9F7AEA] text-white px-4 py-3 rounded-lg transition-all font-medium text-[14px] shadow-sm flex items-center justify-center gap-2 mt-6"
+              className="w-full bg-[#6B46C1] hover:bg-[#5a3ba1] disabled:bg-[#9F7AEA] text-white px-4 py-3 rounded-lg transition-all font-medium text-[14px] shadow-sm flex items-center justify-center gap-2 mt-6 mb-4"
             >
               {isLoading ? (
                 "Creating account..."
