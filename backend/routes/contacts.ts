@@ -7,7 +7,7 @@ export function registerContactRoutes(app: Express) {
   // Get all contacts for authenticated user
   app.get("/api/contacts/all", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Fetch all contacts for user's job submissions using Supabase
       const { data: contacts, error: fetchError } = await supabase
@@ -75,7 +75,7 @@ export function registerContactRoutes(app: Express) {
   // Update contact
   app.patch("/api/contacts/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const contactId = parseInt(req.params.id);
       const updates = req.body;
 
@@ -144,7 +144,7 @@ export function registerContactRoutes(app: Express) {
   // Generate message for contact
   app.post("/api/contacts/:id/generate-message", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const contactId = parseInt(req.params.id);
       const { messageType, tone = "professional" } = req.body;
 
