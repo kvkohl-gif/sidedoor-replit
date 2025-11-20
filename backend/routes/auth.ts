@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
-import { supabaseAdmin } from "../lib/supabaseClient";
+import { sql } from "../lib/neonClient";
 
 const router = Router();
 
@@ -13,51 +13,30 @@ router.post("/register", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const { data: existingUser } = await supabaseAdmin
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .maybeSingle();
+    // Check if user exists using direct SQL
+    const existingUsers = await sql`
+      SELECT id FROM users WHERE email = ${email}
+    `;
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       return res.status(400).json({ error: "User with this email already exists" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = nanoid();
 
-    // Create user with direct table insert
-    const { data: newUser, error: userError } = await supabaseAdmin
-      .from("users")
-      .insert([{
-        id: userId,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        password_hash: passwordHash,
-      }])
-      .select("*")
-      .single();
+    // Create user with direct SQL
+    await sql`
+      INSERT INTO users (id, first_name, last_name, email, password_hash, created_at, updated_at)
+      VALUES (${userId}, ${firstName}, ${lastName}, ${email}, ${passwordHash}, NOW(), NOW())
+    `;
 
-    if (userError || !newUser) {
-      console.error("User creation error:", userError);
-      return res.status(500).json({ error: "Failed to create user" });
-    }
-
+    // Create session with direct SQL
     const sessionId = nanoid();
-    const { data: newSession, error: sessionError } = await supabaseAdmin
-      .from("sessions")
-      .insert([{
-        id: sessionId,
-        user_id: userId,
-      }])
-      .select("*")
-      .single();
-
-    if (sessionError) {
-      console.error("Session creation error:", sessionError);
-      return res.status(500).json({ error: "Failed to create session" });
-    }
+    await sql`
+      INSERT INTO sessions (id, user_id, created_at)
+      VALUES (${sessionId}, ${userId}, NOW())
+    `;
 
     res.cookie("session_id", sessionId, {
       httpOnly: true,
@@ -81,36 +60,28 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const { data: user } = await supabaseAdmin
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .maybeSingle();
+    // Fetch user with direct SQL
+    const users = await sql`
+      SELECT id, password_hash FROM users WHERE email = ${email}
+    `;
 
-    if (!user) {
+    if (users.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    const user = users[0];
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    // Create session with direct SQL
     const sessionId = nanoid();
-    const { data: newSession, error: sessionError } = await supabaseAdmin
-      .from("sessions")
-      .insert([{
-        id: sessionId,
-        user_id: user.id,
-      }])
-      .select("*")
-      .single();
-
-    if (sessionError) {
-      console.error("Session creation error:", sessionError);
-      return res.status(500).json({ error: "Failed to create session" });
-    }
+    await sql`
+      INSERT INTO sessions (id, user_id, created_at)
+      VALUES (${sessionId}, ${user.id}, NOW())
+    `;
 
     res.cookie("session_id", sessionId, {
       httpOnly: true,
@@ -131,10 +102,10 @@ router.post("/logout", async (req: Request, res: Response) => {
     const sessionId = req.cookies.session_id;
 
     if (sessionId) {
-      await supabaseAdmin
-        .from("sessions")
-        .delete()
-        .eq("id", sessionId);
+      // Delete session with direct SQL
+      await sql`
+        DELETE FROM sessions WHERE id = ${sessionId}
+      `;
     }
 
     res.clearCookie("session_id");
