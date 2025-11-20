@@ -610,13 +610,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const template = await storage.createMessageTemplate({
-        recruiterContactId: recruiterId,
-        messageType,
-        subject,
-        content,
-        version: version || "v1"
-      });
+      // Create message template using Supabase
+      const { data: template, error: insertError } = await supabase
+        .from('message_templates')
+        .insert({
+          recruiter_contact_id: recruiterId,
+          message_type: messageType,
+          subject: subject,
+          content: content,
+          version: version || "v1"
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(`Failed to create message template: ${insertError.message}`);
+      }
 
       res.json(template);
     } catch (error) {
@@ -649,8 +658,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const templates = await storage.getMessageTemplatesByRecruiter(recruiterId);
-      res.json(templates);
+      // Get message templates using Supabase
+      const { data: templates, error: templatesError } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('recruiter_contact_id', recruiterId)
+        .order('created_at', { ascending: false });
+
+      if (templatesError) {
+        throw new Error(`Failed to fetch message templates: ${templatesError.message}`);
+      }
+
+      res.json(templates || []);
     } catch (error) {
       console.error("Error fetching message templates:", error);
       res.status(500).json({ message: "Failed to fetch message templates" });
@@ -666,28 +685,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid message ID" });
       }
 
-      // Verify ownership through recruiter -> job submission
-      const template = await storage.getMessageTemplateById(messageId);
-      if (!template) {
-        return res.status(404).json({ message: "Message template not found" });
-      }
-
-      // Get recruiter and verify ownership using Supabase
-      const { data: recruiter, error: recruiterError } = await supabase
-        .from('recruiter_contacts')
-        .select('id, job_submission_id, job_submissions!inner(user_id)')
-        .eq('id', template.recruiterContactId)
+      // Get template and verify ownership through recruiter -> job submission using Supabase
+      const { data: template, error: templateError } = await supabase
+        .from('message_templates')
+        .select(`
+          *,
+          recruiter_contacts!inner (
+            id,
+            job_submission_id,
+            job_submissions!inner (
+              user_id
+            )
+          )
+        `)
+        .eq('id', messageId)
         .single();
       
-      if (recruiterError || !recruiter) {
-        return res.status(404).json({ message: "Recruiter not found" });
+      if (templateError || !template) {
+        return res.status(404).json({ message: "Message template not found" });
       }
       
-      if (recruiter.job_submissions.user_id !== userId) {
+      if (template.recruiter_contacts.job_submissions.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const updated = await storage.updateMessageTemplate(messageId, req.body);
+      // Map camelCase updates to snake_case for Supabase
+      const updateData: any = {};
+      if (req.body.subject !== undefined) updateData.subject = req.body.subject;
+      if (req.body.content !== undefined) updateData.content = req.body.content;
+      if (req.body.version !== undefined) updateData.version = req.body.version;
+      if (req.body.isSent !== undefined) updateData.is_sent = req.body.isSent;
+      if (req.body.sentAt !== undefined) updateData.sent_at = req.body.sentAt;
+
+      const { data: updated, error: updateError } = await supabase
+        .from('message_templates')
+        .update(updateData)
+        .eq('id', messageId)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw new Error(`Failed to update message template: ${updateError.message}`);
+      }
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating message template:", error);
@@ -738,22 +778,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recruiterEmail: recruiter.email
       });
 
-      // Save both messages to database
-      const emailTemplate = await storage.createMessageTemplate({
-        recruiterContactId: recruiterId,
-        messageType: "email",
-        subject: messages.emailSubject,
-        content: messages.emailContent,
-        version: "v1"
-      });
+      // Save both messages to database using Supabase
+      const { data: emailTemplate, error: emailError } = await supabase
+        .from('message_templates')
+        .insert({
+          recruiter_contact_id: recruiterId,
+          message_type: "email",
+          subject: messages.emailSubject,
+          content: messages.emailContent,
+          version: "v1"
+        })
+        .select()
+        .single();
 
-      const linkedinTemplate = await storage.createMessageTemplate({
-        recruiterContactId: recruiterId,
-        messageType: "linkedin",
-        subject: null,
-        content: messages.linkedinContent,
-        version: "v1"
-      });
+      if (emailError) {
+        throw new Error(`Failed to create email template: ${emailError.message}`);
+      }
+
+      const { data: linkedinTemplate, error: linkedinError} = await supabase
+        .from('message_templates')
+        .insert({
+          recruiter_contact_id: recruiterId,
+          message_type: "linkedin",
+          subject: null,
+          content: messages.linkedinContent,
+          version: "v1"
+        })
+        .select()
+        .single();
+
+      if (linkedinError) {
+        throw new Error(`Failed to create LinkedIn template: ${linkedinError.message}`);
+      }
 
       res.json({
         email: emailTemplate,
@@ -898,7 +954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Map camelCase updates to snake_case for Supabase
+      // Map camelCase updates to snake_case for Supabase (complete field coverage)
       const updateData: any = {};
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.title !== undefined) updateData.title = updates.title;
@@ -907,12 +963,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updates.department !== undefined) updateData.department = updates.department;
       if (updates.seniority !== undefined) updateData.seniority = updates.seniority;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.source !== undefined) updateData.source = updates.source;
+      if (updates.sourcePlatform !== undefined) updateData.source_platform = updates.sourcePlatform;
+      if (updates.confidenceScore !== undefined) updateData.confidence_score = updates.confidenceScore;
+      if (updates.recruiterConfidence !== undefined) updateData.recruiter_confidence = updates.recruiterConfidence;
+      if (updates.emailVerified !== undefined) updateData.email_verified = updates.emailVerified;
+      if (updates.verificationStatus !== undefined) updateData.verification_status = updates.verificationStatus;
+      if (updates.verificationData !== undefined) updateData.verification_data = updates.verificationData;
+      if (updates.apolloId !== undefined) updateData.apollo_id = updates.apolloId;
+      if (updates.suggestedEmail !== undefined) updateData.suggested_email = updates.suggestedEmail;
+      if (updates.emailSuggestionReasoning !== undefined) updateData.email_suggestion_reasoning = updates.emailSuggestionReasoning;
       if (updates.contactStatus !== undefined) updateData.contact_status = updates.contactStatus;
+      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt;
+      if (updates.outreachBucket !== undefined) updateData.outreach_bucket = updates.outreachBucket;
       if (updates.emailDraft !== undefined) updateData.email_draft = updates.emailDraft;
       if (updates.linkedinMessage !== undefined) updateData.linkedin_message = updates.linkedinMessage;
       if (updates.generatedEmailMessage !== undefined) updateData.generated_email_message = updates.generatedEmailMessage;
       if (updates.generatedLinkedInMessage !== undefined) updateData.generated_linkedin_message = updates.generatedLinkedInMessage;
-      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt;
 
       // Update the contact using Supabase
       const { data: updatedContact, error: updateError } = await supabase

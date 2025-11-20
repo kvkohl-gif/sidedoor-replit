@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
 import { storage } from "../storage";
 import { supabase } from "../lib/supabaseClient";
+import OpenAI from "openai";
 
 export function registerContactRoutes(app: Express) {
   // Get all contacts for authenticated user
@@ -31,7 +32,7 @@ export function registerContactRoutes(app: Express) {
           job_submissions!inner (
             job_title,
             company_name,
-            job_input,
+            job_url,
             user_id
           )
         `)
@@ -61,9 +62,8 @@ export function registerContactRoutes(app: Express) {
         apolloId: contact.apollo_id,
         jobTitle: contact.job_submissions?.job_title,
         companyName: contact.job_submissions?.company_name,
-        jobInput: contact.job_submissions?.job_input,
+        jobUrl: contact.job_submissions?.job_url,
         submissionId: contact.job_submission_id,
-        jobUrl: contact.job_submissions?.job_input,
       }));
 
       res.json(transformedContacts);
@@ -96,7 +96,7 @@ export function registerContactRoutes(app: Express) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Map camelCase updates to snake_case for Supabase
+      // Map camelCase updates to snake_case for Supabase (complete field coverage)
       const updateData: any = {};
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.title !== undefined) updateData.title = updates.title;
@@ -105,12 +105,23 @@ export function registerContactRoutes(app: Express) {
       if (updates.department !== undefined) updateData.department = updates.department;
       if (updates.seniority !== undefined) updateData.seniority = updates.seniority;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.source !== undefined) updateData.source = updates.source;
+      if (updates.sourcePlatform !== undefined) updateData.source_platform = updates.sourcePlatform;
+      if (updates.confidenceScore !== undefined) updateData.confidence_score = updates.confidenceScore;
+      if (updates.recruiterConfidence !== undefined) updateData.recruiter_confidence = updates.recruiterConfidence;
+      if (updates.emailVerified !== undefined) updateData.email_verified = updates.emailVerified;
+      if (updates.verificationStatus !== undefined) updateData.verification_status = updates.verificationStatus;
+      if (updates.verificationData !== undefined) updateData.verification_data = updates.verificationData;
+      if (updates.apolloId !== undefined) updateData.apollo_id = updates.apolloId;
+      if (updates.suggestedEmail !== undefined) updateData.suggested_email = updates.suggestedEmail;
+      if (updates.emailSuggestionReasoning !== undefined) updateData.email_suggestion_reasoning = updates.emailSuggestionReasoning;
       if (updates.contactStatus !== undefined) updateData.contact_status = updates.contactStatus;
+      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt;
+      if (updates.outreachBucket !== undefined) updateData.outreach_bucket = updates.outreachBucket;
       if (updates.emailDraft !== undefined) updateData.email_draft = updates.emailDraft;
       if (updates.linkedinMessage !== undefined) updateData.linkedin_message = updates.linkedinMessage;
       if (updates.generatedEmailMessage !== undefined) updateData.generated_email_message = updates.generatedEmailMessage;
       if (updates.generatedLinkedInMessage !== undefined) updateData.generated_linkedin_message = updates.generatedLinkedInMessage;
-      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt;
 
       // Update the contact using Supabase
       const { data: updatedContact, error: updateError } = await supabase
@@ -136,7 +147,7 @@ export function registerContactRoutes(app: Express) {
     try {
       const userId = req.user.claims.sub;
       const contactId = parseInt(req.params.id);
-      const { messageType, tone } = req.body;
+      const { messageType, tone = "professional" } = req.body;
 
       // Fetch contact and verify user ownership via job submission using Supabase
       const { data: contact, error: fetchError } = await supabase
@@ -161,17 +172,71 @@ export function registerContactRoutes(app: Express) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Generate messages (placeholder - matches original behavior)
-      const emailDraft = `Hi ${contact.name},\n\nI hope this email finds you well. I recently came across the ${contact.job_submissions?.job_title || 'position'} opening at ${contact.job_submissions?.company_name || 'your company'} and I'm very interested in learning more about this opportunity.\n\nI believe my background would be a great fit for this role. Would you be available for a brief call to discuss how I can contribute to your team?\n\nBest regards,\n[Your Name]`;
+      // Generate message using OpenAI GPT-4o
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       
-      const linkedinMessage = `Hi ${contact.name}, I'm interested in the ${contact.job_submissions?.job_title || 'position'} at ${contact.job_submissions?.company_name || 'your company'}. Would love to connect and learn more about this opportunity!`;
+      const prompt = messageType === "email" 
+        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}. 
 
-      // Return the contact with generated messages (matches original response format)
-      res.json({ 
-        ...contact,
-        emailDraft,
-        linkedinMessage
+Keep it concise (under 150 words), personalized, and include:
+- Brief introduction
+- Specific interest in the role
+- Relevant qualifications
+- Request for discussion
+
+Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
+Company: ${contact.job_submissions.company_name || "Unknown Company"}
+Job: ${contact.job_submissions.job_title || "Unknown Position"}
+
+Email tone: ${tone}`
+        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
+
+Keep it under 300 characters for LinkedIn limits, personalized and include:
+- Brief introduction
+- Interest in the role
+- Request to connect
+
+Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
+Company: ${contact.job_submissions.company_name || "Unknown Company"}
+Job: ${contact.job_submissions.job_title || "Unknown Position"}
+
+LinkedIn message tone: ${tone}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system", 
+            content: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages."
+          },
+          { 
+            role: "user", 
+            content: prompt 
+          }
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
       });
+
+      const generatedMessage = response.choices[0].message.content;
+
+      // Update contact with generated message using Supabase
+      const updateData: any = {};
+      
+      if (messageType === "email") {
+        updateData.generated_email_message = generatedMessage;
+        updateData.email_draft = generatedMessage;
+      } else {
+        updateData.generated_linkedin_message = generatedMessage;
+        updateData.linkedin_message = generatedMessage;
+      }
+      
+      await supabase
+        .from('recruiter_contacts')
+        .update(updateData)
+        .eq('id', contactId);
+
+      res.json({ message: generatedMessage });
     } catch (error) {
       console.error("Error generating message:", error);
       res.status(500).json({ message: "Failed to generate message" });

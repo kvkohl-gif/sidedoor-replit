@@ -156,11 +156,57 @@ All recruiter contact fields from previous section, plus additional message-rela
    - Replaced `storage.getRecruiterById()` with Supabase queries
 
 #### Business Logic Preserved:
-- ✅ OpenAI GPT-4o integration for message generation
+- ✅ OpenAI GPT-4o integration for message generation in ALL routes
 - ✅ User ownership validation through job submission relationships
-- ✅ Comprehensive field updates for contact management
+- ✅ Comprehensive field updates for contact management (20+ fields)
 - ✅ Message template creation and management
 - ✅ Personalized email and LinkedIn message generation
+
+### Message Template Routes (✅ Complete)
+
+**File Modified:** `backend/routes.ts`
+
+#### Routes Migrated:
+1. `POST /api/recruiters/:recruiterId/messages` - Create message template
+2. `GET /api/recruiters/:recruiterId/messages` - Get all templates for recruiter
+3. `PATCH /api/messages/:id` - Update message template
+4. `POST /api/recruiters/:recruiterId/generate-messages` - Generate and save personalized messages
+
+#### Field Mappings (camelCase → snake_case):
+- `recruiterContactId` → `recruiter_contact_id`
+- `messageType` → `message_type`
+- `isSent` → `is_sent`
+- `sentAt` → `sent_at`
+- `createdAt` → `created_at`
+- Fields unchanged: `id`, `subject`, `content`, `version`
+
+#### Key Implementation Details:
+
+1. **POST /api/recruiters/:recruiterId/messages**:
+   - Creates message templates using Supabase insert
+   - Verifies recruiter ownership through job submission relationship
+   - Maps all camelCase fields to snake_case
+
+2. **GET /api/recruiters/:recruiterId/messages**:
+   - Fetches all templates for recruiter using Supabase
+   - Ordered by created_at descending
+   - Verifies user ownership before returning results
+
+3. **PATCH /api/messages/:id**:
+   - Uses Supabase join query to verify ownership through recruiter → job submission
+   - Maps updatable fields (subject, content, version, isSent, sentAt)
+   - Returns updated template
+
+4. **POST /api/recruiters/:recruiterId/generate-messages**:
+   - Generates personalized messages using OpenAI
+   - Creates both email and LinkedIn templates in Supabase
+   - Verifies user ownership through job submission relationship
+
+#### Business Logic Preserved:
+- ✅ OpenAI integration for personalized message generation
+- ✅ Dual message creation (email + LinkedIn)
+- ✅ Template versioning system
+- ✅ User ownership validation through relationships
 
 ## Still Using Drizzle Storage
 
@@ -173,8 +219,6 @@ The following routes still use the old Drizzle storage layer and require migrati
 - `POST /api/contacts/:id/verify-email`
 - `GET /api/submissions/:id/email-patterns`
 
-### Message Template Storage:
-- Message template CRUD operations (createMessageTemplate, getMessageTemplatesByRecruiter, etc.)
 
 ### Dashboard/Metrics Routes:
 - `GET /api/dashboard/stats`
