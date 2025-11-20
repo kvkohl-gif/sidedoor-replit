@@ -1,0 +1,114 @@
+We now have two React components in the frontend:
+
+- frontend/components/Login.tsx         (exports LoginScreen)
+- frontend/components/Signup.tsx        (exports SignupScreen)
+
+Each component expects these props:
+
+- LoginScreen:
+    onNavigate: (page: string) => void    // e.g. "login" | "signup"
+    onLogin: () => void                   // called on successful login
+
+- SignupScreen:
+    onNavigate: (page: string) => void
+    onSignup: () => void                  // called on successful signup
+
+I want you to integrate these into the existing frontend in a minimal, clean way.
+
+### 1) Find the existing router / entry point
+
+Inspect the current React app and determine where routing is defined, for example:
+- App.tsx, or
+- a router file (e.g. router.tsx), or
+- whatever file currently renders the main layout and pages.
+
+Do NOT replace the whole file — only extend it.
+
+### 2) Add routes for login and signup
+
+Add two routes:
+
+- GET /login      → renders <LoginScreen ... />
+- GET /signup     → renders <SignupScreen ... />
+
+Use whatever routing system is already in use (React Router, custom routing, etc.).
+Do NOT introduce a new routing library.
+
+### 3) Wire onNavigate between Login and Signup
+
+The two components expose onNavigate(page: string) so they can switch between each other.
+
+Implement:
+
+- When LoginScreen calls onNavigate("signup"), navigate to /signup
+- When SignupScreen calls onNavigate("login"), navigate to /login
+
+Use the existing navigation mechanism (e.g. useNavigate from React Router, or whatever the app currently uses for internal navigation).
+
+### 4) Connect onLogin and onSignup to the auth flow
+
+For now, I want a simple, working authentication flow:
+
+- LoginScreen:
+    - onLogin should:
+        1. Call the existing login API endpoint if one exists (e.g. POST /api/auth/login). 
+           If there is no such endpoint yet, create a simple one that:
+             - validates email + password
+             - looks up the user in the Supabase "users" table
+             - on success, sets whatever session or auth token the app currently uses.
+        2. On successful login, update the frontend auth state (or context) to “logged in”.
+        3. Redirect the user to the main app screen (same page they would see after being already logged in).
+
+- SignupScreen:
+    - onSignup should:
+        1. Call a registration endpoint (e.g. POST /api/auth/register). 
+           If it does not exist yet, create it in the backend to:
+             - create a new user record in the Supabase "users" table
+             - hash the password securely
+             - return a success response.
+        2. After successful signup, either:
+             - log the user in automatically and redirect to the main app, OR
+             - redirect them to /login.
+           Prefer the first option if it is simple to implement with the existing auth pattern.
+
+If the backend already has auth endpoints or a session mechanism, reuse them rather than inventing a new system.
+
+### 5) Global auth gating (optional, if straightforward)
+
+If the app already has a concept of “user must be logged in to see the main app”, then:
+
+- Ensure that when the user is NOT authenticated:
+    - The router sends them to /login by default.
+- If they ARE authenticated:
+    - They see the normal main dashboard / app pages.
+
+Do NOT break any existing protected routes — only hook in the new login/signup screens in front of them.
+
+### 6) Logged-in user menu / logout
+
+If there is already a user avatar/name component in the sidebar (bottom-left):
+- Add a “Log out” action to that menu if it does not exist.
+- Ensure clicking “Log out”:
+    - clears whatever auth token/session the app uses
+    - redirects the user back to /login.
+
+If there is not yet a user menu component, create a minimal one that:
+- shows user name or initials,
+- includes a “Log out” option,
+- and fits visually with the existing sidebar layout.
+
+### 7) Do NOT do the following
+
+- Do NOT change existing page layouts other than adding routes and the logout menu.
+- Do NOT rename LoginScreen or SignupScreen.
+- Do NOT rewrite their JSX.
+- Do NOT change the props they expect.
+- Do NOT touch any other unrelated business logic.
+
+### 8) After you’re done
+
+Summarize:
+- Which files you edited on the frontend
+- Which backend endpoints you used or created for login/register
+- How the navigation between /login and /signup works
+- How logout is implemented
