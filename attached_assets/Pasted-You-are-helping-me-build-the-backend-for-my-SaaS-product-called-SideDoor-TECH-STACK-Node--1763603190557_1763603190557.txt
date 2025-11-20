@@ -1,0 +1,138 @@
+You are helping me build the backend for my SaaS product called SideDoor.
+
+### 🧩 TECH STACK
+- Node.js (Express)
+- Supabase (Postgres)
+- Stripe
+- OpenAI API
+
+### 🗄️ DATABASE (SUPABASE)
+I already have a full database schema set up in Supabase, including:
+
+Core:
+- users
+- sessions
+- job_submissions
+- recruiter_contacts
+- message_templates
+- email_pattern_analysis
+- contact_emails_supplemental
+- company_email_patterns
+
+SideDoor V2:
+- user_outreach_profiles
+- user_credits
+- credit_transactions
+- outreach_events
+- subscription_plans
+- user_subscriptions
+- payment_transactions
+- stripe_events
+- llm_requests
+
+You do NOT need to generate SQL — only the backend code that connects to Supabase.
+
+### 🔑 ENVIRONMENT VARIABLES (SET THESE IN REPLIT)
+Create placeholders so I can fill them in:
+
+SUPABASE_URL=""
+SUPABASE_ANON_KEY=""
+SUPABASE_SERVICE_ROLE_KEY=""
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+OPENAI_API_KEY=""
+
+### 📁 FILE STRUCTURE I WANT
+Create this folder structure:
+
+/src
+  /lib
+    supabaseClient.js
+    stripeClient.js
+    openaiClient.js
+  /routes
+    jobSubmissions.js
+    recruiterContacts.js
+    outreach.js
+    profile.js
+    credits.js
+    subscriptions.js
+    webhooks.js
+  /controllers
+    jobSubmissionsController.js
+    recruiterContactsController.js
+    outreachController.js
+    profileController.js
+    creditsController.js
+    subscriptionsController.js
+  /middleware
+    authenticate.js
+    validateUser.js
+  server.js
+
+### 📌 WHAT EACH ROUTE SHOULD DO
+
+#### jobSubmissions.js
+- POST /api/job-submissions → create a job submission record in Supabase
+- GET /api/job-submissions → get all job submissions for a user
+
+#### recruiterContacts.js
+- POST /api/contacts → save recruiter contacts for a job submission
+- GET /api/contacts/:jobSubmissionId → get contacts for that job
+
+#### outreach.js
+- POST /api/outreach/email → generate + log AI email (write to llm_requests + outreach_events)
+- POST /api/outreach/linkedin → same for LinkedIn
+
+#### profile.js
+- GET /api/profile/:userId → get user_outreach_profiles
+- POST /api/profile → update or create profile
+
+#### credits.js
+- GET /api/credits/:userId → return current credit balance
+- POST /api/credits/spend → deduct credits + log credit_transactions
+- POST /api/credits/add → add credits (for testing or admin)
+
+#### subscriptions.js
+- GET /api/plans → return subscription_plans
+- GET /api/subscription/:userId → return user_subscriptions
+- POST /api/subscription/create-checkout-session → create Stripe checkout session
+
+#### webhooks.js
+- POST /webhook/stripe
+  - handle invoice.payment_succeeded
+    → insert into payment_transactions
+    → update user_subscriptions
+    → add monthly credits to user_credits
+  - handle customer.subscription.updated
+  - handle customer.subscription.deleted
+  - store raw events into stripe_events
+
+### 🔌 LIB CLIENTS
+
+supabaseClient.js:
+- export supabase (anon)
+- export supabaseAdmin (service role)
+
+stripeClient.js:
+- export stripe instance
+
+openaiClient.js:
+- export OpenAI client
+
+### 🚀 SERVER SETUP
+server.js should:
+- import express
+- load all routes
+- enable CORS + JSON middleware
+- expose /api/* endpoints
+- expose /webhook/stripe with raw body parsing
+
+### 🎯 GOAL
+Generate the complete backend code (controllers + routes + clients + middleware + server.js) with placeholder logic where needed and actual Supabase insert/select/update code where straightforward.
+
+Code must be runnable immediately in Replit once I add env variables.
+
+DO NOT generate frontend code.
+
+Return the complete backend project.
