@@ -209,16 +209,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
 
-        // Save email pattern analysis if available
+        // Save email pattern analysis if available using Supabase
         if (apolloSearchResult.emailPatterns) {
           try {
-            await storage.createEmailPatternAnalysis({
-              jobSubmissionId: updatedSubmission.id,
-              verifiedPattern: apolloSearchResult.emailPatterns.verified_pattern || null,
-              analysisSummary: apolloSearchResult.emailPatterns.analysis_summary,
-              suggestionsCount: apolloSearchResult.emailPatterns.suggestions.length,
-            });
-            console.log(`Saved email pattern analysis with ${apolloSearchResult.emailPatterns.suggestions.length} suggestions`);
+            const { error: patternError } = await supabase
+              .from('email_pattern_analysis')
+              .insert({
+                job_submission_id: updatedSubmission.id,
+                verified_pattern: apolloSearchResult.emailPatterns.verified_pattern || null,
+                analysis_summary: apolloSearchResult.emailPatterns.analysis_summary,
+                suggestions_count: apolloSearchResult.emailPatterns.suggestions.length,
+              });
+            
+            if (patternError) {
+              console.error("Failed to save email pattern analysis:", patternError);
+            } else {
+              console.log(`Saved email pattern analysis with ${apolloSearchResult.emailPatterns.suggestions.length} suggestions`);
+            }
           } catch (error) {
             console.error("Failed to save email pattern analysis:", error);
           }
@@ -226,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let totalContactsAdded = 0;
 
-        // Save Apollo contacts to database
+        // Save Apollo contacts to database using Supabase
         if (apolloSearchResult.contacts.length > 0) {
           const contactsToInsert = enhancedEnrichmentService.convertToInsertFormat(
             apolloSearchResult.contacts,
@@ -234,11 +241,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
             apolloSearchResult.emailPatterns?.suggestions
           );
 
-          for (const contact of contactsToInsert) {
-            await storage.createRecruiterContact(contact);
-            totalContactsAdded++;
+          // Map camelCase to snake_case for Supabase
+          const supabaseContacts = contactsToInsert.map(contact => ({
+            job_submission_id: contact.jobSubmissionId,
+            name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            linkedin_url: contact.linkedinUrl,
+            confidence_score: contact.confidenceScore,
+            source: contact.source,
+            email_verified: contact.emailVerified,
+            verification_status: contact.verificationStatus,
+            source_platform: contact.sourcePlatform,
+            apollo_id: contact.apolloId,
+            recruiter_confidence: contact.recruiterConfidence,
+            verification_data: contact.verificationData,
+            suggested_email: contact.suggestedEmail,
+            email_suggestion_reasoning: contact.emailSuggestionReasoning,
+            contact_status: contact.contactStatus,
+            last_contacted_at: contact.lastContactedAt,
+            notes: contact.notes,
+            outreach_bucket: contact.outreachBucket,
+            department: contact.department,
+            seniority: contact.seniority,
+            generated_email_message: contact.generatedEmailMessage,
+            generated_linkedin_message: contact.generatedLinkedInMessage,
+            email_draft: contact.emailDraft,
+            linkedin_message: contact.linkedinMessage,
+          }));
+
+          const { error: contactsError } = await supabase
+            .from('recruiter_contacts')
+            .insert(supabaseContacts);
+
+          if (contactsError) {
+            console.error("Failed to save recruiter contacts:", contactsError);
+            throw new Error(`Failed to save recruiter contacts: ${contactsError.message}`);
           }
-          
+
+          totalContactsAdded = supabaseContacts.length;
           console.log(`Saved ${apolloSearchResult.contacts.length} Apollo contacts to database`);
           
           // NEW: Run supplemental email pattern inference (additive enhancement)
@@ -252,26 +293,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // If no Apollo contacts found, create a placeholder message
+        // If no Apollo contacts found, create a placeholder message using Supabase
         if (apolloSearchResult.contacts.length === 0) {
           console.log("No Apollo contacts found - no fallback contacts will be generated");
           
           // Create a single informational record indicating no contacts were found
-          await storage.createRecruiterContact({
-            jobSubmissionId: updatedSubmission.id,
-            name: "No Recruiter Contacts Found",
-            title: "Apollo search returned no results",
-            email: null,
-            linkedinUrl: null,
-            confidenceScore: 0,
-            source: "Apollo Search",
-            emailVerified: "false",
-            verificationStatus: "unknown",
-            sourcePlatform: "apollo",
-            recruiterConfidence: 0.0,
-          });
+          const { error: placeholderError } = await supabase
+            .from('recruiter_contacts')
+            .insert({
+              job_submission_id: updatedSubmission.id,
+              name: "No Recruiter Contacts Found",
+              title: "Apollo search returned no results",
+              email: null,
+              linkedin_url: null,
+              confidence_score: 0,
+              source: "Apollo Search",
+              email_verified: "false",
+              verification_status: "unknown",
+              source_platform: "apollo",
+              recruiter_confidence: 0.0,
+            });
           
-          console.log("Created placeholder record for no contacts found");
+          if (placeholderError) {
+            console.error("Failed to create placeholder contact:", placeholderError);
+          } else {
+            console.log("Created placeholder record for no contacts found");
+          }
         }
 
         console.log(`Total contacts added: ${totalContactsAdded}`);
@@ -445,6 +492,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.jobTitle !== undefined) updateData.job_title = req.body.jobTitle;
       if (req.body.jobUrl !== undefined) updateData.job_url = req.body.jobUrl;
       if (req.body.jobDescription !== undefined) updateData.job_description = req.body.jobDescription;
+
+      // Guard against empty updates
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
 
       // Update the submission using Supabase
       const { data: updatedSubmission, error: updateError } = await supabase
