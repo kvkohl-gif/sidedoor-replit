@@ -1,0 +1,55 @@
+We have successfully connected this backend to Supabase. The Supabase client is in backend/lib/supabaseClient.ts and exports:
+
+  import { supabase, supabaseAdmin } from "./lib/supabaseClient";
+
+Now I want you to migrate the job submissions routes to use Supabase instead of the old database layer.
+
+1. Find the existing Express route(s) that handle job submissions, for example:
+   - POST /api/job-submissions (create a new job submission)
+   - GET /api/job-submissions (list job submissions for the current user)
+
+2. In those route handlers, replace any Drizzle / old db code with Supabase queries that use the Supabase table "job_submissions", which has (at least) these columns:
+
+   - id (serial primary key)
+   - user_id (varchar, required)
+   - job_input (text, required)
+   - input_type (varchar, required)
+   - company_name (varchar)
+   - job_title (varchar)
+   - submitted_at (timestamptz, default now())
+   - status (varchar, default 'not_contacted')
+   - notes (text)
+
+3. For POST /api/job-submissions:
+   - Read the same request body fields that the route already expects (jobInput, inputType, companyName, jobTitle, etc).
+   - Insert a new row into Supabase:
+
+        const { data, error } = await supabase
+          .from("job_submissions")
+          .insert({
+            user_id: userId,          // however the route currently gets the logged-in user
+            job_input: jobInput,
+            input_type: inputType,
+            company_name: companyName ?? null,
+            job_title: jobTitle ?? null
+          })
+          .select("*")
+          .single();
+
+   - Keep the existing response shape (e.g. res.json({ success: true, jobSubmission: data })) so the frontend does not need to change.
+
+4. For GET /api/job-submissions:
+   - Use Supabase to select all job_submissions for the current user:
+
+        const { data, error } = await supabase
+          .from("job_submissions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("submitted_at", { ascending: false });
+
+   - Again, keep the response shape the same as before.
+
+5. Do NOT change the route URLs or how the frontend calls them.
+   Only swap the internal database logic to use Supabase via supabase.from(...).
+
+6. When you’re done, tell me which file(s) you edited and briefly describe the changes.

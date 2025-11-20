@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerContactRoutes } from "./routes/contacts";
 import dbTestRouter from "./routes/dbTest";
+import { supabase } from "./lib/supabaseClient";
 import OpenAI from "openai";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
@@ -85,8 +86,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract organization_id and company_domain from request if provided
       const { organizationId = null, companyDomain = null } = req.body;
 
-      // Create initial job submission
-      const jobSubmission = await storage.createJobSubmission(submissionData);
+      // Create initial job submission using Supabase
+      const { data: jobSubmission, error: insertError } = await supabase
+        .from('job_submissions')
+        .insert({
+          user_id: submissionData.userId,
+          job_input: submissionData.jobInput,
+          input_type: submissionData.inputType,
+          openai_response_raw: submissionData.openaiResponseRaw || null,
+          email_draft: submissionData.emailDraft || null,
+          linkedin_message: submissionData.linkedinMessage || null,
+          company_name: submissionData.companyName || null,
+          job_title: submissionData.jobTitle || null,
+          organization_id: submissionData.organizationId || null,
+          company_domain: submissionData.companyDomain || null,
+          status: submissionData.status || 'not_contacted',
+          notes: submissionData.notes || null,
+        })
+        .select()
+        .single();
+
+      if (insertError || !jobSubmission) {
+        throw new Error(`Failed to create job submission: ${insertError?.message}`);
+      }
 
       // Process job input based on type
       let jobContent = submissionData.jobInput;
@@ -139,19 +161,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? jobDataExtraction.job_title 
           : extraction.job_title;
 
-        // Update job submission with extracted data and organization info
-        const updatedSubmission = await storage.updateJobSubmission(jobSubmission.id, {
-          openaiResponseRaw: JSON.stringify({
-            basic_extraction: extraction,
-            enhanced_data: jobDataExtraction
-          }),
-          companyName,
-          jobTitle,
-          organizationId: organizationId,
-          companyDomain: companyDomain,
-          emailDraft: extraction.email_draft,
-          linkedinMessage: extraction.linkedin_message,
-        });
+        // Update job submission with extracted data and organization info using Supabase
+        const { data: updatedSubmission, error: updateError } = await supabase
+          .from('job_submissions')
+          .update({
+            openai_response_raw: JSON.stringify({
+              basic_extraction: extraction,
+              enhanced_data: jobDataExtraction
+            }),
+            company_name: companyName,
+            job_title: jobTitle,
+            organization_id: organizationId,
+            company_domain: companyDomain,
+            email_draft: extraction.email_draft,
+            linkedin_message: extraction.linkedin_message,
+          })
+          .eq('id', jobSubmission.id)
+          .select()
+          .single();
+
+        if (updateError || !updatedSubmission) {
+          throw new Error(`Failed to update job submission: ${updateError?.message}`);
+        }
 
         // Extract optimized Apollo search parameters
         console.log(`Extracting Apollo search parameters for ${companyName}`);
@@ -245,8 +276,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`Total contacts added: ${totalContactsAdded}`);
 
-        // Return the complete submission with recruiters
-        const completeSubmission = await storage.getJobSubmissionById(jobSubmission.id);
+        // Return the complete submission with recruiters using Supabase
+        const { data: completeSubmission, error: fetchError } = await supabase
+          .from('job_submissions')
+          .select(`
+            *,
+            recruiters:recruiter_contacts(*)
+          `)
+          .eq('id', jobSubmission.id)
+          .single();
+
+        if (fetchError || !completeSubmission) {
+          throw new Error(`Failed to fetch complete submission: ${fetchError?.message}`);
+        }
+
         res.json({ id: jobSubmission.id, submission: completeSubmission, runId });
 
         // Remove from active runs on successful completion
@@ -264,11 +307,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Error occurred, removed runId ${req.body.runId} from active runs`);
         }
         
-        // Update submission with error status but still return it
+        // Update submission with error status but still return it using Supabase
         const errorMessage = openaiError instanceof Error ? openaiError.message : "Unknown error";
-        await storage.updateJobSubmission(jobSubmission.id, {
-          openaiResponseRaw: JSON.stringify({ error: errorMessage }),
-        });
+        await supabase
+          .from('job_submissions')
+          .update({
+            openai_response_raw: JSON.stringify({ error: errorMessage }),
+          })
+          .eq('id', jobSubmission.id);
         res.status(500).json({ 
           message: "Failed to extract recruiter information", 
           submissionId: jobSubmission.id 
