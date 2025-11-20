@@ -386,14 +386,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid submission ID" });
       }
 
-      const submission = await storage.getJobSubmissionById(submissionId);
+      // Fetch submission with recruiters using Supabase
+      const { data: submission, error: fetchError } = await supabase
+        .from('job_submissions')
+        .select(`
+          *,
+          recruiters:recruiter_contacts(*)
+        `)
+        .eq('id', submissionId)
+        .single();
       
-      if (!submission) {
+      if (fetchError || !submission) {
         return res.status(404).json({ message: "Submission not found" });
       }
 
       // Ensure user owns this submission
-      if (submission.userId !== userId) {
+      if (submission.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
