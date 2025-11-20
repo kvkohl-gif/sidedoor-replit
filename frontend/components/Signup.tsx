@@ -1,5 +1,6 @@
 import { Key, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { registerUser } from "@/lib/auth";
 
 interface SignupScreenProps {
   onNavigate: (page: string) => void;
@@ -31,31 +32,13 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
 
     setIsLoading(true);
     
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          email, 
-          password,
-          firstName,
-          lastName,
-        }),
-      });
-
-      if (response.ok) {
-        onSignup();
-        // Reload to trigger auth check and redirect to dashboard
-        window.location.href = '/';
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Signup failed');
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('Signup error:', error);
-      alert('Signup failed');
+    const result = await registerUser(firstName, lastName, email, password);
+    
+    if (result.success) {
+      onSignup();
+      window.location.href = '/';
+    } else {
+      alert(result.error || 'Signup failed');
       setIsLoading(false);
     }
   };

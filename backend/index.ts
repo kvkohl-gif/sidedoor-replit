@@ -1,13 +1,22 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from 'express-session';
+import cookieParser from 'cookie-parser';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { sessionAuth } from "./middleware/sessionAuth";
+import authRouter from "./routes/auth";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 app.set('trust proxy', 1); // required behind Replit proxy
+
+// Cookie parser for session_id cookie
+app.use(cookieParser());
+
+// Session authentication middleware (attaches req.user)
+app.use(sessionAuth);
 
 app.use(session({
   name: 'connect.sid',
@@ -56,6 +65,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Register auth routes
+  app.use("/api/auth", authRouter);
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

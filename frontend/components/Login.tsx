@@ -1,5 +1,6 @@
 import { Key, Mail, Lock, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { loginUser } from "@/lib/auth";
 
 interface LoginScreenProps {
   onNavigate: (page: string) => void;
@@ -15,26 +16,13 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
     e.preventDefault();
     setIsLoading(true);
     
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        onLogin();
-        // Reload to trigger auth check
-        window.location.href = '/';
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Login failed');
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed');
+    const result = await loginUser(email, password);
+    
+    if (result.success) {
+      onLogin();
+      window.location.href = '/';
+    } else {
+      alert(result.error || 'Login failed');
       setIsLoading(false);
     }
   };

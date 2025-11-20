@@ -1,11 +1,18 @@
-import type { Express } from "express";
-import { isAuthenticated } from "../replitAuth";
+import type { Express, Request, Response, NextFunction } from "express";
 import { supabase } from "../lib/supabaseClient";
 import OpenAI from "openai";
 
+// Session-based authentication middleware
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
 export function registerContactRoutes(app: Express) {
   // Get all contacts for authenticated user
-  app.get("/api/contacts/all", isAuthenticated, async (req: any, res) => {
+  app.get("/api/contacts/all", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       
@@ -73,7 +80,7 @@ export function registerContactRoutes(app: Express) {
   });
 
   // Update contact
-  app.patch("/api/contacts/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/contacts/:id", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
@@ -174,7 +181,7 @@ export function registerContactRoutes(app: Express) {
   });
 
   // Generate message for contact
-  app.post("/api/contacts/:id/generate-message", isAuthenticated, async (req: any, res) => {
+  app.post("/api/contacts/:id/generate-message", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
