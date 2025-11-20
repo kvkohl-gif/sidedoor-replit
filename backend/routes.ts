@@ -11,10 +11,8 @@ import { enrichmentService, ContactEnrichmentService } from "./enrichmentService
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
 import { supplementalEmailService } from "./supplementalEmailService";
 import { urlScrapingService } from "./urlScrapingService";
-import { insertJobSubmissionSchema, contactEmailsSupplemental, recruiterContacts } from "@shared/schema";
+import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
-import { db } from "./db";
-import { eq } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for Replit Preview
@@ -32,7 +30,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      
+      // Get user from Supabase
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw error;
+      }
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -527,22 +536,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid submission ID" });
       }
 
-      const submission = await storage.getJobSubmissionById(submissionId);
+      // Get submission from Supabase
+      const { data: submission, error: submissionError } = await supabase
+        .from('job_submissions')
+        .select('*')
+        .eq('id', submissionId)
+        .single();
       
-      if (!submission) {
+      if (submissionError || !submission) {
         return res.status(404).json({ message: "Submission not found" });
       }
 
       // Ensure user owns this submission
-      if (submission.userId !== userId) {
+      if (submission.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Parse the enhanced job data from openaiResponseRaw
+      // Parse the enhanced job data from openai_response_raw
       let enhancedData = null;
-      if (submission.openaiResponseRaw) {
+      if (submission.openai_response_raw) {
         try {
-          const parsed = JSON.parse(submission.openaiResponseRaw);
+          const parsed = JSON.parse(submission.openai_response_raw);
           enhancedData = parsed.enhanced_data;
         } catch (error) {
           console.error("Error parsing enhanced data:", error);
@@ -570,13 +584,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid submission ID" });
       }
 
-      // Verify user owns this submission
-      const submission = await storage.getJobSubmissionById(submissionId);
-      if (!submission || submission.userId !== userId) {
+      // Verify user owns this submission using Supabase
+      const { data: submission, error: submissionError } = await supabase
+        .from('job_submissions')
+        .select('id, user_id')
+        .eq('id', submissionId)
+        .single();
+        
+      if (submissionError || !submission || submission.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const patterns = await storage.getEmailPatternAnalysis(submissionId);
+      // Get email pattern analysis using Supabase
+      const { data: patterns, error: patternsError } = await supabase
+        .from('email_pattern_analysis')
+        .select('*')
+        .eq('job_submission_id', submissionId)
+        .single();
+
+      if (patternsError && patternsError.code !== 'PGRST116') {
+        console.error("Error fetching patterns:", patternsError);
+      }
+
       res.json(patterns || { message: "No pattern analysis found" });
     } catch (error) {
       console.error("Error fetching email patterns:", error);
@@ -1175,28 +1204,52 @@ LinkedIn message tone: ${tone}`;
         return res.status(400).json({ message: "Invalid submission ID" });
       }
       
-      // Verify ownership of the submission
-      const submission = await storage.getJobSubmissionById(submissionId);
-      if (!submission || submission.userId !== userId) {
+      // Verify ownership of the submission using Supabase
+      const { data: submission, error: submissionError } = await supabase
+        .from('job_submissions')
+        .select('id, user_id')
+        .eq('id', submissionId)
+        .single();
+        
+      if (submissionError || !submission || submission.user_id !== userId) {
         return res.status(404).json({ message: "Submission not found" });
       }
       
-      // Get supplemental emails for all contacts in this submission
-      const supplementalEmails = await db
-        .select({
-          contactId: contactEmailsSupplemental.recruiterContactId,
-          email: contactEmailsSupplemental.emailAddress,
-          emailType: contactEmailsSupplemental.emailType,
-          verificationStatus: contactEmailsSupplemental.verificationStatus,
-          confidenceScore: contactEmailsSupplemental.confidenceScore,
-          patternReasoning: contactEmailsSupplemental.patternReasoning,
-          isVerified: contactEmailsSupplemental.isVerified,
-          createdAt: contactEmailsSupplemental.createdAt,
-        })
-        .from(contactEmailsSupplemental)
-        .innerJoin(recruiterContacts, eq(contactEmailsSupplemental.recruiterContactId, recruiterContacts.id))
-        .where(eq(recruiterContacts.jobSubmissionId, submissionId))
-        .orderBy(contactEmailsSupplemental.createdAt);
+      // Get supplemental emails for all contacts in this submission using Supabase
+      const { data: supplementalEmailsRaw, error: emailsError } = await supabase
+        .from('contact_emails_supplemental')
+        .select(`
+          recruiter_contact_id,
+          email_address,
+          email_type,
+          verification_status,
+          confidence_score,
+          pattern_reasoning,
+          is_verified,
+          created_at,
+          recruiter_contacts!inner (
+            job_submission_id
+          )
+        `)
+        .eq('recruiter_contacts.job_submission_id', submissionId)
+        .order('created_at', { ascending: true });
+      
+      if (emailsError) {
+        console.error("Error fetching supplemental emails:", emailsError);
+        return res.status(500).json({ message: "Failed to fetch supplemental emails" });
+      }
+
+      // Transform to match expected response format
+      const supplementalEmails = (supplementalEmailsRaw || []).map((item: any) => ({
+        contactId: item.recruiter_contact_id,
+        email: item.email_address,
+        emailType: item.email_type,
+        verificationStatus: item.verification_status,
+        confidenceScore: item.confidence_score,
+        patternReasoning: item.pattern_reasoning,
+        isVerified: item.is_verified,
+        createdAt: item.created_at,
+      }));
       
       console.log(`[API] Fetched ${supplementalEmails.length} supplemental emails for submission ${submissionId}`);
       

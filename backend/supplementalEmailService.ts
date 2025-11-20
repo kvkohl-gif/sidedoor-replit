@@ -1,14 +1,41 @@
-import { db } from "./db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { supabase } from "./lib/supabaseClient";
 import { 
-  recruiterContacts, 
-  contactEmailsSupplemental, 
-  companyEmailPatterns,
-  type RecruiterContact,
   type InsertContactEmailSupplemental,
   type InsertCompanyEmailPattern
 } from "../shared/schema";
 import { verifierService } from "./verifierService";
+
+// Type for recruiter contact from Supabase
+type RecruiterContact = {
+  id: number;
+  job_submission_id: number;
+  name: string | null;
+  email: string | null;
+  title: string | null;
+  linkedin_url: string | null;
+  department: string | null;
+  seniority: string | null;
+  source: string | null;
+  source_platform: string | null;
+  confidence_score: number | null;
+  recruiter_confidence: string | null;
+  email_verified: string | null;
+  verification_status: string | null;
+  verification_data: any;
+  apollo_id: string | null;
+  suggested_email: string | null;
+  email_suggestion_reasoning: string | null;
+  contact_status: string | null;
+  last_contacted_at: string | null;
+  notes: string | null;
+  outreach_bucket: string | null;
+  generated_email_message: string | null;
+  generated_linkedin_message: string | null;
+  email_draft: string | null;
+  linkedin_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
 
 interface EmailPattern {
   pattern: string;
@@ -34,23 +61,24 @@ export class SupplementalEmailService {
         return;
       }
       
-      // 2. Find contacts with invalid Apollo emails only
-      const invalidEmailContacts = await db
-        .select()
-        .from(recruiterContacts)
-        .where(
-          and(
-            eq(recruiterContacts.jobSubmissionId, jobSubmissionId),
-            eq(recruiterContacts.verificationStatus, 'invalid'),
-            isNotNull(recruiterContacts.email),
-            isNotNull(recruiterContacts.name)
-          )
-        );
+      // 2. Find contacts with invalid Apollo emails only using Supabase
+      const { data: invalidEmailContacts, error: contactsError } = await supabase
+        .from('recruiter_contacts')
+        .select('*')
+        .eq('job_submission_id', jobSubmissionId)
+        .eq('verification_status', 'invalid')
+        .not('email', 'is', null)
+        .not('name', 'is', null);
       
-      console.log(`[SUPPLEMENTAL] Found ${invalidEmailContacts.length} contacts with invalid emails`);
+      if (contactsError) {
+        console.error(`[SUPPLEMENTAL] Error fetching invalid contacts:`, contactsError);
+        return;
+      }
+      
+      console.log(`[SUPPLEMENTAL] Found ${invalidEmailContacts?.length || 0} contacts with invalid emails`);
       
       // 3. Generate pattern-inferred emails for invalid contacts only
-      for (const contact of invalidEmailContacts) {
+      for (const contact of (invalidEmailContacts || [])) {
         await this.generateSupplementalEmailsForContact(contact, patternAnalysis);
       }
       
@@ -68,21 +96,22 @@ export class SupplementalEmailService {
   private async analyzeCompanyEmailPatterns(jobSubmissionId: number) {
     console.log(`[SUPPLEMENTAL] Analyzing email patterns for job ${jobSubmissionId}`);
     
-    // Get all VALID Apollo emails from this company
-    const validContacts = await db
-      .select()
-      .from(recruiterContacts)
-      .where(
-        and(
-          eq(recruiterContacts.jobSubmissionId, jobSubmissionId),
-          eq(recruiterContacts.verificationStatus, 'valid'),
-          isNotNull(recruiterContacts.email),
-          isNotNull(recruiterContacts.name)
-        )
-      );
+    // Get all VALID Apollo emails from this company using Supabase
+    const { data: validContacts, error: validContactsError } = await supabase
+      .from('recruiter_contacts')
+      .select('*')
+      .eq('job_submission_id', jobSubmissionId)
+      .eq('verification_status', 'valid')
+      .not('email', 'is', null)
+      .not('name', 'is', null);
     
-    if (validContacts.length < 2) {
-      console.log(`[SUPPLEMENTAL] Need at least 2 valid emails for pattern analysis, found ${validContacts.length}`);
+    if (validContactsError) {
+      console.error(`[SUPPLEMENTAL] Error fetching valid contacts:`, validContactsError);
+      return null;
+    }
+    
+    if (!validContacts || validContacts.length < 2) {
+      console.log(`[SUPPLEMENTAL] Need at least 2 valid emails for pattern analysis, found ${validContacts?.length || 0}`);
       return null;
     }
     
@@ -100,17 +129,23 @@ export class SupplementalEmailService {
     const topPattern = patterns[0];
     const companyDomain = this.extractDomain(emailAddresses[0]);
     
-    // Store pattern analysis
-    const [analysis] = await db
-      .insert(companyEmailPatterns)
-      .values({
-        jobSubmissionId,
-        companyDomain,
-        detectedPattern: topPattern.pattern,
-        patternConfidence: topPattern.confidence,
-        validEmailSampleCount: validContacts.length,
+    // Store pattern analysis using Supabase
+    const { data: analysis, error: insertError } = await supabase
+      .from('company_email_patterns')
+      .insert({
+        job_submission_id: jobSubmissionId,
+        company_domain: companyDomain,
+        detected_pattern: topPattern.pattern,
+        pattern_confidence: topPattern.confidence,
+        valid_email_sample_count: validContacts.length,
       })
-      .returning();
+      .select()
+      .single();
+    
+    if (insertError) {
+      console.error(`[SUPPLEMENTAL] Error storing pattern analysis:`, insertError);
+      return null;
+    }
     
     console.log(`[SUPPLEMENTAL] Detected pattern: ${topPattern.pattern} (confidence: ${topPattern.confidence})`);
     
@@ -124,15 +159,15 @@ export class SupplementalEmailService {
     contact: RecruiterContact, 
     patternAnalysis: any
   ) {
-    if (!contact.name || !patternAnalysis.companyDomain) return;
+    if (!contact.name || !patternAnalysis.company_domain) return;
     
-    console.log(`[SUPPLEMENTAL] Generating email for ${contact.name} using pattern ${patternAnalysis.detectedPattern}`);
+    console.log(`[SUPPLEMENTAL] Generating email for ${contact.name} using pattern ${patternAnalysis.detected_pattern}`);
     
     // Generate candidate email using pattern
     const candidateEmail = this.generateEmailFromPattern(
       contact.name, 
-      patternAnalysis.companyDomain, 
-      patternAnalysis.detectedPattern
+      patternAnalysis.company_domain, 
+      patternAnalysis.detected_pattern
     );
     
     if (!candidateEmail) {
@@ -148,18 +183,24 @@ export class SupplementalEmailService {
     
     // Only store if verification is valid
     if (verificationStatus.is_valid) {
-      const supplementalEmail: InsertContactEmailSupplemental = {
-        recruiterContactId: contact.id,
-        emailAddress: candidateEmail,
-        emailType: 'pattern_inferred',
-        verificationStatus: 'valid',
-        verificationData: verification,
-        confidenceScore: patternAnalysis.patternConfidence,
-        patternReasoning: `Generated using ${patternAnalysis.detectedPattern} pattern from ${patternAnalysis.validEmailSampleCount} valid company emails`,
-        isVerified: 'true',
-      };
+      // Insert using Supabase with snake_case field mapping
+      const { error: insertError } = await supabase
+        .from('contact_emails_supplemental')
+        .insert({
+          recruiter_contact_id: contact.id,
+          email_address: candidateEmail,
+          email_type: 'pattern_inferred',
+          verification_status: 'valid',
+          verification_data: verification,
+          confidence_score: patternAnalysis.pattern_confidence,
+          pattern_reasoning: `Generated using ${patternAnalysis.detected_pattern} pattern from ${patternAnalysis.valid_email_sample_count} valid company emails`,
+          is_verified: 'true',
+        });
       
-      await db.insert(contactEmailsSupplemental).values(supplementalEmail);
+      if (insertError) {
+        console.error(`[SUPPLEMENTAL] Error inserting supplemental email:`, insertError);
+        return;
+      }
       
       console.log(`[SUPPLEMENTAL] ✅ Added verified email ${candidateEmail} for ${contact.name}`);
     } else {
