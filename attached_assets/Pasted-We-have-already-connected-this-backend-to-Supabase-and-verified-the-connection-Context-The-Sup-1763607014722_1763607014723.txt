@@ -1,0 +1,188 @@
+We have already connected this backend to Supabase and verified the connection.
+
+Context:
+
+- The Supabase client is in backend/lib/supabaseClient.ts and exports:
+    import { supabase, supabaseAdmin } from "./lib/supabaseClient";
+
+- Environment variables SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are already configured.
+
+- The job submission routes (/api/submissions) have already been migrated to Supabase and are working:
+    - POST /api/submissions
+    - GET /api/submissions
+    - GET /api/submissions/:id
+    - PATCH /api/submissions/:id
+
+Now I want you to migrate the **rest of the backend data layer** from Drizzle/old storage to Supabase in a controlled way, for ALL remaining tables we’ve created in Supabase.
+
+### VERY IMPORTANT GLOBAL RULES
+
+1. Do NOT change any route URLs.
+2. Do NOT change the request or response shapes of any API.
+3. Do NOT change what fields the frontend sends or expects to receive.
+4. Do NOT rewrite business logic, side effects, or external integrations:
+   - Do NOT rewrite or remove OpenAI logic (GPT calls)
+   - Do NOT rewrite or remove Apollo.io logic
+   - Do NOT rewrite or remove NeverBounce logic
+   - Do NOT rewrite scraping or URL parsing logic
+5. ONLY replace the database storage layer:
+   - Anywhere the code currently uses Drizzle, Neon, or a "storage" abstraction to read/write the DB, change it to use Supabase.
+6. Explicitly map existing fields (camelCase) to Supabase columns (snake_case).
+7. Reuse the same TypeScript types/interfaces where possible; if you need new ones, keep them compatible with existing payloads.
+8. Keep all existing authentication/authorization checks exactly as they are.
+9. Do NOT modify environment variables or Supabase schema via code.
+10. Do NOT drop or alter tables in Supabase; only insert/select/update/delete rows.
+
+### TABLES / FEATURES TO MIGRATE
+
+Please migrate all remaining DB usage for these Supabase tables (some are already partially used by the job submission migration):
+
+Core workflow tables:
+- recruiter_contacts
+- message_templates
+- email_pattern_analysis
+- contact_emails_supplemental
+- company_email_patterns
+
+User personalization:
+- user_outreach_profiles
+
+Outreach & analytics:
+- outreach_events
+- llm_requests
+
+Credits & billing:
+- user_credits
+- credit_transactions
+- subscription_plans
+- user_subscriptions
+- payment_transactions
+- stripe_events
+
+Existing auth/users:
+- users
+    - Do NOT change the existing auth mechanism or how users are identified in requests.
+    - You may read/write users in Supabase where appropriate, but keep the current login/session flow intact.
+
+### HOW TO MIGRATE (PATTERN)
+
+1. Search the codebase for all current DB access:
+   - Drizzle imports and usage
+   - any "storage.*" helpers
+   - direct SQL or other DB client calls
+
+2. For each feature, update the storage layer to use Supabase:
+   - Use supabase.from("<table_name>") for normal operations.
+   - Use supabaseAdmin for admin-style operations (Stripe webhooks, credit adjustments, etc.).
+
+3. Preserve the existing function signatures:
+   - Functions like storage.getX, storage.createX, storage.updateX should keep the same parameters and return types where possible.
+   - Only their internals should change to use Supabase.
+
+4. Explicit field mapping (examples, adapt to actual code):
+   - jobSubmissionId  -> job_submission_id
+   - userId           -> user_id
+   - jobInput         -> job_input
+   - inputType        -> input_type
+   - companyName      -> company_name
+   - jobTitle         -> job_title
+
+   - recruiter contact fields:
+     - linkedinUrl           -> linkedin_url
+     - confidenceScore       -> confidence_score
+     - emailVerified         -> email_verified
+     - verificationStatus    -> verification_status
+     - verificationData      -> verification_data
+     - apolloId              -> apollo_id
+     - contactStatus         -> contact_status
+     - emailDraft            -> email_draft
+     - linkedinMessage       -> linkedin_message
+
+   - message template fields:
+     - contactId             -> recruiter_contact_id
+     - messageType           -> message_type
+     - subject               -> subject
+     - content/body          -> content
+     - version               -> version
+     - isSent                -> is_sent
+     - sentAt                -> sent_at
+
+   - pattern analysis fields:
+     - verifiedPattern       -> verified_pattern
+     - analysisSummary       -> analysis_summary
+     - suggestionsCount      -> suggestions_count
+
+   - credits & billing (examples):
+     - creditBalance         -> credit_balance
+     - totalCreditsEarned    -> total_credits_earned
+     - totalCreditsSpent     -> total_credits_spent
+     - planSlug              -> slug
+     - stripeProductId       -> stripe_product_id
+     - stripePriceId         -> stripe_price_id
+     - stripeCustomerId      -> stripe_customer_id
+     - stripeSubscriptionId  -> stripe_subscription_id
+     - stripeInvoiceId       -> stripe_invoice_id
+     - stripePaymentIntentId -> stripe_payment_intent_id
+
+   - llm_requests:
+     - purpose               -> purpose
+     - model                 -> model
+     - promptTemplateKey     -> prompt_template_key
+     - promptVersion         -> prompt_version
+     - inputTokens           -> input_tokens
+     - outputTokens          -> output_tokens
+     - latencyMs             -> latency_ms
+     - success               -> success
+     - errorMessage          -> error_message
+
+   - outreach_events:
+     - channel               -> channel
+     - subject               -> subject
+     - body                  -> body
+     - status                -> status
+     - providerMessageId     -> provider_message_id
+
+   Use the actual field names from the code when mapping; do NOT change what the frontend sends.
+
+5. For each CRUD operation:
+   - CREATE: use supabase.from("<table>").insert({...}).select("*").single()
+   - READ:   use supabase.from("<table>").select("*").eq(...).order(...), etc.
+   - UPDATE: use supabase.from("<table>").update({...}).eq("id", id) or appropriate key.
+   - DELETE: use supabase.from("<table>").delete().eq("id", id) where needed.
+
+6. Stripe/webhooks:
+   - For Stripe webhooks and billing logic, use supabaseAdmin to write to:
+        - subscription_plans
+        - user_subscriptions
+        - payment_transactions
+        - stripe_events
+        - user_credits
+        - credit_transactions
+   - Keep existing webhook routes/handlers; only replace their DB writes/reads with Supabase.
+
+### CLEANUP
+
+After all DB reads/writes have been migrated to Supabase:
+
+1. Remove all Drizzle-specific code and configuration:
+   - Drizzle imports
+   - Old db.ts/db client files
+   - Any unused schemas or config related to the old database.
+
+2. Remove the old database dependency from package.json if no longer used.
+
+3. Ensure no remaining references to the old DB client or storage implementations remain; everything should route through Supabase.
+
+### DELIVERABLES
+
+When you are done:
+
+1. List all files you edited.
+2. For each major feature (submissions, contacts, templates, profiles, credits, billing, AI logging, outreach events), briefly describe how you migrated it to Supabase.
+3. Call out any assumptions you made about field mappings or Supabase table columns.
+4. Confirm that:
+   - All routes still respond with the same shapes as before.
+   - No frontend changes are required.
+   - The app now uses Supabase as the **only** database.
+
+Do NOT attempt to change the Supabase schema from code. Assume the tables already exist and just use them.
