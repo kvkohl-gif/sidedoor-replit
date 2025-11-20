@@ -49,7 +49,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
 
       {/* Login Card */}
       <div className="w-full max-w-md relative z-10">
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg px-8 py-10 sm:px-10 sm:py-12">
+        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg py-12 px-8 sm:px-10">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <div className="flex items-center gap-2.5">
@@ -61,7 +61,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
           </div>
 
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-10">
             <h1 className="text-[#1A202C] mb-2">Welcome back</h1>
             <p className="text-[15px] text-[#718096]">Log in to continue your workflow</p>
           </div>
@@ -123,7 +123,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#6B46C1] hover:bg-[#5a3ba1] disabled:bg-[#9F7AEA] text-white px-4 py-3 rounded-lg transition-all font-medium text-[14px] shadow-sm flex items-center justify-center gap-2 mt-6 mb-4"
+              className="w-full bg-[#6B46C1] hover:bg-[#5a3ba1] disabled:bg-[#9F7AEA] text-white px-4 py-3 rounded-lg transition-all font-medium text-[14px] shadow-sm flex items-center justify-center gap-2 mt-8 mb-6"
             >
               {isLoading ? (
                 "Logging in..."
@@ -147,7 +147,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
           </div>
 
           {/* Sign Up Link */}
-          <div className="text-center">
+          <div className="text-center mt-4 mb-4">
             <p className="text-[14px] text-[#718096]">
               Don't have an account?{" "}
               <button

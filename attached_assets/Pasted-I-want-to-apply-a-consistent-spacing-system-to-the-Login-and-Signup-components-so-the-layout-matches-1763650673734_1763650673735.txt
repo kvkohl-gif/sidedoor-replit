@@ -1,0 +1,85 @@
+I want to apply a consistent spacing system to the Login and Signup components so the layout matches a professional auth screen.
+
+You should only update:  
+- frontend/components/Login.tsx  
+- frontend/components/Signup.tsx  
+
+Do NOT modify props, logic, handlers, or routing.  
+Only adjust Tailwind padding/margin/spacing classes.  
+Do NOT add max-w-sm or max-w-md (these classes do not exist in this project).
+
+Apply the following spacing rules to BOTH components:
+
+─────────────────────────────────────────────
+TOP SECTION (Logo + App Name + Headline)
+─────────────────────────────────────────────
+
+1. The top section (logo + "The Side Door") should have:
+   - `mb-8` below it  
+   This creates space before the headline.
+
+2. The headline (e.g., “Welcome back”, “Create your account”) should have:
+   - `mb-2` below it  
+   for tight spacing to the sub-headline.
+
+3. The sub-headline (“Log in to continue your workflow”, etc.) should have:
+   - `mb-10` below it  
+   This creates clear separation before the form fields.
+
+─────────────────────────────────────────────
+FORM FIELDS (Email, Password, etc.)
+─────────────────────────────────────────────
+
+4. Update the `<form>` spacing:
+   - Replace the current space-y-* class with: `space-y-6`  
+     This yields professional, consistent spacing between each field group.
+
+5. Add LEFT and RIGHT padding inside the card:
+   - Ensure the CARD wrapper div includes: `px-8 sm:px-10`  
+     (This ensures inputs don’t touch the card edges.)
+
+─────────────────────────────────────────────
+CTA BUTTON (Log in / Sign up)
+─────────────────────────────────────────────
+
+6. The main CTA button should have:
+   - `mt-8` above it  
+   - `mb-6` below it  
+   This prevents it from being squeezed between fields and footer.
+
+─────────────────────────────────────────────
+BOTTOM LINKS (Forgot password?, Log in link)
+─────────────────────────────────────────────
+
+7. The secondary links (e.g., “Don’t have an account? Log in →”) should have:
+   - `mt-4` above them  
+   - `mb-4` below them  
+
+─────────────────────────────────────────────
+CARD PADDING (Entire White Card Container)
+─────────────────────────────────────────────
+
+8. The card container (the large white box with rounded-2xl) should have:
+   - `py-12` for vertical padding  
+   - `px-8 sm:px-10` for horizontal padding  
+   to center everything nicely.
+
+─────────────────────────────────────────────
+ABSOLUTE BACKGROUND BLOBS
+─────────────────────────────────────────────
+
+9. Keep them unchanged except ensure the *card wrapper* has:
+   - `relative z-10`  
+   so the form sits above the decorative blobs.
+
+─────────────────────────────────────────────
+
+Do NOT modify:
+- the structure of elements
+- button classes apart from margin adjustments
+- any business logic
+- props: onNavigate, onLogin, onSignup
+
+After making these changes, please tell me:
+- exactly which lines in each component were updated
+- and confirm the final spacing visually matches the rules above.
