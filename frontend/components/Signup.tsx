@@ -73,7 +73,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
         <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg py-12 px-8 sm:px-10">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-[#6B46C1] to-[#9F7AEA] rounded-lg flex items-center justify-center">
                 <Key className="w-5 h-5 text-white" />
               </div>
