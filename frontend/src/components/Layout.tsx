@@ -1,14 +1,16 @@
-import { Home, Search, Clock, Users, Settings, CreditCard, User, Menu, X, ChevronRight, Plus, UserCircle, Key } from "lucide-react";
+import { Home, Search, Clock, Users, Settings, CreditCard, User, Menu, X, ChevronRight, Plus, UserCircle, Key, LogOut } from "lucide-react";
 import { useState } from "react";
 
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: string;
   onNavigate: (page: string) => void;
+  onLogout?: () => void;
 }
 
-export function Layout({ children, currentPage, onNavigate }: LayoutProps) {
+export function Layout({ children, currentPage, onNavigate, onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLogoutMenu, setShowLogoutMenu] = useState(false);
 
   const navItems = [
     { icon: Home, label: "Dashboard", id: "dashboard" },
@@ -155,15 +157,30 @@ export function Layout({ children, currentPage, onNavigate }: LayoutProps) {
 
           {/* User Profile */}
           <div className="px-3 pb-4 pt-3 border-t border-[#E2E8F0]">
-            <button className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[#F8FAFC] transition-colors group">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#6B46C1] to-[#9F7AEA] rounded-full flex items-center justify-center flex-shrink-0">
-                <User className="w-4 h-4 text-white" />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="font-medium text-[#1A202C] text-[13px] truncate">Sarah Johnson</div>
-                <div className="text-[12px] text-[#94A3B8]">Business Plan</div>
-              </div>
-            </button>
+            <div className="space-y-2">
+              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[#F8FAFC] transition-colors group">
+                <div className="w-8 h-8 bg-gradient-to-br from-[#6B46C1] to-[#9F7AEA] rounded-full flex items-center justify-center flex-shrink-0">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="font-medium text-[#1A202C] text-[13px] truncate">Sarah Johnson</div>
+                  <div className="text-[12px] text-[#94A3B8]">Business Plan</div>
+                </div>
+              </button>
+              {onLogout && (
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to log out?')) {
+                      onLogout();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-red-50 transition-colors group text-[#64748B] hover:text-red-600"
+                >
+                  <LogOut className="w-[18px] h-[18px]" />
+                  <span className="text-[14px]">Log out</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </aside>
