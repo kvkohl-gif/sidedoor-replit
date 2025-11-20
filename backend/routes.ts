@@ -422,17 +422,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid submission ID" });
       }
 
-      // First verify the submission exists and user owns it
-      const submission = await storage.getJobSubmissionById(submissionId);
-      if (!submission) {
+      // First verify the submission exists and user owns it using Supabase
+      const { data: submission, error: fetchError } = await supabase
+        .from('job_submissions')
+        .select('id, user_id')
+        .eq('id', submissionId)
+        .single();
+        
+      if (fetchError || !submission) {
         return res.status(404).json({ message: "Submission not found" });
       }
-      if (submission.userId !== userId) {
+      if (submission.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Update the submission
-      const updatedSubmission = await storage.updateJobSubmission(submissionId, req.body);
+      // Map camelCase request body to snake_case for Supabase
+      const updateData: any = {};
+      if (req.body.status !== undefined) updateData.status = req.body.status;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      if (req.body.jobInput !== undefined) updateData.job_input = req.body.jobInput;
+      if (req.body.companyName !== undefined) updateData.company_name = req.body.companyName;
+      if (req.body.jobTitle !== undefined) updateData.job_title = req.body.jobTitle;
+      if (req.body.jobUrl !== undefined) updateData.job_url = req.body.jobUrl;
+      if (req.body.jobDescription !== undefined) updateData.job_description = req.body.jobDescription;
+
+      // Update the submission using Supabase
+      const { data: updatedSubmission, error: updateError } = await supabase
+        .from('job_submissions')
+        .update(updateData)
+        .eq('id', submissionId)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw new Error(`Failed to update submission: ${updateError.message}`);
+      }
+
       res.json(updatedSubmission);
     } catch (error) {
       console.error("Error updating submission:", error);
