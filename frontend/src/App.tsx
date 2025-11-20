@@ -124,21 +124,26 @@ export default function App() {
     const { page, params } = navigationState;
     
     // Show login/signup without Layout wrapper
+    // Note: Wrapped in max-w container because components use max-w-md which isn't in compiled CSS
     if (page === "login") {
       return (
-        <LoginScreen
-          onNavigate={handleNavigate}
-          onLogin={() => {}} // Will be handled inside component
-        />
+        <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
+          <LoginScreen
+            onNavigate={handleNavigate}
+            onLogin={() => {}} // Will be handled inside component
+          />
+        </div>
       );
     }
     
     if (page === "signup") {
       return (
-        <SignupScreen
-          onNavigate={handleNavigate}
-          onSignup={() => {}} // Will be handled inside component
-        />
+        <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
+          <SignupScreen
+            onNavigate={handleNavigate}
+            onSignup={() => {}} // Will be handled inside component
+          />
+        </div>
       );
     }
     
