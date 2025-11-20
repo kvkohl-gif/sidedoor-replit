@@ -134,7 +134,39 @@ export function registerContactRoutes(app: Express) {
         throw new Error(`Failed to update contact: ${updateError.message}`);
       }
 
-      res.json(updatedContact);
+      // Transform snake_case response to camelCase for frontend
+      const transformedContact = {
+        id: updatedContact.id,
+        jobSubmissionId: updatedContact.job_submission_id,
+        name: updatedContact.name,
+        title: updatedContact.title,
+        email: updatedContact.email,
+        linkedinUrl: updatedContact.linkedin_url,
+        department: updatedContact.department,
+        seniority: updatedContact.seniority,
+        source: updatedContact.source,
+        sourcePlatform: updatedContact.source_platform,
+        confidenceScore: updatedContact.confidence_score,
+        recruiterConfidence: updatedContact.recruiter_confidence,
+        emailVerified: updatedContact.email_verified,
+        verificationStatus: updatedContact.verification_status,
+        verificationData: updatedContact.verification_data,
+        apolloId: updatedContact.apollo_id,
+        suggestedEmail: updatedContact.suggested_email,
+        emailSuggestionReasoning: updatedContact.email_suggestion_reasoning,
+        contactStatus: updatedContact.contact_status,
+        lastContactedAt: updatedContact.last_contacted_at,
+        notes: updatedContact.notes,
+        outreachBucket: updatedContact.outreach_bucket,
+        emailDraft: updatedContact.email_draft,
+        linkedinMessage: updatedContact.linkedin_message,
+        generatedEmailMessage: updatedContact.generated_email_message,
+        generatedLinkedInMessage: updatedContact.generated_linkedin_message,
+        createdAt: updatedContact.created_at,
+        updatedAt: updatedContact.updated_at,
+      };
+
+      res.json(transformedContact);
     } catch (error) {
       console.error("Error updating contact:", error);
       res.status(500).json({ message: "Failed to update contact" });
