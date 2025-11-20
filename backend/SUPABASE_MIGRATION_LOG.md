@@ -108,19 +108,73 @@
 
 **Recommendation**: The remaining routes should be migrated to maintain data consistency across the application.
 
+### Recruiter Contact Routes (✅ Complete)
+
+**Files Modified:** `backend/routes/contacts.ts`, `backend/routes.ts`
+
+#### Routes Migrated:
+1. `GET /api/contacts/all` - Get all recruiter contacts for authenticated user
+2. `PATCH /api/contacts/:id` - Update contact information (both instances)
+3. `POST /api/contacts/:id/generate-message` - Generate personalized outreach messages (both instances)
+4. `POST /api/recruiters/:recruiterId/messages` - Create message template for recruiter
+5. `GET /api/recruiters/:recruiterId/messages` - Get message templates for recruiter
+6. `PATCH /api/messages/:id` - Update message template
+7. `POST /api/recruiters/:recruiterId/generate-messages` - Generate personalized messages using OpenAI
+
+#### Field Mappings Used:
+All recruiter contact fields from previous section, plus additional message-related fields in update operations:
+- `emailDraft` → `email_draft`
+- `linkedinMessage` → `linkedin_message`
+- `generatedEmailMessage` → `generated_email_message`
+- `generatedLinkedInMessage` → `generated_linkedin_message`
+- `contactStatus` → `contact_status`
+- `lastContactedAt` → `last_contacted_at`
+
+#### Key Implementation Details:
+
+1. **GET /api/contacts/all** (routes/contacts.ts):
+   ```typescript
+   const { data: contacts, error } = await supabase
+     .from('recruiter_contacts')
+     .select('*, job_submissions!inner(user_id)')
+     .eq('job_submissions.user_id', userId);
+   ```
+
+2. **PATCH /api/contacts/:id** (both files):
+   - Verifies ownership via job submission relationship
+   - Maps all camelCase update fields to snake_case
+   - Comprehensive field mapping for 13+ updatable fields
+
+3. **POST /api/contacts/:id/generate-message** (both files):
+   - Fetches contact with job submission relationship in single query
+   - Generates personalized message using OpenAI GPT-4o
+   - Updates contact with generated message in snake_case format
+
+4. **Message Template Routes**:
+   - All verify recruiter ownership through job submission relationship
+   - Use Supabase joins to check user_id in single query
+   - Replaced `storage.getRecruiterById()` with Supabase queries
+
+#### Business Logic Preserved:
+- ✅ OpenAI GPT-4o integration for message generation
+- ✅ User ownership validation through job submission relationships
+- ✅ Comprehensive field updates for contact management
+- ✅ Message template creation and management
+- ✅ Personalized email and LinkedIn message generation
+
 ## Still Using Drizzle Storage
 
 The following routes still use the old Drizzle storage layer and require migration:
 
-### Recruiter Contact Routes:
+### Job Data Routes:
 - `GET /api/submissions/:id/job-data`
 - `GET /api/submissions/:id/recruiters`
 - `POST /api/submissions/:id/generate-outreach`
-- `POST /api/contacts/:id/generate-message`
-- `GET /api/contacts/all`
-- `GET /api/contacts/:id`
-- `PATCH /api/contacts/:id`
 - `POST /api/contacts/:id/verify-email`
+- `GET /api/submissions/:id/email-patterns`
+
+### Message Template Storage:
+- Message template CRUD operations (createMessageTemplate, getMessageTemplatesByRecruiter, etc.)
 
 ### Dashboard/Metrics Routes:
 - `GET /api/dashboard/stats`

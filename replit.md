@@ -4,16 +4,16 @@
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
 ## Recent Changes (November 20, 2025)
-*   **Supabase Migration (Phase 1)**: Successfully migrated 4 core job submission routes from Drizzle/Neon to Supabase:
-    *   POST /api/submissions - Creates job submissions, recruiter contacts, and email pattern analysis in Supabase
-    *   GET /api/submissions - Fetches all submissions with recruiter relationships from Supabase
-    *   GET /api/submissions/:id - Fetches single submission with recruiters from Supabase
-    *   PATCH /api/submissions/:id - Updates submission fields via Supabase with empty update guard
-    *   **Field Mapping**: Implemented complete camelCase→snake_case mapping for all 25+ fields across job_submissions, recruiter_contacts, and email_pattern_analysis tables
-    *   **Business Logic Preserved**: OpenAI extraction, Apollo.io enrichment, NeverBounce verification, geographic filtering, and email pattern inference all function identically
-    *   **No Mixed Storage**: These 4 routes are fully isolated from Drizzle storage
-    *   **Production Ready**: Architect-approved migration with comprehensive field mapping documented in backend/SUPABASE_MIGRATION_LOG.md
-    *   ⚠️ **Remaining Work**: Other routes (contacts, dashboard, job-data) still use Drizzle and should be migrated for consistency
+*   **Supabase Migration (Phase 2)**: Successfully migrated all recruiter contact and message generation routes from Drizzle/Neon to Supabase:
+    *   **Job Submission Routes (✅ Complete)**: POST, GET, GET/:id, PATCH /api/submissions
+    *   **Contact Routes (✅ Complete)**: GET /api/contacts/all, PATCH /api/contacts/:id, POST /api/contacts/:id/generate-message
+    *   **Message Template Routes (✅ Complete)**: POST/GET /api/recruiters/:recruiterId/messages, PATCH /api/messages/:id, POST /api/recruiters/:recruiterId/generate-messages
+    *   **Field Mapping**: Complete camelCase→snake_case mapping for all 25+ fields across job_submissions, recruiter_contacts, and email_pattern_analysis tables
+    *   **Business Logic Preserved**: OpenAI extraction, Apollo.io enrichment, NeverBounce verification, geographic filtering, email pattern inference, and personalized message generation all function identically
+    *   **Files Modified**: backend/routes.ts, backend/routes/contacts.ts
+    *   **No Mixed Storage**: All migrated routes use Supabase exclusively with proper join queries for ownership verification
+    *   **Documentation**: Comprehensive field mapping and implementation details in backend/SUPABASE_MIGRATION_LOG.md
+    *   ⚠️ **Remaining Work**: Dashboard/metrics routes, email verification, and message template storage still use Drizzle
 
 ## Recent Changes (November 19, 2025)
 *   **Frontend Migration Complete**: Successfully integrated Figma-exported UI components as the new frontend, replacing the previous React implementation.
@@ -42,8 +42,8 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
 *   **Monorepo Structure**: Facilitates co-development and shared type management between frontend and backend.
 *   **Type Safety**: Utilizes TypeScript across the stack for improved code quality and maintainability.
 *   **Database**: Transitioning from Drizzle ORM + Neon PostgreSQL to Supabase PostgreSQL for improved serverless capabilities and built-in features. 
-    *   **Migration Status**: Job submission routes (POST/GET/GET:id/PATCH) fully migrated to Supabase
-    *   **Pending Migration**: Contact routes, dashboard routes, and other endpoints still use Drizzle
+    *   **Migration Status**: Job submission routes and all recruiter contact routes fully migrated to Supabase (11 routes total)
+    *   **Pending Migration**: Dashboard/metrics routes, email verification, message template storage, and job data routes still use Drizzle
     *   **Data Layer**: Supabase client configured with both regular and admin access for service-level operations
 *   **Authentication**: Integrated with Replit's OpenID Connect for secure user authentication and session management (not using Supabase auth).
 *   **UI/UX**: Employs Shadcn/ui and Radix UI with Tailwind CSS for a modern, consistent, and accessible user interface. Components are designed for compactness and clarity, including consistent header structures and a collapsible sidebar.
