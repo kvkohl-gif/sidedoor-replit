@@ -7,7 +7,7 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import MemoryStore from "memorystore";
-import { storage } from "./storage";
+import { supabase } from "./lib/supabaseClient";
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -65,12 +65,22 @@ async function upsertUser(
   const userData = {
     id: claims["sub"],
     email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
+    first_name: claims["first_name"],
+    last_name: claims["last_name"],
+    profile_image_url: claims["profile_image_url"],
   };
   
-  await storage.upsertUser(userData);
+  // Upsert user in Supabase
+  const { error } = await supabase
+    .from('users')
+    .upsert(userData, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
+    
+  if (error) {
+    console.error('Error upserting user:', error);
+  }
 }
 
 export async function setupAuth(app: Express) {

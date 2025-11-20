@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { isAuthenticated } from "../replitAuth";
-import { storage } from "../storage";
 import { supabase } from "../lib/supabaseClient";
 import OpenAI from "openai";
 
