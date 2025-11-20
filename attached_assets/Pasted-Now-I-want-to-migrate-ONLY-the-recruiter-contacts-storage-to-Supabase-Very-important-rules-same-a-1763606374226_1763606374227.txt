@@ -1,0 +1,125 @@
+Now I want to migrate ONLY the recruiter contacts storage to Supabase.
+
+Very important rules (same as before):
+
+1. Do NOT modify any route URLs.
+2. Do NOT change the request or response shape of any API.
+3. Do NOT change what fields the frontend sends or receives.
+4. Do NOT rewrite business logic (OpenAI, Apollo, scraping, etc.).
+5. ONLY replace the database storage layer with Supabase.
+6. Explicitly map each existing field to the correct Supabase column.
+7. Keep all authentication/authorization checks as they are.
+8. Do NOT touch other features or tables yet.
+
+## What to migrate
+
+Find the routes and storage functions that handle recruiter contacts, for example:
+- Creating contacts for a job submission
+- Listing contacts for a submission
+- Updating a recruiter contact
+- Changing contact status / notes / email drafts
+These currently call functions like:
+- storage.createRecruiterContact(...)
+- storage.getRecruiterContactsBySubmissionId(...)
+- storage.updateRecruiterContact(...)
+(or similar recruiter-related storage helpers)
+
+Replace those storage calls with Supabase queries that use the table **"recruiter_contacts"**.
+
+## Supabase recruiter_contacts table
+
+Use these columns (at least):
+
+- id (serial primary key)
+- job_submission_id (integer, NOT NULL)
+- name (varchar)
+- title (varchar)
+- email (varchar)
+- linkedin_url (varchar)
+- confidence_score (real)
+- source (varchar, default 'OpenAI')
+- email_verified (boolean, default false)
+- verification_status (varchar, default 'unknown')
+- source_platform (varchar, default 'openai')
+- apollo_id (varchar)
+- recruiter_confidence (real, default 0)
+- verification_data (jsonb)
+- created_at (timestamptz, default now())
+- updated_at (timestamptz, default now())
+- suggested_email (varchar)
+- email_suggestion_reasoning (text)
+- contact_status (varchar, default 'not_contacted')
+- last_contacted_at (timestamptz)
+- notes (text)
+- outreach_bucket (varchar, default 'recruiter')
+- department (varchar)
+- seniority (varchar)
+- generated_email_message (text)
+- generated_linkedin_message (text)
+- email_draft (text)
+- linkedin_message (text)
+
+## How to map (examples)
+
+When creating a recruiter contact, map the existing payload fields to Supabase columns:
+
+- jobSubmissionId → job_submission_id
+- name → name
+- title → title
+- email → email
+- linkedinUrl → linkedin_url
+- confidenceScore → confidence_score
+- source → source
+- department → department
+- seniority → seniority
+- status → contact_status
+- notes → notes
+- emailDraft → email_draft
+- linkedinMessage → linkedin_message
+
+For inserts:
+
+const { data, error } = await supabase
+  .from("recruiter_contacts")
+  .insert({
+    job_submission_id: jobSubmissionId,
+    name,
+    title,
+    email,
+    linkedin_url: linkedinUrl,
+    confidence_score,
+    source,
+    department,
+    seniority,
+    contact_status: status,
+    notes,
+    email_draft: emailDraft,
+    linkedin_message: linkedinMessage
+  })
+  .select("*")
+  .single();
+
+For queries:
+
+const { data, error } = await supabase
+  .from("recruiter_contacts")
+  .select("*")
+  .eq("job_submission_id", jobSubmissionId);
+
+For updates:
+
+await supabase
+  .from("recruiter_contacts")
+  .update({...})
+  .eq("id", contactId);
+
+## Scope
+
+- Only migrate recruiter contact storage to use Supabase.
+- Do NOT change job submissions again.
+- Do NOT touch other tables (message_templates, credits, etc.) yet.
+
+When you’re done, tell me:
+- Which files you edited
+- The Supabase insert/select/update code you added
+- Any assumptions made about field mappings
