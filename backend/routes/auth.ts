@@ -24,19 +24,18 @@ router.post("/register", async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const userId = nanoid();
 
-    const { data: newUser, error: userError } = await supabaseAdmin
-      .from("users")
-      .insert({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        password_hash: passwordHash,
-      })
-      .select("id")
-      .single();
+    // Use SQL function to bypass schema cache issues
+    const { data: newUser, error: userError } = await supabaseAdmin.rpc('create_user_with_password', {
+      p_id: userId,
+      p_first_name: firstName,
+      p_last_name: lastName,
+      p_email: email,
+      p_password_hash: passwordHash
+    });
 
-    if (userError || !newUser) {
+    if (userError) {
       console.error("User creation error:", userError);
       return res.status(500).json({ error: "Failed to create user" });
     }
@@ -46,7 +45,7 @@ router.post("/register", async (req: Request, res: Response) => {
       .from("sessions")
       .insert({
         id: sessionId,
-        user_id: newUser.id,
+        user_id: userId,
       });
 
     if (sessionError) {
