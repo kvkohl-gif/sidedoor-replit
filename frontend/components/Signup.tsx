@@ -88,7 +88,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto">
+          <form onSubmit={handleSubmit} className="space-y-4" style={{ maxWidth: '384px', marginLeft: 'auto', marginRight: 'auto' }}>
             {/* Name Row */}
             <div className="grid grid-cols-2 gap-3">
               {/* First Name */}

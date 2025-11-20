@@ -67,7 +67,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5 max-w-sm mx-auto">
+          <form onSubmit={handleSubmit} className="space-y-5" style={{ maxWidth: '384px', marginLeft: 'auto', marginRight: 'auto' }}>
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-[14px] font-medium text-[#1A202C] mb-2">
