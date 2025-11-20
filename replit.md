@@ -4,6 +4,16 @@
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
 ## Recent Changes (November 20, 2025)
+*   **Authentication System Migration (COMPLETE)**: Replaced Replit OpenID Connect with custom server-side session-based authentication:
+    *   **Backend Auth Routes**: Created backend/routes/auth.ts with POST /api/auth/register, /login, /logout endpoints using Supabase direct queries
+    *   **Password Security**: Implemented bcrypt password hashing with 10 salt rounds for secure credential storage
+    *   **Session Management**: Custom sessionAuth middleware (backend/middleware/sessionAuth.ts) validates session_id cookie against Supabase sessions table on every request
+    *   **Cookie Configuration**: HttpOnly, SameSite=strict, Secure (production) cookies prevent XSS and CSRF attacks
+    *   **Protected Routes**: All API endpoints use requireAuth middleware instead of Passport isAuthenticated for authorization checks
+    *   **Frontend Integration**: Created frontend/src/lib/auth.ts with loginUser/registerUser helpers; updated Login.tsx and Signup.tsx to use new auth flow
+    *   **Security Verified**: Architect review confirmed no vulnerabilities; recommended future enhancements: session expiry/rotation, rate limiting on auth endpoints
+    *   **Files Modified**: backend/routes/auth.ts, backend/middleware/sessionAuth.ts, backend/index.ts, backend/routes.ts, backend/routes/contacts.ts, frontend/src/lib/auth.ts, frontend/components/Login.tsx, frontend/components/Signup.tsx
+    *   **Business Logic Preserved**: All existing functionality (job submissions, contact management, message generation) works identically with new auth system
 *   **Supabase Migration (COMPLETE - 100%)**: Successfully completed full migration from Drizzle/Neon to Supabase PostgreSQL:
     *   **All Routes Migrated**: All 20+ backend routes now use Supabase exclusively
     *   **Job Submission Routes**: POST, GET, GET/:id, PATCH, /job-data, /email-patterns, /supplemental-emails
@@ -48,7 +58,13 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
     *   **Migration Status**: COMPLETE - All routes migrated to Supabase (20+ routes covering all functionality)
     *   **Data Layer**: Supabase client configured with both regular and admin access for service-level operations
     *   **Legacy Code**: Drizzle ORM code removed from active use (backed up as .backup files)
-*   **Authentication**: Integrated with Replit's OpenID Connect for secure user authentication and session management (not using Supabase auth).
+*   **Authentication**: Custom server-side session-based authentication using Express backend and Supabase sessions table:
+    *   Bcrypt password hashing (10 salt rounds) for secure credential storage
+    *   HttpOnly, Secure (production), SameSite=strict cookies for session_id
+    *   Global sessionAuth middleware validates sessions on every request
+    *   All protected routes use requireAuth middleware for authorization
+    *   Frontend auth helpers (loginUser, registerUser, logoutUser) centralize API calls
+    *   Not using Supabase Auth or Replit OpenID Connect - fully custom implementation
 *   **UI/UX**: Employs Shadcn/ui and Radix UI with Tailwind CSS for a modern, consistent, and accessible user interface. Components are designed for compactness and clarity, including consistent header structures and a collapsible sidebar.
 *   **AI Integration**: OpenAI GPT-4o is central to extracting initial recruiter data and generating outreach parameters.
 *   **Contact Enrichment**: A multi-stage process involving:
@@ -62,7 +78,7 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
 
 ### Technical Implementations:
 *   **Frontend**: React 18, Vite, Shadcn/ui, Radix UI, Tailwind CSS, TanStack Query for server state, Wouter for routing, React Hook Form with Zod for form validation.
-*   **Backend**: Express.js, Supabase PostgreSQL, Passport.js (OpenID Connect strategy), Express sessions, OpenAI API.
+*   **Backend**: Express.js, Supabase PostgreSQL, custom session-based authentication with bcrypt, cookie-parser for session cookies, OpenAI API.
 *   **Database Schema**: Includes `users`, `sessions`, `job_submissions`, and `recruiter_contacts` tables, with detailed fields for contact verification status, source, and Apollo ID tracking.
 *   **Deployment**: Optimized for Replit environment, using Vite for frontend builds and esbuild for backend bundling, with environment variables for external service configuration.
 
@@ -82,8 +98,8 @@ The application adopts a monorepo structure, comprising a React frontend, an Exp
 *   **@neondatabase/serverless**: PostgreSQL database connection (legacy, no longer used)
 *   **drizzle-orm**: Type-safe database ORM (legacy, no longer used in active code)
 *   **openai**: OpenAI API client for GPT-4o
-*   **passport**: Authentication middleware
-*   **express-session**: Session management
+*   **bcryptjs**: Password hashing for secure authentication
+*   **cookie-parser**: HTTP cookie parsing for session management
 *   **puppeteer-extra**: Advanced web scraping with stealth capabilities
 *   **apollo-client**: Integration for Apollo.io API
 *   **neverbounce-js**: Integration for NeverBounce email verification
