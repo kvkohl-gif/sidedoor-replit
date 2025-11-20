@@ -595,14 +595,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid recruiter ID" });
       }
 
-      // Verify the recruiter belongs to a job submission owned by the user
-      const recruiter = await storage.getRecruiterById(recruiterId);
-      if (!recruiter) {
+      // Verify the recruiter belongs to a job submission owned by the user using Supabase
+      const { data: recruiter, error: recruiterError } = await supabase
+        .from('recruiter_contacts')
+        .select('id, job_submission_id, job_submissions!inner(user_id)')
+        .eq('id', recruiterId)
+        .single();
+      
+      if (recruiterError || !recruiter) {
         return res.status(404).json({ message: "Recruiter not found" });
       }
 
-      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
-      if (!submission || submission.userId !== userId) {
+      if (recruiter.job_submissions.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -630,14 +634,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid recruiter ID" });
       }
 
-      // Verify access through job submission ownership
-      const recruiter = await storage.getRecruiterById(recruiterId);
-      if (!recruiter) {
+      // Verify access through job submission ownership using Supabase
+      const { data: recruiter, error: recruiterError } = await supabase
+        .from('recruiter_contacts')
+        .select('id, job_submission_id, job_submissions!inner(user_id)')
+        .eq('id', recruiterId)
+        .single();
+      
+      if (recruiterError || !recruiter) {
         return res.status(404).json({ message: "Recruiter not found" });
       }
 
-      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
-      if (!submission || submission.userId !== userId) {
+      if (recruiter.job_submissions.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -664,14 +672,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Message template not found" });
       }
 
-      const recruiter = await storage.getRecruiterById(template.recruiterContactId);
-      if (!recruiter) {
+      // Get recruiter and verify ownership using Supabase
+      const { data: recruiter, error: recruiterError } = await supabase
+        .from('recruiter_contacts')
+        .select('id, job_submission_id, job_submissions!inner(user_id)')
+        .eq('id', template.recruiterContactId)
+        .single();
+      
+      if (recruiterError || !recruiter) {
         return res.status(404).json({ message: "Recruiter not found" });
       }
       
-      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
-      
-      if (!submission || submission.userId !== userId) {
+      if (recruiter.job_submissions.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -692,14 +704,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid recruiter ID" });
       }
 
-      // Verify access and get context
-      const recruiter = await storage.getRecruiterById(recruiterId);
-      if (!recruiter) {
+      // Verify access and get context using Supabase
+      const { data: recruiter, error: recruiterError } = await supabase
+        .from('recruiter_contacts')
+        .select(`
+          *,
+          job_submissions!inner (
+            job_title,
+            company_name,
+            job_input,
+            user_id
+          )
+        `)
+        .eq('id', recruiterId)
+        .single();
+      
+      if (recruiterError || !recruiter) {
         return res.status(404).json({ message: "Recruiter not found" });
       }
 
-      const submission = await storage.getJobSubmissionById(recruiter.jobSubmissionId);
-      if (!submission || submission.userId !== userId) {
+      if (recruiter.job_submissions.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
@@ -708,9 +732,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messages = await generatePersonalizedMessages({
         recruiterName: recruiter.name || "Hiring Manager",
         recruiterTitle: recruiter.title || "Recruiter",
-        companyName: submission.companyName || "the company",
-        jobTitle: submission.jobTitle || "this position",
-        jobDescription: submission.jobInput,
+        companyName: recruiter.job_submissions.company_name || "the company",
+        jobTitle: recruiter.job_submissions.job_title || "this position",
+        jobDescription: recruiter.job_submissions.job_input,
         recruiterEmail: recruiter.email
       });
 
@@ -856,10 +880,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const contactId = parseInt(req.params.id);
       const updates = req.body;
-      
-      // Update the contact in the database
       const userId = req.user.id;
-      const updatedContact = await storage.updateContact(contactId, userId, updates);
+      
+      // First verify the contact belongs to the user via job submission using Supabase
+      const { data: contact, error: fetchError } = await supabase
+        .from('recruiter_contacts')
+        .select('id, job_submission_id, job_submissions!inner(user_id)')
+        .eq('id', contactId)
+        .single();
+
+      if (fetchError || !contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      // Check user ownership
+      if (contact.job_submissions.user_id !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Map camelCase updates to snake_case for Supabase
+      const updateData: any = {};
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.title !== undefined) updateData.title = updates.title;
+      if (updates.email !== undefined) updateData.email = updates.email;
+      if (updates.linkedinUrl !== undefined) updateData.linkedin_url = updates.linkedinUrl;
+      if (updates.department !== undefined) updateData.department = updates.department;
+      if (updates.seniority !== undefined) updateData.seniority = updates.seniority;
+      if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.contactStatus !== undefined) updateData.contact_status = updates.contactStatus;
+      if (updates.emailDraft !== undefined) updateData.email_draft = updates.emailDraft;
+      if (updates.linkedinMessage !== undefined) updateData.linkedin_message = updates.linkedinMessage;
+      if (updates.generatedEmailMessage !== undefined) updateData.generated_email_message = updates.generatedEmailMessage;
+      if (updates.generatedLinkedInMessage !== undefined) updateData.generated_linkedin_message = updates.generatedLinkedInMessage;
+      if (updates.lastContactedAt !== undefined) updateData.last_contacted_at = updates.lastContactedAt;
+
+      // Update the contact using Supabase
+      const { data: updatedContact, error: updateError } = await supabase
+        .from('recruiter_contacts')
+        .update(updateData)
+        .eq('id', contactId)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw new Error(`Failed to update contact: ${updateError.message}`);
+      }
       
       res.json(updatedContact);
     } catch (error) {
@@ -874,23 +939,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const contactId = parseInt(req.params.id);
       const { messageType, tone = "professional" } = req.body;
       
-      // Get contact details
-      const contact = await storage.getContactById(contactId);
-      if (!contact) {
+      // Get contact details using Supabase
+      const { data: contact, error: contactError } = await supabase
+        .from('recruiter_contacts')
+        .select(`
+          *,
+          job_submissions!inner (
+            job_title,
+            company_name,
+            user_id
+          )
+        `)
+        .eq('id', contactId)
+        .single();
+        
+      if (contactError || !contact) {
         return res.status(404).json({ message: "Contact not found" });
-      }
-
-      // Get submission details for context
-      const submission = await storage.getJobSubmissionById(contact.jobSubmissionId);
-      if (!submission) {
-        return res.status(404).json({ message: "Job submission not found" });
       }
 
       // Generate message using OpenAI
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       
       const prompt = messageType === "email" 
-        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${submission.jobTitle || "position"} at ${submission.companyName || "the company"}. 
+        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}. 
 
 Keep it concise (under 150 words), personalized, and include:
 - Brief introduction
@@ -899,11 +970,11 @@ Keep it concise (under 150 words), personalized, and include:
 - Request for discussion
 
 Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${submission.companyName || "Unknown Company"}
-Job: ${submission.jobTitle || "Unknown Position"}
+Company: ${contact.job_submissions.company_name || "Unknown Company"}
+Job: ${contact.job_submissions.job_title || "Unknown Position"}
 
 Email tone: ${tone}`
-        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${submission.jobTitle || "position"} at ${submission.companyName || "the company"}.
+        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
 
 Keep it under 300 characters for LinkedIn limits, personalized and include:
 - Brief introduction
@@ -911,8 +982,8 @@ Keep it under 300 characters for LinkedIn limits, personalized and include:
 - Request to connect
 
 Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${submission.companyName || "Unknown Company"}
-Job: ${submission.jobTitle || "Unknown Position"}
+Company: ${contact.job_submissions.company_name || "Unknown Company"}
+Job: ${contact.job_submissions.job_title || "Unknown Position"}
 
 LinkedIn message tone: ${tone}`;
 
@@ -934,19 +1005,21 @@ LinkedIn message tone: ${tone}`;
 
       const generatedMessage = response.choices[0].message.content;
 
-      // Update contact with generated message
-      const updateFields: any = {};
+      // Update contact with generated message using Supabase
+      const updateData: any = {};
       
       if (messageType === "email") {
-        updateFields.generatedEmailMessage = generatedMessage;
-        updateFields.emailDraft = generatedMessage;
+        updateData.generated_email_message = generatedMessage;
+        updateData.email_draft = generatedMessage;
       } else {
-        updateFields.generatedLinkedInMessage = generatedMessage;
-        updateFields.linkedinMessage = generatedMessage;
+        updateData.generated_linkedin_message = generatedMessage;
+        updateData.linkedin_message = generatedMessage;
       }
       
-      const userId = req.user.id;
-      await storage.updateContact(contactId, userId, updateFields);
+      await supabase
+        .from('recruiter_contacts')
+        .update(updateData)
+        .eq('id', contactId);
 
       res.json({ message: generatedMessage });
     } catch (error) {
