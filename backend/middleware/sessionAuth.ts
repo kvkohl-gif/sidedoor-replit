@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { sql } from "../lib/neonClient";
+import { pool } from "../lib/neonClient";
 
 declare global {
   namespace Express {
@@ -25,16 +25,17 @@ export async function sessionAuth(
     }
 
     // Validate session with direct SQL
-    const sessions = await sql`
-      SELECT user_id FROM sessions WHERE id = ${sessionId}
-    `;
+    const sessionsResult = await pool.query(
+      "SELECT user_id FROM sessions WHERE id = $1",
+      [sessionId]
+    );
 
-    if (sessions.length === 0) {
+    if (sessionsResult.rows.length === 0) {
       req.user = null;
       return next();
     }
 
-    req.user = { id: sessions[0].user_id };
+    req.user = { id: sessionsResult.rows[0].user_id };
     return next();
   } catch (error) {
     console.error("Session auth error:", error);

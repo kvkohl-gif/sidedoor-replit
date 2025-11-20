@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
 
 const connectionString = process.env.POSTGRES_CONNECTION_STRING;
 
@@ -13,4 +13,9 @@ console.log("Contains 'db.':", connectionString.includes('db.'));
 console.log("Contains 'api.':", connectionString.includes('api.'));
 console.log("==========================================");
 
-export const sql = neon(connectionString);
+export const pool = new Pool({
+  connectionString,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});

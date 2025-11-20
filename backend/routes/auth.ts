@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
-import { sql } from "../lib/neonClient";
+import { pool } from "../lib/neonClient";
 
 const router = Router();
 
@@ -14,11 +14,12 @@ router.post("/register", async (req: Request, res: Response) => {
     }
 
     // Check if user exists using direct SQL
-    const existingUsers = await sql`
-      SELECT id FROM users WHERE email = ${email}
-    `;
+    const existingUsersResult = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
 
-    if (existingUsers.length > 0) {
+    if (existingUsersResult.rows.length > 0) {
       return res.status(400).json({ error: "User with this email already exists" });
     }
 
@@ -26,17 +27,17 @@ router.post("/register", async (req: Request, res: Response) => {
     const userId = nanoid();
 
     // Create user with direct SQL
-    await sql`
-      INSERT INTO users (id, first_name, last_name, email, password_hash, created_at, updated_at)
-      VALUES (${userId}, ${firstName}, ${lastName}, ${email}, ${passwordHash}, NOW(), NOW())
-    `;
+    await pool.query(
+      "INSERT INTO users (id, first_name, last_name, email, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
+      [userId, firstName, lastName, email, passwordHash]
+    );
 
     // Create session with direct SQL
     const sessionId = nanoid();
-    await sql`
-      INSERT INTO sessions (id, user_id, created_at)
-      VALUES (${sessionId}, ${userId}, NOW())
-    `;
+    await pool.query(
+      "INSERT INTO sessions (id, user_id, created_at) VALUES ($1, $2, NOW())",
+      [sessionId, userId]
+    );
 
     res.cookie("session_id", sessionId, {
       httpOnly: true,
@@ -61,15 +62,16 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     // Fetch user with direct SQL
-    const users = await sql`
-      SELECT id, password_hash FROM users WHERE email = ${email}
-    `;
+    const usersResult = await pool.query(
+      "SELECT id, password_hash FROM users WHERE email = $1",
+      [email]
+    );
 
-    if (users.length === 0) {
+    if (usersResult.rows.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const user = users[0];
+    const user = usersResult.rows[0];
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
     if (!isValidPassword) {
@@ -78,10 +80,10 @@ router.post("/login", async (req: Request, res: Response) => {
 
     // Create session with direct SQL
     const sessionId = nanoid();
-    await sql`
-      INSERT INTO sessions (id, user_id, created_at)
-      VALUES (${sessionId}, ${user.id}, NOW())
-    `;
+    await pool.query(
+      "INSERT INTO sessions (id, user_id, created_at) VALUES ($1, $2, NOW())",
+      [sessionId, user.id]
+    );
 
     res.cookie("session_id", sessionId, {
       httpOnly: true,
@@ -103,9 +105,10 @@ router.post("/logout", async (req: Request, res: Response) => {
 
     if (sessionId) {
       // Delete session with direct SQL
-      await sql`
-        DELETE FROM sessions WHERE id = ${sessionId}
-      `;
+      await pool.query(
+        "DELETE FROM sessions WHERE id = $1",
+        [sessionId]
+      );
     }
 
     res.clearCookie("session_id");
