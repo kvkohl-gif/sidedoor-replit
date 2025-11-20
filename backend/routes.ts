@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerContactRoutes } from "./routes/contacts";
+import dbTestRouter from "./routes/dbTest";
 import OpenAI from "openai";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
@@ -19,6 +20,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // Supabase database test route
+  app.use("/api/db-test", dbTestRouter);
 
   // Auth middleware
   await setupAuth(app);
