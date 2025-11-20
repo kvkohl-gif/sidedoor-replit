@@ -15,9 +15,9 @@ router.post("/register", async (req: Request, res: Response) => {
 
     const { data: existingUser } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select("*")
       .eq("email", email)
-      .single();
+      .maybeSingle();
 
     if (existingUser) {
       return res.status(400).json({ error: "User with this email already exists" });
@@ -26,27 +26,33 @@ router.post("/register", async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = nanoid();
 
-    // Use SQL function to bypass schema cache issues
-    const { data: newUser, error: userError } = await supabaseAdmin.rpc('create_user_with_password', {
-      p_id: userId,
-      p_first_name: firstName,
-      p_last_name: lastName,
-      p_email: email,
-      p_password_hash: passwordHash
-    });
+    // Create user with direct table insert
+    const { data: newUser, error: userError } = await supabaseAdmin
+      .from("users")
+      .insert([{
+        id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password_hash: passwordHash,
+      }])
+      .select("*")
+      .single();
 
-    if (userError) {
+    if (userError || !newUser) {
       console.error("User creation error:", userError);
       return res.status(500).json({ error: "Failed to create user" });
     }
 
     const sessionId = nanoid();
-    const { error: sessionError } = await supabaseAdmin
+    const { data: newSession, error: sessionError } = await supabaseAdmin
       .from("sessions")
-      .insert({
+      .insert([{
         id: sessionId,
         user_id: userId,
-      });
+      }])
+      .select("*")
+      .single();
 
     if (sessionError) {
       console.error("Session creation error:", sessionError);
@@ -75,13 +81,13 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const { data: user, error: userError } = await supabaseAdmin
+    const { data: user } = await supabaseAdmin
       .from("users")
-      .select("id, password_hash")
+      .select("*")
       .eq("email", email)
-      .single();
+      .maybeSingle();
 
-    if (userError || !user) {
+    if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -92,12 +98,14 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     const sessionId = nanoid();
-    const { error: sessionError } = await supabaseAdmin
+    const { data: newSession, error: sessionError } = await supabaseAdmin
       .from("sessions")
-      .insert({
+      .insert([{
         id: sessionId,
         user_id: user.id,
-      });
+      }])
+      .select("*")
+      .single();
 
     if (sessionError) {
       console.error("Session creation error:", sessionError);
