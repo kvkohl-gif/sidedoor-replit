@@ -15,7 +15,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
 
@@ -30,11 +30,34 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
     }
 
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          email, 
+          password,
+          firstName,
+          lastName,
+        }),
+      });
+
+      if (response.ok) {
+        onSignup();
+        // Reload to trigger auth check and redirect to dashboard
+        window.location.href = '/';
+      } else {
+        const data = await response.json();
+        alert(data.message || 'Signup failed');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      alert('Signup failed');
       setIsLoading(false);
-      onSignup();
-    }, 1000);
+    }
   };
 
   return (

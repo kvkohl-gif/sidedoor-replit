@@ -11,14 +11,32 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        onLogin();
+        // Reload to trigger auth check
+        window.location.href = '/';
+      } else {
+        const data = await response.json();
+        alert(data.message || 'Login failed');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Login failed');
       setIsLoading(false);
-      onLogin();
-    }, 1000);
+    }
   };
 
   return (
