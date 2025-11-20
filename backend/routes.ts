@@ -355,8 +355,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/submissions", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const submissions = await storage.getJobSubmissionsByUser(userId);
-      res.json(submissions);
+      
+      // Fetch submissions with recruiters using Supabase
+      const { data: submissions, error: fetchError } = await supabase
+        .from('job_submissions')
+        .select(`
+          *,
+          recruiters:recruiter_contacts(*)
+        `)
+        .eq('user_id', userId)
+        .order('submitted_at', { ascending: false });
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch submissions: ${fetchError.message}`);
+      }
+
+      res.json(submissions || []);
     } catch (error) {
       console.error("Error fetching submissions:", error);
       res.status(500).json({ message: "Failed to fetch submissions" });
