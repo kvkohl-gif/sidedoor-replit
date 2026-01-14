@@ -34,9 +34,12 @@ router.post("/register", async (req: Request, res: Response) => {
 
     // Create session with direct SQL
     const sessionId = nanoid();
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + 30); // 30 days from now
+
     await pool.query(
-      "INSERT INTO sessions (sid, user_id, created_at) VALUES ($1, $2, NOW())",
-      [sessionId, userId]
+      "INSERT INTO sessions (sid, sess, expire, user_id, created_at) VALUES ($1, $2, $3, $4, NOW())",
+      [sessionId, {}, expireDate, userId]
     );
 
     res.cookie("session_id", sessionId, {
@@ -80,9 +83,12 @@ router.post("/login", async (req: Request, res: Response) => {
 
     // Create session with direct SQL
     const sessionId = nanoid();
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + 30); // 30 days from now
+
     await pool.query(
-      "INSERT INTO sessions (sid, user_id, created_at) VALUES ($1, $2, NOW())",
-      [sessionId, user.id]
+      "INSERT INTO sessions (sid, sess, expire, user_id, created_at) VALUES ($1, $2, $3, $4, NOW())",
+      [sessionId, {}, expireDate, user.id]
     );
 
     res.cookie("session_id", sessionId, {
