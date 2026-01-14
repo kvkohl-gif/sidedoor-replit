@@ -26,7 +26,7 @@ export async function sessionAuth(
 
     // Validate session with direct SQL
     const sessionsResult = await pool.query(
-      "SELECT user_id FROM sessions WHERE id = $1",
+      "SELECT user_id FROM sessions WHERE sid = $1",
       [sessionId]
     );
 

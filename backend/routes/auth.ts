@@ -35,7 +35,7 @@ router.post("/register", async (req: Request, res: Response) => {
     // Create session with direct SQL
     const sessionId = nanoid();
     await pool.query(
-      "INSERT INTO sessions (id, user_id, created_at) VALUES ($1, $2, NOW())",
+      "INSERT INTO sessions (sid, user_id, created_at) VALUES ($1, $2, NOW())",
       [sessionId, userId]
     );
 
@@ -81,7 +81,7 @@ router.post("/login", async (req: Request, res: Response) => {
     // Create session with direct SQL
     const sessionId = nanoid();
     await pool.query(
-      "INSERT INTO sessions (id, user_id, created_at) VALUES ($1, $2, NOW())",
+      "INSERT INTO sessions (sid, user_id, created_at) VALUES ($1, $2, NOW())",
       [sessionId, user.id]
     );
 
@@ -106,7 +106,7 @@ router.post("/logout", async (req: Request, res: Response) => {
     if (sessionId) {
       // Delete session with direct SQL
       await pool.query(
-        "DELETE FROM sessions WHERE id = $1",
+        "DELETE FROM sessions WHERE sid = $1",
         [sessionId]
       );
     }
