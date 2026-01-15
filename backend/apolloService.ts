@@ -125,7 +125,7 @@ const RECRUITER_TITLES = [
 
 class ApolloService {
   private apiKey: string;
-  private baseUrl = "https://api.apollo.io/v1";
+  private baseUrl = "https://api.apollo.io/api/v1";
 
   constructor() {
     this.apiKey = process.env.APOLLO_API_KEY || "";
@@ -375,7 +375,7 @@ class ApolloService {
 
       console.log(`Testing Apollo API connection with payload:`, JSON.stringify(testPayload, null, 2));
 
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+      const response = await fetch(`${this.baseUrl}/mixed_people/api_search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -541,7 +541,7 @@ class ApolloService {
         searchPayload.reveal_personal_emails = true;
       }
 
-      const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+      const response = await fetch(`${this.baseUrl}/mixed_people/api_search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -936,7 +936,7 @@ class ApolloService {
     searchPayload.reveal_personal_emails = true;
     console.log(`🔑 Email unlocking enabled: reveal_personal_emails = true`);
 
-    const response = await fetch(`${this.baseUrl}/mixed_people/search`, {
+    const response = await fetch(`${this.baseUrl}/mixed_people/api_search`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
