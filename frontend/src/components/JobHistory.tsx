@@ -74,12 +74,18 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                    sub.status === "email_sent" || sub.status === "awaiting_reply" ? "yellow" : "gray",
       contactsFound: sub.recruiters.length,
       contactsValid: validContacts,
-      date: new Date(sub.submittedAt).toLocaleDateString("en-US", { 
-        month: "short", 
-        day: "numeric", 
-        year: "numeric" 
-      }),
-      daysAgo: formatDistanceToNow(new Date(sub.submittedAt), { addSuffix: true }),
+      date: (() => {
+        try {
+          const d = new Date(sub.submittedAt);
+          return !isNaN(d.getTime()) ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown";
+        } catch { return "Unknown"; }
+      })(),
+      daysAgo: (() => {
+        try {
+          const d = new Date(sub.submittedAt);
+          return !isNaN(d.getTime()) ? formatDistanceToNow(d, { addSuffix: true }) : "Unknown";
+        } catch { return "Unknown"; }
+      })(),
       notes: sub.notes || "",
       archived: sub.isArchived === "true",
     };

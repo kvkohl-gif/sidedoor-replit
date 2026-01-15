@@ -38,7 +38,6 @@ export function registerContactRoutes(app: Express) {
           job_submissions!inner (
             job_title,
             company_name,
-            job_url,
             user_id
           )
         `)
@@ -68,7 +67,6 @@ export function registerContactRoutes(app: Express) {
         apolloId: contact.apollo_id,
         jobTitle: contact.job_submissions?.job_title,
         companyName: contact.job_submissions?.company_name,
-        jobUrl: contact.job_submissions?.job_url,
         submissionId: contact.job_submission_id,
       }));
 
@@ -98,7 +96,10 @@ export function registerContactRoutes(app: Express) {
       }
 
       // Check user ownership
-      if (contact.job_submissions.user_id !== userId) {
+      const jobSubmission = Array.isArray(contact.job_submissions) 
+        ? contact.job_submissions[0] 
+        : contact.job_submissions;
+      if (!jobSubmission || jobSubmission.user_id !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
