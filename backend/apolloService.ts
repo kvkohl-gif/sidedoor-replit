@@ -1051,36 +1051,40 @@ class ApolloService {
     }
 
     try {
-      console.log(`Enriching contact by profile: ${contact.name} at ${contact.organization_name}`);
+      console.log(`Enriching contact by profile: ${contact.name || contact.id} at ${contact.organization_name || 'unknown org'}`);
 
       const matchPayload: any = {
         reveal_personal_emails: true
-        // Note: reveal_phone_number requires webhook_url, so we'll skip it for now
       };
 
-      // Use multiple identifiers for better matching
-      if (contact.first_name && contact.last_name) {
-        matchPayload.first_name = contact.first_name;
-        matchPayload.last_name = contact.last_name;
-      } else if (contact.name) {
-        const nameParts = contact.name.split(' ');
-        matchPayload.first_name = nameParts[0];
-        if (nameParts.length > 1) {
-          matchPayload.last_name = nameParts.slice(1).join(' ');
+      // PRIORITY 1: Use Apollo person ID if available (most reliable with new API)
+      if (contact.id) {
+        matchPayload.id = contact.id;
+        console.log(`Using Apollo person ID for enrichment: ${contact.id}`);
+      } else {
+        // Fallback to name-based matching
+        if (contact.first_name && contact.last_name) {
+          matchPayload.first_name = contact.first_name;
+          matchPayload.last_name = contact.last_name;
+        } else if (contact.name) {
+          const nameParts = contact.name.split(' ');
+          matchPayload.first_name = nameParts[0];
+          if (nameParts.length > 1) {
+            matchPayload.last_name = nameParts.slice(1).join(' ');
+          }
         }
-      }
 
-      if (contact.organization_name) {
-        matchPayload.organization_name = contact.organization_name;
-      }
+        if (contact.organization_name) {
+          matchPayload.organization_name = contact.organization_name;
+        }
 
-      if (contact.linkedin_url) {
-        matchPayload.linkedin_url = contact.linkedin_url;
-      }
+        if (contact.linkedin_url) {
+          matchPayload.linkedin_url = contact.linkedin_url;
+        }
 
-      // Add title for better matching
-      if (contact.title) {
-        matchPayload.title = contact.title;
+        if (contact.title) {
+          matchPayload.title = contact.title;
+        }
       }
 
       console.log(`Enrichment payload:`, JSON.stringify(matchPayload, null, 2));
