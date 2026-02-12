@@ -44,6 +44,17 @@ export function lookupRole(jobTitle: string): RoleLookupResult | null {
 
 export function detectSeniority(jobTitle: string): SeniorityResult {
   const normalizedTitle = jobTitle.toLowerCase().trim();
+
+  const seniorityExceptions: Record<string, SeniorityResult> = {
+    'chief of staff': { seniority: 'senior_manager', level: 6, apolloSeniority: 'director', confidence: 0.9 },
+  };
+
+  for (const [exceptionPattern, exceptionResult] of Object.entries(seniorityExceptions)) {
+    if (normalizedTitle.includes(exceptionPattern)) {
+      return exceptionResult;
+    }
+  }
+
   const levels = taxonomy.seniorityLevels;
 
   const orderedKeys = Object.keys(levels).sort(

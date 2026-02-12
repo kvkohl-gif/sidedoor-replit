@@ -1,0 +1,187 @@
+# FOLLOW-UP: Fix Taxonomy Bugs Found During Testing
+
+## CONTEXT
+We just ran 20 real-world job titles through the role taxonomy system you implemented. It caught 90% of titles correctly, but we found 2 seniority detection bugs and 1 gap in hiring manager targets. These need to be fixed before launch.
+
+**Do NOT re-implement the taxonomy system. It's already in place. Only make the targeted fixes below.**
+
+---
+
+## BUG FIX 1: "Chief of Staff" incorrectly detected as C-Suite seniority
+
+**Problem:** The word "chief" in "Chief of Staff" triggers the c_suite seniority pattern. But Chief of Staff is a senior manager / operations role, NOT a C-suite executive.
+
+**File to edit:** `backend/roleTaxonomyService.ts`
+
+**Fix:** In the `detectSeniority()` function, add an explicit exception check BEFORE the main seniority loop. Add this right after the `const normalizedTitle` line and before the `const orderedKeys` line:
+
+```typescript
+// --- EXCEPTIONS: titles that contain seniority keywords but aren't that level ---
+const seniorityExceptions: Record<string, SeniorityResult> = {
+  'chief of staff': { seniority: 'senior_manager', level: 6, apolloSeniority: 'director', confidence: 0.9 },
+};
+
+for (const [exceptionPattern, exceptionResult] of Object.entries(seniorityExceptions)) {
+  if (normalizedTitle.includes(exceptionPattern)) {
+    return exceptionResult;
+  }
+}
+// --- END EXCEPTIONS ---
+```
+
+---
+
+## BUG FIX 2: "partner" pattern in c_suite is too broad
+
+**Problem:** The c_suite seniority pattern includes "partner" which matches "HR Business Partner", "Talent Partner", "People Partner", "Client Partner" — all mid-level roles. It should only match executive-level partner titles like "Managing Partner" or "General Partner".
+
+**File to edit:** `backend/data/roleTaxonomy.json`
+
+**Fix:** In the `seniorityLevels.c_suite.patterns` array, replace `"partner"` with more specific patterns:
+
+**Before:**
+```json
+"c_suite": {
+  "level": 9,
+  "patterns": ["chief", "c-level", "cto", "cfo", "cmo", "coo", "cpo", "cro", "ceo", "founder", "co.?founder", "partner"],
+  "apolloSeniority": "c_suite"
+}
+```
+
+**After:**
+```json
+"c_suite": {
+  "level": 9,
+  "patterns": ["chief", "c-level", "cto", "cfo", "cmo", "coo", "cpo", "cro", "ceo", "founder", "co.?founder", "managing partner", "general partner", "founding partner", "senior partner"],
+  "apolloSeniority": "c_suite"
+}
+```
+
+This way "HR Business Partner" and "Talent Partner" won't match c_suite, but "Managing Partner" at a law firm or consulting firm still will.
+
+---
+
+## BUG FIX 3: Missing hiring manager targets for manager-level roles
+
+**Problem:** Several departments only define `ic_junior` and `ic_senior` hiring manager targets but not `manager`. When someone with "Manager" in their title is classified (like "Growth Marketing Manager" or "Customer Success Manager"), `getHiringManagerTargets()` returns null because there's no `manager` key.
+
+**File to edit:** `backend/data/roleTaxonomy.json`
+
+**Fix:** Add a `manager` entry to the `hiringManagerTargets` object in these departments that are missing it:
+
+### In `departments.design.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "senior_manager"],
+  "targetTitles": ["Director of Design", "VP of Design", "Head of Design"],
+  "targetSeniority": ["director", "vp"]
+}
+```
+
+### In `departments.data_science.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of Data Science", "Head of Data", "Chief Data Officer"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.marketing.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of Marketing", "Head of Marketing", "CMO"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.customer_success.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of Customer Success", "Head of Customer Success", "Chief Customer Officer"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.operations.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of Operations", "COO", "Head of Operations"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.hr.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of People", "VP of HR", "CHRO", "Chief People Officer"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.legal.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["General Counsel", "VP of Legal", "Chief Legal Officer"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+### In `departments.construction_real_estate.hiringManagerTargets`, add:
+```json
+"manager": {
+  "seniority": ["manager", "director"],
+  "targetTitles": ["VP of Construction", "VP of Development", "Head of Real Estate", "COO"],
+  "targetSeniority": ["vp", "c_suite"]
+}
+```
+
+---
+
+## ENHANCEMENT: Add Developer Advocate / DevRel roles
+
+**Problem:** "Developer Advocate" is a common tech role that's not in the taxonomy, causing an AI fallback.
+
+**File to edit:** `backend/data/roleTaxonomy.json`
+
+**Fix:** Add a new entry in `crossFunctionalRoles`:
+
+```json
+"developer_relations": {
+  "titlePatterns": ["developer advocate", "developer evangelist", "devrel", "developer relations", "dev advocate", "developer experience"],
+  "primaryDepartment": "marketing",
+  "secondaryDepartment": "engineering",
+  "searchBoth": true,
+  "hiringManagerTitles": ["VP of Marketing", "Head of Developer Relations", "Director of Developer Experience", "VP of Engineering", "CMO"]
+}
+```
+
+---
+
+## VERIFICATION
+
+After making all fixes, verify by checking the server logs when processing these job titles:
+
+1. **"Chief of Staff"** → should show seniority `senior_manager` (NOT `c_suite`)
+2. **"HR Business Partner"** → should show seniority `mid` (NOT `c_suite`)
+3. **"Growth Marketing Manager"** → should return hiring manager targets (NOT empty)
+4. **"Customer Success Manager"** → should return hiring manager targets (NOT empty)
+5. **"Developer Advocate"** → should match as cross-functional Marketing + Engineering (NOT fall to AI)
+
+---
+
+## SUMMARY OF CHANGES
+
+| File | Change |
+|------|--------|
+| `backend/roleTaxonomyService.ts` | Add seniority exceptions block in `detectSeniority()` for "chief of staff" |
+| `backend/data/roleTaxonomy.json` | Replace broad "partner" with specific partner variants in c_suite patterns |
+| `backend/data/roleTaxonomy.json` | Add `manager` hiring targets to 8 departments missing them |
+| `backend/data/roleTaxonomy.json` | Add `developer_relations` to crossFunctionalRoles |
+
+**No new files. No new dependencies. No frontend changes. No database changes.**

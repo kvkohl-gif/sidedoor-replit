@@ -164,6 +164,11 @@
           "seniority": ["senior", "staff", "principal"],
           "targetTitles": ["Head of Design", "Director of Design", "VP of Design", "Creative Director"],
           "targetSeniority": ["director", "vp"]
+        },
+        "manager": {
+          "seniority": ["manager", "senior_manager"],
+          "targetTitles": ["Director of Design", "VP of Design", "Head of Design"],
+          "targetSeniority": ["director", "vp"]
         }
       },
       "apolloSearchDepartments": ["design", "marketing"]
@@ -207,6 +212,11 @@
           "seniority": ["senior", "staff", "principal"],
           "targetTitles": ["Director of Data Science", "Head of Data", "VP of Data Science"],
           "targetSeniority": ["director", "vp"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
+          "targetTitles": ["VP of Data Science", "Head of Data", "Chief Data Officer"],
+          "targetSeniority": ["vp", "c_suite"]
         }
       },
       "apolloSearchDepartments": ["engineering_technical", "operations"]
@@ -270,6 +280,11 @@
         },
         "ic_senior": {
           "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Marketing", "Head of Marketing", "CMO"],
+          "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
           "targetTitles": ["VP of Marketing", "Head of Marketing", "CMO"],
           "targetSeniority": ["vp", "c_suite"]
         }
@@ -371,6 +386,11 @@
           "seniority": ["senior", "director"],
           "targetTitles": ["VP of Customer Success", "Head of Customer Success", "Chief Customer Officer"],
           "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
+          "targetTitles": ["VP of Customer Success", "Head of Customer Success", "Chief Customer Officer"],
+          "targetSeniority": ["vp", "c_suite"]
         }
       },
       "apolloSearchDepartments": ["support", "operations"]
@@ -414,6 +434,11 @@
         },
         "ic_senior": {
           "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Operations", "COO", "Head of Operations"],
+          "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
           "targetTitles": ["VP of Operations", "COO", "Head of Operations"],
           "targetSeniority": ["vp", "c_suite"]
         }
@@ -512,6 +537,11 @@
           "seniority": ["senior", "director"],
           "targetTitles": ["VP of People", "VP of HR", "CHRO", "Chief People Officer"],
           "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
+          "targetTitles": ["VP of People", "VP of HR", "CHRO", "Chief People Officer"],
+          "targetSeniority": ["vp", "c_suite"]
         }
       },
       "apolloSearchDepartments": ["human_resources"]
@@ -553,6 +583,11 @@
         },
         "ic_senior": {
           "seniority": ["senior", "director"],
+          "targetTitles": ["General Counsel", "VP of Legal", "Chief Legal Officer"],
+          "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
           "targetTitles": ["General Counsel", "VP of Legal", "Chief Legal Officer"],
           "targetSeniority": ["vp", "c_suite"]
         }
@@ -602,6 +637,11 @@
         },
         "ic_senior": {
           "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Construction", "VP of Development", "Head of Real Estate", "COO"],
+          "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
           "targetTitles": ["VP of Construction", "VP of Development", "Head of Real Estate", "COO"],
           "targetSeniority": ["vp", "c_suite"]
         }
@@ -658,7 +698,7 @@
     },
     "c_suite": {
       "level": 9,
-      "patterns": ["chief", "c-level", "cto", "cfo", "cmo", "coo", "cpo", "cro", "ceo", "founder", "co.?founder", "partner"],
+      "patterns": ["chief", "c-level", "cto", "cfo", "cmo", "coo", "cpo", "cro", "ceo", "founder", "co.?founder", "managing partner", "general partner", "founding partner", "senior partner"],
       "apolloSeniority": "c_suite"
     }
   },
@@ -719,6 +759,13 @@
       "secondaryDepartment": "operations",
       "searchBoth": false,
       "hiringManagerTitles": ["Director of Professional Services", "VP of Customer Success", "Head of Implementation"]
+    },
+    "developer_relations": {
+      "titlePatterns": ["developer advocate", "developer evangelist", "devrel", "developer relations", "dev advocate", "developer experience"],
+      "primaryDepartment": "marketing",
+      "secondaryDepartment": "engineering",
+      "searchBoth": true,
+      "hiringManagerTitles": ["VP of Marketing", "Head of Developer Relations", "Director of Developer Experience", "VP of Engineering", "CMO"]
     }
   },
 
