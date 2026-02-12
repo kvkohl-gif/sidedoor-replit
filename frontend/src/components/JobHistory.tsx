@@ -261,8 +261,6 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
       <div className="space-y-3">
         {filteredJobs.map((job) => {
           const cfg = getStatusConfig(job.status);
-          const validRate = job.contactsFound > 0 ? Math.round((job.contactsValid / job.contactsFound) * 100) : 0;
-          
           return (
             <div
               key={job.id}

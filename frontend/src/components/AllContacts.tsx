@@ -447,6 +447,33 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
     );
   }
 
+  if (contacts.length === 0) {
+    return (
+      <div className="contacts-root">
+        <style>{css}</style>
+        <div className="contacts-header">
+          <h1>Contacts</h1>
+        </div>
+        <div style={{ textAlign: "center", padding: "80px 24px" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#f5f3ff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <Search style={{ width: 28, height: 28, color: "#7c3aed" }} />
+          </div>
+          <h3 style={{ color: "#0f172a", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No contacts yet</h3>
+          <p style={{ color: "#64748b", fontSize: 14, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
+            Submit a job posting to automatically discover recruiter and hiring manager contacts.
+          </p>
+          <button
+            onClick={() => onNavigate("search")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+          >
+            <Plus style={{ width: 16, height: 16 }} />
+            Start New Search
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="contacts-root">
       <style>{css}</style>

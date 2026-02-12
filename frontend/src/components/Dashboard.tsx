@@ -157,21 +157,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
               <MessageSquare className="w-5 h-5 text-[#6B46C1]" />
             </div>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-[#6B46C1] rounded-md text-xs font-medium">
-              This week
-            </span>
           </div>
           <div className="space-y-1 mb-4">
             <div className="text-3xl font-bold text-[#0F172A]">-</div>
             <div className="text-[13px] text-[#64748B]">AI messages generated</div>
           </div>
           <div className="pt-4 border-t border-[#F1F5F9]">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[#64748B]">Personalization score</span>
-              <span className="text-[#0F172A] font-semibold">-</span>
-            </div>
-            <div className="w-full bg-[#F1F5F9] rounded-full h-1.5 overflow-hidden">
-              <div className="bg-[#6B46C1] h-1.5 rounded-full" style={{ width: "0%" }}></div>
+            <div className="text-xs text-[#94a3b8]">
+              Generate outreach from any contact page
             </div>
           </div>
         </div>
