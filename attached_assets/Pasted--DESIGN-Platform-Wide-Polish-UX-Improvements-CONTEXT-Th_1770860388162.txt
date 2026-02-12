@@ -1,0 +1,179 @@
+# DESIGN: Platform-Wide Polish & UX Improvements
+
+## CONTEXT
+
+This prompt covers smaller improvements that don't warrant their own full design doc but collectively make the platform feel more polished and trustworthy. Implement these AFTER the core page redesigns are done.
+
+---
+
+## 1. ALL CONTACTS TABLE — ADD ACTIONS COLUMN
+
+The redesigned contacts table (already implemented) is missing the actions column that was in the original. Add it back.
+
+Each row should have:
+- LinkedIn icon button (if linkedin_url exists) — opens profile in new tab
+- "Draft" button — navigates to contact detail page with message generation section focused
+- The row itself should be clickable to navigate to contact detail
+
+```
+| NAME | COMPANY | EMAIL | TYPE | STATUS | SOURCED FOR | ACTIONS      |
+|------|---------|-------|------|--------|-------------|--------------|
+| ...  | ...     | ...   | ...  | ...    | ...         | [in] [Draft] |
+```
+
+The "Draft" button should be:
+- Purple solid if no message has been generated yet
+- Outlined/secondary if a message already exists ("View Draft")
+
+Check the `generated_email_message` field on the contact — if it's not null, the message has been generated.
+
+---
+
+## 2. EMPTY STATES
+
+Several pages have poor empty states. Fix these:
+
+**Dashboard — No submissions yet:**
+```
+┌──────────────────────────────────────────┐
+│  🔍  Start your first search             │
+│                                          │
+│  Paste a job URL or description to find  │
+│  recruiters and hiring managers you can   │
+│  contact directly.                       │
+│                                          │
+│  [+ New Search]                          │
+└──────────────────────────────────────────┘
+```
+
+**Contacts page — No contacts yet:**
+```
+┌──────────────────────────────────────────┐
+│  👥  No contacts yet                      │
+│                                          │
+│  Submit a job to find recruiters and     │
+│  hiring managers at that company.        │
+│                                          │
+│  [+ New Search]                          │
+└──────────────────────────────────────────┘
+```
+
+**Job History — No jobs:**
+Same pattern. Always include a CTA button that takes them to the search page.
+
+---
+
+## 3. STATUS COLOR CONSISTENCY
+
+Standardize these colors across ALL pages (contacts table, job details, job history, contact detail):
+
+```typescript
+const STATUS_COLORS = {
+  // Contact-level statuses
+  not_contacted:       { color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
+  email_sent:          { color: '#2563eb', bg: '#eff6ff', dot: '#3b82f6' },
+  linkedin_sent:       { color: '#0a66c2', bg: '#f0f7ff', dot: '#0a66c2' },
+  awaiting_reply:      { color: '#d97706', bg: '#fffbeb', dot: '#f59e0b' },
+  follow_up_needed:    { color: '#ea580c', bg: '#fff7ed', dot: '#f97316' },
+  replied:             { color: '#7c3aed', bg: '#f5f3ff', dot: '#8b5cf6' },
+  interview_scheduled: { color: '#059669', bg: '#ecfdf5', dot: '#10b981' },
+  not_interested:      { color: '#dc2626', bg: '#fef2f2', dot: '#ef4444' },
+
+  // Job-level statuses
+  saved:              { color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af' },
+  applied:            { color: '#2563eb', bg: '#eff6ff', dot: '#3b82f6' },
+  reaching_out:       { color: '#d97706', bg: '#fffbeb', dot: '#f59e0b' },
+  in_conversation:    { color: '#7c3aed', bg: '#f5f3ff', dot: '#8b5cf6' },
+  interviewing:       { color: '#059669', bg: '#ecfdf5', dot: '#10b981' },
+  closed:             { color: '#9ca3af', bg: '#f3f4f6', dot: '#d1d5db' },
+
+  // Verification statuses
+  valid:    { color: '#059669', bg: '#ecfdf5', dot: '#10b981', label: 'Verified' },
+  risky:    { color: '#d97706', bg: '#fffbeb', dot: '#f59e0b', label: 'Risky' },
+  invalid:  { color: '#dc2626', bg: '#fef2f2', dot: '#ef4444', label: 'Invalid' },
+  unknown:  { color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af', label: 'Unverified' },
+};
+```
+
+Create a shared utility file: `frontend/src/lib/statusColors.ts` and import it everywhere.
+
+---
+
+## 4. VALID RATE — DON'T SHOW 0% IN RED
+
+On the Job History cards, "0% Valid Rate" shows in red/negative styling. When there are no verified emails, this looks like a failure. Options:
+
+- If 0 verified: show "—" instead of "0%"
+- Or show "0 verified" in neutral gray, not red
+- Only show the percentage when there ARE some verified emails
+
+---
+
+## 5. DUPLICATE SUBMISSIONS IN JOB HISTORY
+
+The Job History shows 3 identical entries for the same Quickbase PM role. This likely means the user submitted the same job 3 times (maybe testing, or the duplicate prevention failed).
+
+Short-term fix: Add visual differentiation so duplicates are obvious:
+- Show a timestamp or relative date ("28 days ago" is already there — make sure each shows a unique time)
+- Consider adding a small "Submission #1", "#2", "#3" indicator
+
+Long-term fix: Before creating a new submission, check if the same `job_input` (or same company_name + job_title combo) was submitted in the last 24 hours. If so, warn the user: "You already submitted this job. View existing results?"
+
+---
+
+## 6. SIDEBAR — MINOR TWEAKS
+
+The sidebar is clean. Two small improvements:
+
+**Active state:** The current page indicator (purple left border + highlighted text) is good. Make sure it's consistent — the screenshots show it working on some pages but the styling varies.
+
+**Credits widget:** 50 of 250 is clear. Add a subtle color change when credits are low:
+- Above 50%: green progress bar
+- 20-50%: amber progress bar
+- Below 20%: red progress bar + "Running low" text
+
+---
+
+## 7. MOBILE RESPONSIVENESS
+
+The app doesn't need to be fully mobile-optimized for launch, but it should not BREAK on mobile. Key fixes:
+
+- Sidebar should collapse to a hamburger menu on screens < 768px
+- Tables should become card-based views on mobile (stack columns vertically)
+- The Job Details two-column layout should stack (contacts below job info)
+
+This is low priority — most users will use this on desktop. But it shouldn't look broken if someone opens it on their phone.
+
+---
+
+## 8. WHAT'S MISSING BUT SHOULD WAIT (POST-LAUNCH)
+
+These are good ideas but not needed for soft launch:
+
+- **Email sending integration** — Currently users copy messages and send manually. Eventually, integrate with email sending (Resend, SendGrid) so users can send directly from the app.
+- **LinkedIn automation** — Direct LinkedIn messaging is risky (LinkedIn TOS). Keep it as "copy and paste" for now.
+- **Follow-up sequences** — Auto-generate follow-up emails 5-7 days after first touch. Great feature, not needed for v1.
+- **CRM integrations** — Export contacts to HubSpot, Salesforce, etc. Nice-to-have.
+- **Team/collaboration features** — Multiple users sharing contacts. B2B feature for later.
+- **Analytics dashboard** — Response rates, best-performing message types, outreach timing. Need data first.
+
+## WHAT'S OVERKILL (CONSIDER REMOVING)
+
+- **Personalization Score on Dashboard** — The "-" placeholder for personalization score adds no value. Remove it until there's actual scoring logic.
+- **"This week" label on AI Messages card** — If there's no data, don't show a time filter. Just show "—" or the empty state.
+- **Separate Subscription / Credits / Billing History pages** — These are all placeholder UI. Consolidate into a single "Plan & Billing" page. Having 3 empty pages makes the app feel unfinished.
+
+---
+
+## IMPLEMENTATION ORDER
+
+1. Status color consistency (shared utility — affects everything else)
+2. Actions column on contacts table
+3. Empty states
+4. Valid Rate display fix
+5. Duplicate submission warning
+6. Credits widget color
+7. Remove/consolidate placeholder pages
+8. Mobile basics (if time)
+
+Each of these is small enough to implement individually in 15-30 minutes.
