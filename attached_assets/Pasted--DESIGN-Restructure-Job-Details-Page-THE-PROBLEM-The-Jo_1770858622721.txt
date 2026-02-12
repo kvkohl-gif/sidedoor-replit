@@ -1,0 +1,134 @@
+# DESIGN: Restructure Job Details Page
+
+## THE PROBLEM
+
+The Job Details page currently has a two-column layout where:
+- LEFT COLUMN: Job title, company name, location, application status dropdown, then the ENTIRE raw job description running endlessly down the page (including full "About Company" text)
+- RIGHT COLUMN: Contacts table at the top, then empty space below
+
+The left column becomes an unreadable wall of text. Key metadata is buried inside prose. The "About Quickbase" company description takes up as much space as the actual job requirements. Users can't quickly scan what matters.
+
+## THE REDESIGN
+
+### New Left Column Structure (top to bottom):
+
+**Section 1: Job Summary Card** (always visible, compact)
+```
+┌─────────────────────────────────────────┐
+│ ← Back to Job History                    │
+│                                          │
+│ Senior Product Manager                   │
+│ Product-Led Growth (PLG + AI-aware)      │
+│                                          │
+│ 🏢 Quickbase    📍 Remote / Hybrid (US) │
+│ 📋 Reports to: Sr. Director of PM       │
+│ 🏷️ Department: Product                  │
+│                                          │
+│ Status: [Not Contacted ▾]               │
+│                                          │
+│ Submitted: Jan 14, 2026                  │
+└─────────────────────────────────────────┘
+```
+
+Key changes:
+- Job title is the main heading but only the CLEAN title — not the full "Senior Product Manager - Product-Led Growth (PLG + AI-aware)" mess. Put the subtitle on its own line.
+- Extract metadata INTO structured fields: company, location, reports to, department. These come from the OpenAI extraction stored in `openai_response_raw`.
+- Status dropdown stays here.
+- This card should be ~200px tall max. No scrolling needed.
+
+**Section 2: Outreach Tracking** (new section)
+```
+┌─────────────────────────────────────────┐
+│ Outreach Progress                        │
+│                                          │
+│ ✉️ Emailed: Izabel Santos (Jan 16)      │
+│ ✉️ Emailed: Siana Patel (Jan 16)        │
+│ + Log outreach                           │
+│                                          │
+│ 📝 Notes:                               │
+│ [User's notes about this application]    │
+│ [editable textarea]                      │
+└─────────────────────────────────────────┘
+```
+
+This is NEW. Currently there's nowhere to track who you've contacted for this specific job. This section shows:
+- Which contacts from this job you've emailed/messaged (pulled from contact_status on recruiter_contacts)
+- A "Log outreach" button to manually mark a contact as emailed
+- User notes (already exists in the DB as `notes` on job_submissions)
+
+**Section 3: Job Description** (collapsible)
+```
+┌─────────────────────────────────────────┐
+│ Job Description                    [▾]   │
+│──────────────────────────────────────────│
+│ Key Responsibilities                     │
+│ • Own and execute PLG strategy...        │
+│ • Define north-star metrics...           │
+│ • Design rapid growth experiments...     │
+│                                          │
+│ [Show full description ▾]               │
+└─────────────────────────────────────────┘
+```
+
+Key changes:
+- COLLAPSIBLE by default — show first ~300 chars or the "Responsibilities" section
+- "Show full description" expands to reveal the entire JD
+- The "About Company" section should be a SEPARATE collapsible below this, not mixed in
+
+**Section 4: About Company** (collapsible, collapsed by default)
+```
+┌─────────────────────────────────────────┐
+│ About Quickbase                    [▸]   │
+│ AI-powered platform for Dynamic Work     │
+│ Management · ~12,000 organizations       │
+└─────────────────────────────────────────┘
+```
+
+- Collapsed by default with a 1-line summary
+- Expandable to full company description
+- This is important context for outreach but doesn't need to be visible all the time
+
+### Right Column Structure (unchanged except):
+- Contacts table stays as-is (it's already working well)
+- Make sure the contacts table scrolls independently of the left column if there are many contacts
+- Add a LinkedIn icon and "Draft" button to each contact row if not already there
+
+## IMPLEMENTATION NOTES
+
+### Where to find the structured data:
+The `openai_response_raw` field on `job_submissions` contains the full AI extraction as JSON. Parse it to extract:
+- `jobTitle` — clean title
+- `companyName`
+- `location`
+- `responsibilities` — array of strings
+- `requirements` — array of strings
+- Any other extracted fields
+
+If the raw response doesn't have these fields extracted cleanly, fall back to displaying the raw job description text.
+
+### Collapsible sections:
+Use Shadcn's `Collapsible` component or a simple useState toggle. Don't over-engineer this.
+
+```tsx
+const [showFullJD, setShowFullJD] = useState(false);
+
+// In render:
+<div>
+  {showFullJD ? fullDescription : truncatedDescription}
+  <button onClick={() => setShowFullJD(!showFullJD)}>
+    {showFullJD ? 'Show less' : 'Show full description'}
+  </button>
+</div>
+```
+
+### Outreach tracking section:
+Query the `recruiter_contacts` table for this job submission where `contact_status !== 'not_contacted'` to show who's been emailed. The "Log outreach" action updates `contact_status` and `last_contacted_at` on the recruiter_contacts row.
+
+### Notes:
+The `notes` field already exists on `job_submissions`. Just add a textarea that PATCHes `/api/submissions/:id` with the updated notes.
+
+## DO NOT
+- Do NOT remove any data that's currently displayed — just restructure it
+- Do NOT change the contacts table on the right side
+- Do NOT modify the database schema
+- Do NOT change the API endpoints (use existing PATCH /api/submissions/:id for notes/status)

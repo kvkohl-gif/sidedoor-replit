@@ -1,0 +1,144 @@
+# DESIGN: Contact Detail Page — Mini CRM View
+
+## CONTEXT
+
+When a user clicks a contact name (from All Contacts or from a Job's contact list), they should see a useful detail view for that contact. Currently this page shows "Contact Not Found" (a separate bug to fix first — see REPLIT_FIX_CONTACT_NOT_FOUND.md). This prompt defines what the page SHOULD look like once the routing bug is fixed.
+
+## WHAT THIS PAGE IS FOR
+
+This is a mini CRM view for a single contact. The user needs to:
+1. See all info about this person at a glance
+2. Generate or view outreach drafts (email + LinkedIn)
+3. Track their outreach status with this contact
+4. Add personal notes
+5. Quickly access the contact's LinkedIn profile and email
+
+## PAGE LAYOUT
+
+### Top Bar
+```
+← Back to Contacts          [LinkedIn icon] [Copy Email] [Draft Outreach ▾]
+```
+
+### Contact Header Card
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  [RC]  Rayna Chen                                    HIRING MGR  │
+│        Senior Product Manager                                    │
+│        Quickbase                                                 │
+│                                                                  │
+│  📧 rayna@quickbase.com          ● Risky                        │
+│  🔗 linkedin.com/in/rayna-chen                                  │
+│  🏢 Department: Product    📊 Seniority: Senior                 │
+│                                                                  │
+│  Sourced for: Senior Product Manager at Quickbase  [View Job →]  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Avatar with initials (color-coded: purple for recruiter, teal for hiring manager)
+- Full name as primary heading
+- Title, company on subsequent lines
+- Email with verification badge + copy button
+- LinkedIn URL (clickable, opens in new tab)
+- Department and seniority (from Apollo/taxonomy data)
+- Link back to the job submission this contact was sourced from
+
+### Outreach Status & Tracking
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Outreach Status                                                 │
+│                                                                  │
+│  Status: [Not Contacted ▾]                                       │
+│                                                                  │
+│  Options:                                                        │
+│  • Not Contacted                                                 │
+│  • Email Sent                                                    │
+│  • LinkedIn Sent                                                 │
+│  • Awaiting Reply                                                │
+│  • Follow Up Needed                                              │
+│  • Replied                                                       │
+│  • Interview Scheduled                                           │
+│  • Not Interested                                                │
+│                                                                  │
+│  Last contacted: —                                               │
+│  Channel: —                                                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Status dropdown updates `contact_status` on `recruiter_contacts` via PATCH /api/contacts/:id.
+When user changes status to "Email Sent" or "LinkedIn Sent", auto-set `last_contacted_at` to now.
+
+### Generated Messages Section
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Outreach Drafts                                                 │
+│                                                                  │
+│  [Email] [LinkedIn]                              [✨ Generate]   │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ Subject: Re: Senior PM — PLG expertise from Series A      │  │
+│  │                                                            │  │
+│  │ Hi Rayna,                                                  │  │
+│  │                                                            │  │
+│  │ I noticed Quickbase is hiring a Senior PM to lead          │  │
+│  │ Product-Led Growth — that's exactly the motion I led       │  │
+│  │ at [previous company] where we reduced churn from          │  │
+│  │ 75% to 30%...                                              │  │
+│  │                                                            │  │
+│  │ [editable textarea]                                        │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  [Copy to Clipboard]  [Mark as Sent]                             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Toggle between Email and LinkedIn views
+- "Generate" button calls POST /api/contacts/:id/generate-message
+- Generated text appears in an editable textarea so users can tweak it
+- "Copy to Clipboard" copies the message
+- "Mark as Sent" updates contact_status to "email_sent" or "linkedin_sent" and sets last_contacted_at
+
+If a message has already been generated, show it immediately instead of the generate button.
+Store generated messages in `generated_email_message` and `generated_linkedin_message` on recruiter_contacts.
+
+### Notes Section
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Notes                                                           │
+│                                                                  │
+│  [editable textarea - auto-saves on blur]                        │
+│                                                                  │
+│  e.g., "Rayna seems to focus on B2B SaaS products.              │
+│  Check her recent LinkedIn post about PLG metrics."              │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Simple textarea that saves to `notes` field on recruiter_contacts via PATCH /api/contacts/:id
+- Auto-save on blur (debounced) or explicit save button
+
+## DATA SOURCE
+
+All data comes from the `recruiter_contacts` table. The existing GET endpoint needs to return:
+- All contact fields (name, title, email, linkedin_url, verification_status, etc.)
+- The associated job_submission (company_name, job_title) for the "Sourced for" link
+- Any existing generated messages
+
+The PATCH /api/contacts/:id endpoint already exists and should handle updates to:
+- contact_status
+- last_contacted_at
+- notes
+- email_draft (edited version of generated email)
+- linkedin_message (edited version of generated LinkedIn)
+
+## IMPLEMENTATION NOTES
+
+- Use the existing component structure — this is `ContactDetail.tsx`
+- The page currently exists but shows "Contact Not Found" due to a routing bug
+- Once the routing bug is fixed (see REPLIT_FIX_CONTACT_NOT_FOUND.md), replace the error state with this layout
+- Use Shadcn components: Card, Badge, Select, Textarea, Button, Tabs
+- The Generate button should show a loading spinner while the AI generates (~5-10 seconds)
+
+## DO NOT
+- Do NOT create a new database table — all data fits in existing recruiter_contacts
+- Do NOT change the contact list/table views
+- Do NOT remove any existing fields from the API response
