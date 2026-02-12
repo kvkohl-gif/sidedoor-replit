@@ -1,0 +1,151 @@
+# CRITICAL BUG FIX: Job Metadata Not Saving After Submission
+
+## THE PROBLEM
+
+When a user submits a job description (URL or text), the pipeline successfully:
+- ✅ Scrapes/processes the job input
+- ✅ Calls OpenAI to extract job data (company, title, etc.)
+- ✅ Searches Apollo for contacts
+- ✅ Finds and saves contacts with correct names, titles, and emails
+
+But it FAILS to save the extracted job metadata:
+- ❌ Job title shows "Job Title Not Available" / "Unknown Position"
+- ❌ Company shows "Company Not Available" / "Unknown Company"  
+- ❌ Location shows "Location not specified"
+- ❌ Job description shows "No job description available"
+- ❌ Date shows "Invalid Date"
+
+This happens on ALL submissions, not just one. See the dashboard: 3 active applications, all showing "Unknown Position" / "Unknown Company" / "Invalid Date".
+
+Yet contacts ARE being found (14 total with correct quickbase.com emails), which means the AI extraction IS running and the company IS being identified internally — the data just isn't making it into the `job_submissions` table.
+
+## WHERE TO LOOK
+
+The bug is in `backend/routes.ts` in the `POST /api/submissions` endpoint. Trace the following:
+
+### 1. Check the initial INSERT into job_submissions
+When the submission is first created, verify that the INSERT includes:
+- `company_name` — should come from the OpenAI extraction result
+- `job_title` — should come from the OpenAI extraction result
+- `submitted_at` — should default to `now()` (the "Invalid Date" suggests this column might be null)
+
+The most likely issue: the initial INSERT creates the row with just `job_input` and `input_type`, and then a subsequent UPDATE is supposed to fill in `company_name`, `job_title`, `openai_response_raw`, etc. — but that UPDATE is either:
+- Not running at all
+- Running but using wrong column names (snake_case vs camelCase mismatch)
+- Running but the extracted data object has different field names than expected
+- Failing silently (no error handling on the UPDATE)
+
+### 2. Check the OpenAI extraction result mapping
+In `backend/openai.ts`, the `extractJobData()` function returns a JSON object. Check what field names it uses:
+- Does it return `companyName` or `company_name`?
+- Does it return `jobTitle` or `job_title`?
+
+Then check where this result gets mapped to the database UPDATE. There's likely a field name mismatch between what OpenAI returns (camelCase) and what the database expects (snake_case).
+
+### 3. Check the UPDATE query after extraction
+Find the code that updates the job_submissions row AFTER OpenAI processing. It should look something like:
+
+```typescript
+// Something like this should exist:
+await supabase
+  .from('job_submissions')
+  .update({
+    company_name: extractedData.companyName,  // or whatever the field is
+    job_title: extractedData.jobTitle,
+    openai_response_raw: JSON.stringify(extractedData),
+    // etc.
+  })
+  .eq('id', submissionId);
+```
+
+If this UPDATE doesn't exist, or if the field names don't match, that's the bug.
+
+### 4. Check submitted_at / date handling
+The "Invalid Date" on the dashboard means either:
+- `submitted_at` is null in the database (the column default of `now()` isn't being applied)
+- The frontend is receiving the date in a format it can't parse
+- The field is being explicitly set to null during INSERT
+
+## HOW TO FIX
+
+### Fix A: If the UPDATE after extraction is missing
+Add an UPDATE call after the OpenAI extraction completes:
+
+```typescript
+// After extractJobData() returns the parsed result:
+const extractedData = await extractJobData(jobInput);
+
+// Update the submission with extracted metadata
+await supabase
+  .from('job_submissions')
+  .update({
+    company_name: extractedData.companyName || extractedData.company_name || null,
+    job_title: extractedData.jobTitle || extractedData.job_title || null,
+    openai_response_raw: JSON.stringify(extractedData),
+  })
+  .eq('id', submissionId);
+```
+
+### Fix B: If the UPDATE exists but field names are wrong
+Map the OpenAI response fields to database column names. The database uses snake_case:
+- `company_name` (not companyName)
+- `job_title` (not jobTitle)
+- `openai_response_raw` (the full JSON stringified response)
+- `company_domain` (if extracted)
+- `organization_id` (if Apollo returns it)
+
+### Fix C: If submitted_at is null
+Make sure the INSERT either:
+- Doesn't include `submitted_at` at all (so the database default `now()` applies), OR
+- Explicitly sets it: `submitted_at: new Date().toISOString()`
+
+### Fix D: Add logging to trace the issue
+Add these console.log statements to help debug:
+
+```typescript
+// After OpenAI extraction:
+console.log('[Submission] Extracted job data:', {
+  companyName: extractedData.companyName || extractedData.company_name,
+  jobTitle: extractedData.jobTitle || extractedData.job_title,
+  hasRawResponse: !!extractedData
+});
+
+// After the database UPDATE:
+console.log('[Submission] Database update result:', {
+  submissionId,
+  fieldsUpdated: ['company_name', 'job_title', 'openai_response_raw'],
+  success: true // or the actual result
+});
+```
+
+## ALSO CHECK: Frontend field mapping
+
+In `frontend/src/components/Dashboard.tsx`, `JobHistory.tsx`, and `JobDetails.tsx`, verify how the API response fields are being read. The API might be returning the data correctly but the frontend could be looking for the wrong field names.
+
+For example, if the API returns `company_name` but the frontend reads `companyName` (or vice versa), you'd see "Unknown Company" even if the data exists.
+
+Check for patterns like:
+```typescript
+// These should match what the API actually returns:
+submission.companyName  // or submission.company_name?
+submission.jobTitle     // or submission.job_title?
+submission.submittedAt  // or submission.submitted_at?
+```
+
+The field mapping convention in this codebase is: database = snake_case, API responses = camelCase. Make sure the routes are actually doing this conversion, and that the frontend is reading the camelCase versions.
+
+## VERIFICATION
+
+After fixing, submit a new job URL and verify:
+1. Job Details page shows the correct company name, job title, and location
+2. Dashboard "Recent Searches" shows the correct position and company name
+3. Date shows correctly (not "Invalid Date")
+4. Job description section is populated (not "No job description available")
+5. The `openai_response_raw` column in the database is populated (check via Supabase dashboard)
+
+## DO NOT
+
+- Do NOT change the contact search logic — contacts are working correctly
+- Do NOT modify the Apollo integration
+- Do NOT change the database schema
+- Do NOT modify the frontend component structure — only fix field name references if needed

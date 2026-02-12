@@ -23,6 +23,54 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function mapSubmissionToFrontend(row: any) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    jobInput: row.job_input,
+    inputType: row.input_type,
+    openaiResponseRaw: row.openai_response_raw,
+    emailDraft: row.email_draft,
+    linkedinMessage: row.linkedin_message,
+    companyName: row.company_name,
+    jobTitle: row.job_title,
+    organizationId: row.organization_id,
+    companyDomain: row.company_domain,
+    status: row.status,
+    notes: row.notes,
+    submittedAt: row.submitted_at,
+    recruiters: row.recruiters?.map((r: any) => ({
+      id: r.id,
+      jobSubmissionId: r.job_submission_id,
+      name: r.name,
+      title: r.title,
+      email: r.email,
+      linkedinUrl: r.linkedin_url,
+      confidenceScore: r.confidence_score,
+      source: r.source,
+      emailVerified: r.email_verified,
+      verificationStatus: r.verification_status,
+      sourcePlatform: r.source_platform,
+      apolloId: r.apollo_id,
+      recruiterConfidence: r.recruiter_confidence,
+      verificationData: r.verification_data,
+      suggestedEmail: r.suggested_email,
+      emailSuggestionReasoning: r.email_suggestion_reasoning,
+      contactStatus: r.contact_status,
+      lastContactedAt: r.last_contacted_at,
+      notes: r.notes,
+      outreachBucket: r.outreach_bucket,
+      department: r.department,
+      seniority: r.seniority,
+      generatedEmailMessage: r.generated_email_message,
+      generatedLinkedInMessage: r.generated_linkedin_message,
+      emailDraft: r.email_draft,
+      linkedinMessage: r.linkedin_message,
+    })),
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for Replit Preview
   app.get('/health', (req, res) => {
@@ -359,7 +407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error(`Failed to fetch complete submission: ${fetchError?.message}`);
         }
 
-        res.json({ id: jobSubmission.id, submission: completeSubmission, runId });
+        res.json({ id: jobSubmission.id, submission: mapSubmissionToFrontend(completeSubmission), runId });
 
         // Remove from active runs on successful completion
         if (req.body.runId) {
@@ -439,7 +487,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error(`Failed to fetch submissions: ${fetchError.message}`);
       }
 
-      res.json(submissions || []);
+      res.json((submissions || []).map(mapSubmissionToFrontend));
     } catch (error) {
       console.error("Error fetching submissions:", error);
       res.status(500).json({ message: "Failed to fetch submissions" });
@@ -474,7 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      res.json(submission);
+      res.json(mapSubmissionToFrontend(submission));
     } catch (error) {
       console.error("Error fetching submission:", error);
       res.status(500).json({ message: "Failed to fetch submission" });
@@ -532,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error(`Failed to update submission: ${updateError.message}`);
       }
 
-      res.json(updatedSubmission);
+      res.json(mapSubmissionToFrontend(updatedSubmission));
     } catch (error) {
       console.error("Error updating submission:", error);
       res.status(500).json({ message: "Failed to update submission" });
