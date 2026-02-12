@@ -1,0 +1,245 @@
+# Implementation Task: Integrate Role Taxonomy System into Side Door Backend
+
+## CONTEXT
+We have built a role taxonomy system to improve job title classification accuracy and hiring manager targeting. There are 3 new files to add and 3 existing files to edit. The goal is to use a fast regex-based lookup BEFORE calling OpenAI for department inference, and to inject structured taxonomy knowledge into our existing AI prompts so they make better decisions.
+
+**This should NOT break any existing functionality.** The taxonomy is additive — it runs first as a fast-lookup, and falls back to the existing AI inference when there's no confident match.
+
+---
+
+## STEP 1: ADD NEW FILES
+
+### File 1: `backend/data/roleTaxonomy.json`
+
+Create the directory `backend/data/` if it doesn't exist. Create `roleTaxonomy.json` with the following content:
+
+```json
+{INSERT THE FULL CONTENTS OF roleTaxonomy.json HERE — copy the entire file from the roleTaxonomy.json download}
+```
+
+### File 2: `backend/systemPromptTaxonomy.ts`
+
+Create `backend/systemPromptTaxonomy.ts` with the following content:
+
+```typescript
+{INSERT THE FULL CONTENTS OF systemPromptTaxonomy.ts HERE — copy the entire file from the systemPromptTaxonomy.ts download}
+```
+
+### File 3: `backend/roleTaxonomyService.ts`
+
+Create `backend/roleTaxonomyService.ts` with the following content:
+
+```typescript
+{INSERT THE FULL CONTENTS OF roleTaxonomyService.ts HERE — copy the entire file from the roleTaxonomyService.ts download}
+```
+
+---
+
+## STEP 2: CONFIGURE JSON IMPORT
+
+In `tsconfig.json` (root level), make sure these compiler options are set so TypeScript can import the JSON file:
+
+```json
+{
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  }
+}
+```
+
+If `tsconfig.json` already has these, skip this step. Do NOT remove any existing options — only add these two if missing.
+
+---
+
+## STEP 3: EDIT `backend/enhancedEnrichmentService.ts`
+
+This is the orchestrator that runs the Apollo search pipeline. We need to call the taxonomy lookup BEFORE the AI-powered department inference.
+
+### What to do:
+
+1. Add this import at the top of the file:
+```typescript
+import { classifyJobRole, getRecruiterTitleVariations } from './roleTaxonomyService';
+```
+
+2. Find the section in the main orchestration function where the job title has been extracted (after `extractJobData()` or `extractApolloSearchParams()` has run) and BEFORE the department inference / Apollo search begins.
+
+3. Add the taxonomy fast-lookup at that point:
+```typescript
+// --- TAXONOMY FAST-LOOKUP (runs before AI inference) ---
+const taxonomyResult = classifyJobRole(jobTitle, jobDescription);
+
+let departmentFromTaxonomy: string | null = null;
+let hiringManagerTitlesFromTaxonomy: string[] | null = null;
+let apolloDepartmentsFromTaxonomy: string[] | null = null;
+let seniorityFromTaxonomy: string | null = null;
+
+if (!taxonomyResult.shouldUseAI && taxonomyResult.taxonomyMatch) {
+  // High-confidence taxonomy match — use directly
+  departmentFromTaxonomy = taxonomyResult.taxonomyMatch.department;
+  hiringManagerTitlesFromTaxonomy = taxonomyResult.taxonomyMatch.hiringManagerTitles;
+  apolloDepartmentsFromTaxonomy = taxonomyResult.taxonomyMatch.apolloSearchDepartments;
+  seniorityFromTaxonomy = taxonomyResult.taxonomyMatch.apolloSeniority;
+  
+  console.log(`[Taxonomy] High-confidence match: ${taxonomyResult.taxonomyMatch.departmentLabel} (${taxonomyResult.taxonomyMatch.confidence.toFixed(2)}) — skipping AI department inference`);
+}
+// If shouldUseAI is true, we proceed with existing AI inference below
+// but pass taxonomyResult.taxonomyContext into the prompt for better accuracy
+```
+
+4. Where the existing code calls the department inference (likely `departmentRouter` or a similar function), wrap it in a conditional:
+```typescript
+// Only call AI for department inference if taxonomy didn't provide high-confidence match
+if (departmentFromTaxonomy) {
+  // Use taxonomy results
+  // Map these values into whatever variables your existing code uses for:
+  //   - department name
+  //   - hiring manager search titles
+  //   - Apollo department codes
+  //   - seniority level
+} else {
+  // Existing AI inference code stays here — unchanged
+  // But append taxonomyResult.taxonomyContext to the prompt if available
+}
+```
+
+5. For the department lead search (Bucket 2), if `hiringManagerTitlesFromTaxonomy` exists, use those titles instead of (or in addition to) the AI-generated ones:
+```typescript
+const departmentLeadTitles = hiringManagerTitlesFromTaxonomy || aiGeneratedTitles;
+```
+
+6. For the recruiter search (Bucket 1), you can optionally use the expanded recruiter title list:
+```typescript
+const recruiterTitles = getRecruiterTitleVariations();
+// Use these in the Apollo recruiter search if they're more comprehensive
+// than the current hardcoded list
+```
+
+**IMPORTANT:** Do NOT delete or replace the existing AI inference logic. Keep it as the fallback. The taxonomy is a fast pre-filter, not a replacement.
+
+---
+
+## STEP 4: EDIT `backend/departmentRouter.ts`
+
+This file uses GPT-4o to infer the department from a job description.
+
+### What to do:
+
+1. Add this import at the top:
+```typescript
+import { ROLE_TAXONOMY_CONTEXT } from './systemPromptTaxonomy';
+```
+
+2. Find the system prompt string used in the OpenAI chat completion call. It likely looks something like:
+```typescript
+const systemPrompt = `You are a job classification expert...`;
+// or
+const messages = [{ role: 'system', content: `...` }];
+```
+
+3. Append `ROLE_TAXONOMY_CONTEXT` to the END of that system prompt:
+```typescript
+const systemPrompt = `${existingSystemPromptContent}
+
+${ROLE_TAXONOMY_CONTEXT}`;
+```
+
+Do NOT replace the existing prompt — append to it. The existing prompt has instructions the model needs. We're adding structured knowledge to make it more accurate.
+
+---
+
+## STEP 5: EDIT `backend/openai.ts`
+
+This file contains multiple OpenAI prompt functions. We need to enhance two of them.
+
+### 5A: Edit `extractApolloSearchParams()` function
+
+1. Add this import at the top of `openai.ts` (if not already added):
+```typescript
+import { ROLE_TAXONOMY_CONTEXT } from './systemPromptTaxonomy';
+```
+
+2. Find the `extractApolloSearchParams()` function. Locate its system prompt.
+
+3. Append `ROLE_TAXONOMY_CONTEXT` to the end of that system prompt:
+```typescript
+const systemPrompt = `${existingApolloSearchParamsPrompt}
+
+${ROLE_TAXONOMY_CONTEXT}`;
+```
+
+### 5B: Edit `extractJobData()` function (OPTIONAL but recommended)
+
+1. Find the `extractJobData()` function and its system prompt.
+
+2. Append a condensed version to help with initial classification:
+```typescript
+const systemPrompt = `${existingExtractJobDataPrompt}
+
+When identifying the department and likely reporting structure, use these canonical departments: Engineering, Product, Design, Data Science & Analytics, Marketing, Sales, Customer Success & Support, Operations, Finance & Accounting, Human Resources & People, Legal & Compliance, Construction & Real Estate. Cross-functional roles like Sales Engineer (Sales + Engineering), Product Marketing Manager (Marketing + Product), and Data Engineer (Engineering + Data Science) should note both departments.`;
+```
+
+This is a lighter injection — we don't need the full taxonomy here since `extractJobData` is primarily about parsing the job description, not targeting contacts.
+
+---
+
+## STEP 6: ADD LOGGING
+
+In `backend/enhancedEnrichmentService.ts`, add logging so we can monitor taxonomy hit rates:
+
+```typescript
+// After the taxonomy lookup:
+console.log(`[Taxonomy] Job title: "${jobTitle}"`);
+console.log(`[Taxonomy] Match: ${taxonomyResult.taxonomyMatch ? 'YES' : 'NO'}`);
+if (taxonomyResult.taxonomyMatch) {
+  console.log(`[Taxonomy] Department: ${taxonomyResult.taxonomyMatch.departmentLabel}`);
+  console.log(`[Taxonomy] Confidence: ${taxonomyResult.taxonomyMatch.confidence.toFixed(2)}`);
+  console.log(`[Taxonomy] Seniority: ${taxonomyResult.taxonomyMatch.seniority} (level ${taxonomyResult.taxonomyMatch.seniorityLevel})`);
+  console.log(`[Taxonomy] Cross-functional: ${taxonomyResult.taxonomyMatch.isCrossFunctional}`);
+  console.log(`[Taxonomy] Using AI: ${taxonomyResult.shouldUseAI}`);
+  console.log(`[Taxonomy] Hiring manager targets: ${taxonomyResult.taxonomyMatch.hiringManagerTitles.join(', ')}`);
+}
+```
+
+---
+
+## STEP 7: TEST
+
+After implementing, test with these job titles by submitting them through the app:
+
+1. **"Senior Software Engineer"** — Should match Engineering, senior seniority, target Director of Engineering / VP of Engineering
+2. **"Sales Engineer"** — Should match as cross-functional (Sales + Engineering), should search both departments
+3. **"Product Marketing Manager"** — Should match as cross-functional (Marketing + Product)
+4. **"Junior Data Analyst"** — Should match Data Science & Analytics, junior seniority, target Data Science Manager / Analytics Manager
+5. **"Chief of Staff"** — Should match Operations
+6. **"Some Weird Custom Title That Doesn't Exist"** — Should fall through to AI inference (taxonomy returns null, shouldUseAI = true)
+
+Check the server console logs for the `[Taxonomy]` entries to verify matches are working.
+
+---
+
+## SUMMARY OF CHANGES
+
+| Action | File | What |
+|--------|------|------|
+| CREATE | `backend/data/roleTaxonomy.json` | Knowledge base with 12 departments, 400+ title patterns, seniority rules, cross-functional mappings |
+| CREATE | `backend/roleTaxonomyService.ts` | Fast-lookup service with `classifyJobRole()`, `detectSeniority()`, `getHiringManagerTargets()` |
+| CREATE | `backend/systemPromptTaxonomy.ts` | `ROLE_TAXONOMY_CONTEXT` string to inject into AI prompts |
+| EDIT | `backend/enhancedEnrichmentService.ts` | Call `classifyJobRole()` before AI inference, use results for Apollo search |
+| EDIT | `backend/departmentRouter.ts` | Append `ROLE_TAXONOMY_CONTEXT` to system prompt |
+| EDIT | `backend/openai.ts` | Append `ROLE_TAXONOMY_CONTEXT` to `extractApolloSearchParams()` and optionally `extractJobData()` |
+| MAYBE EDIT | `tsconfig.json` | Add `resolveJsonModule` and `esModuleInterop` if missing |
+
+**No existing logic is removed.** The taxonomy is a pre-filter that either provides a high-confidence result (skip AI) or enriches the AI prompt (better accuracy). The existing AI inference is always the fallback.
+
+---
+
+## WHAT NOT TO DO
+
+- Do NOT modify `vite.config.ts`
+- Do NOT change the database schema — no migrations needed
+- Do NOT modify any frontend files — this is entirely backend
+- Do NOT remove or replace existing AI inference functions — only enhance them
+- Do NOT change the API endpoint signatures — the responses stay the same
+- Do NOT install any new npm packages — this uses only native TypeScript/Node features plus the existing project dependencies

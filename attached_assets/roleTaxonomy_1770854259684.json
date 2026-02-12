@@ -1,0 +1,801 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Side Door Role Taxonomy — Maps job titles to departments, seniority levels, and ideal contact targets for Apollo search. Used as a fast-lookup before hitting OpenAI for department inference.",
+    "lastUpdated": "2026-02-11",
+    "usage": "Import in departmentRouter.ts and enhancedEnrichmentService.ts. Match incoming job titles against titlePatterns using regex. If match found, use mapped values directly or as validation layer over AI inference."
+  },
+
+  "departments": {
+    "engineering": {
+      "id": "engineering",
+      "label": "Engineering",
+      "aliases": ["Software Engineering", "Technology", "IT", "Development", "R&D", "Platform", "Infrastructure"],
+      "titlePatterns": [
+        "software engineer",
+        "software developer",
+        "frontend engineer",
+        "frontend developer",
+        "backend engineer",
+        "backend developer",
+        "full.?stack engineer",
+        "full.?stack developer",
+        "site reliability engineer",
+        "sre",
+        "devops engineer",
+        "platform engineer",
+        "infrastructure engineer",
+        "cloud engineer",
+        "systems engineer",
+        "embedded engineer",
+        "firmware engineer",
+        "mobile engineer",
+        "mobile developer",
+        "ios engineer",
+        "ios developer",
+        "android engineer",
+        "android developer",
+        "qa engineer",
+        "quality assurance engineer",
+        "sdet",
+        "test engineer",
+        "automation engineer",
+        "security engineer",
+        "application security engineer",
+        "machine learning engineer",
+        "ml engineer",
+        "ai engineer",
+        "data engineer",
+        "solutions engineer",
+        "solutions architect",
+        "technical architect",
+        "software architect",
+        "engineering manager",
+        "director of engineering",
+        "vp of engineering",
+        "vp engineering",
+        "cto",
+        "chief technology officer",
+        "principal engineer",
+        "staff engineer",
+        "distinguished engineer",
+        "tech lead",
+        "technical lead"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Engineering Manager", "Software Engineering Manager", "Development Manager"],
+          "targetSeniority": ["manager", "senior_manager"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "staff", "principal"],
+          "targetTitles": ["Director of Engineering", "VP of Engineering", "Senior Engineering Manager", "Head of Engineering"],
+          "targetSeniority": ["director", "vp"]
+        },
+        "manager": {
+          "seniority": ["manager", "senior_manager"],
+          "targetTitles": ["Director of Engineering", "VP of Engineering", "SVP Engineering"],
+          "targetSeniority": ["director", "vp"]
+        }
+      },
+      "apolloSearchDepartments": ["engineering_technical", "information_technology"]
+    },
+
+    "product": {
+      "id": "product",
+      "label": "Product",
+      "aliases": ["Product Management", "Product Development", "Product Strategy"],
+      "titlePatterns": [
+        "product manager",
+        "senior product manager",
+        "group product manager",
+        "principal product manager",
+        "director of product",
+        "vp of product",
+        "vp product",
+        "head of product",
+        "chief product officer",
+        "cpo",
+        "product owner",
+        "technical product manager",
+        "product lead",
+        "product analyst",
+        "product operations",
+        "product strategy"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Senior Product Manager", "Group Product Manager", "Director of Product"],
+          "targetSeniority": ["senior_manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "group", "principal"],
+          "targetTitles": ["VP of Product", "Head of Product", "Chief Product Officer"],
+          "targetSeniority": ["vp", "c_suite"]
+        },
+        "manager": {
+          "seniority": ["manager", "director"],
+          "targetTitles": ["VP of Product", "Chief Product Officer", "SVP Product"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["operations", "engineering_technical"]
+    },
+
+    "design": {
+      "id": "design",
+      "label": "Design",
+      "aliases": ["UX", "UI", "User Experience", "Creative", "Product Design"],
+      "titlePatterns": [
+        "product designer",
+        "ux designer",
+        "ui designer",
+        "ux/ui designer",
+        "ui/ux designer",
+        "interaction designer",
+        "visual designer",
+        "graphic designer",
+        "brand designer",
+        "design systems",
+        "ux researcher",
+        "user researcher",
+        "design manager",
+        "head of design",
+        "director of design",
+        "vp of design",
+        "creative director",
+        "senior designer",
+        "principal designer",
+        "staff designer",
+        "design lead",
+        "content designer",
+        "motion designer",
+        "design technologist"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Design Manager", "UX Manager", "Senior Product Designer", "Design Lead"],
+          "targetSeniority": ["manager", "senior_manager"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "staff", "principal"],
+          "targetTitles": ["Head of Design", "Director of Design", "VP of Design", "Creative Director"],
+          "targetSeniority": ["director", "vp"]
+        }
+      },
+      "apolloSearchDepartments": ["design", "marketing"]
+    },
+
+    "data_science": {
+      "id": "data_science",
+      "label": "Data Science & Analytics",
+      "aliases": ["Data", "Analytics", "Business Intelligence", "AI/ML"],
+      "titlePatterns": [
+        "data scientist",
+        "senior data scientist",
+        "data analyst",
+        "business analyst",
+        "business intelligence analyst",
+        "bi analyst",
+        "bi engineer",
+        "analytics engineer",
+        "analytics manager",
+        "data analytics",
+        "quantitative analyst",
+        "research scientist",
+        "applied scientist",
+        "machine learning scientist",
+        "ml scientist",
+        "ai researcher",
+        "statistical analyst",
+        "head of data",
+        "director of data science",
+        "vp of data",
+        "chief data officer",
+        "decision scientist"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Data Science Manager", "Analytics Manager", "Senior Data Scientist"],
+          "targetSeniority": ["manager", "senior_manager"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "staff", "principal"],
+          "targetTitles": ["Director of Data Science", "Head of Data", "VP of Data Science"],
+          "targetSeniority": ["director", "vp"]
+        }
+      },
+      "apolloSearchDepartments": ["engineering_technical", "operations"]
+    },
+
+    "marketing": {
+      "id": "marketing",
+      "label": "Marketing",
+      "aliases": ["Growth", "Brand", "Communications", "Content", "Demand Generation"],
+      "titlePatterns": [
+        "marketing manager",
+        "marketing coordinator",
+        "marketing specialist",
+        "digital marketing",
+        "growth marketing",
+        "growth manager",
+        "performance marketing",
+        "demand generation",
+        "demand gen",
+        "content marketing",
+        "content strategist",
+        "content manager",
+        "content writer",
+        "copywriter",
+        "brand manager",
+        "brand marketing",
+        "brand strategist",
+        "communications manager",
+        "pr manager",
+        "public relations",
+        "social media manager",
+        "social media",
+        "community manager",
+        "email marketing",
+        "lifecycle marketing",
+        "product marketing manager",
+        "pmm",
+        "product marketing",
+        "field marketing",
+        "event marketing",
+        "events manager",
+        "marketing operations",
+        "marketing analyst",
+        "seo manager",
+        "seo specialist",
+        "sem manager",
+        "paid media",
+        "media buyer",
+        "head of marketing",
+        "director of marketing",
+        "vp of marketing",
+        "cmo",
+        "chief marketing officer",
+        "marketing director"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Marketing Manager", "Senior Marketing Manager", "Director of Marketing"],
+          "targetSeniority": ["manager", "senior_manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Marketing", "Head of Marketing", "CMO"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["marketing"]
+    },
+
+    "sales": {
+      "id": "sales",
+      "label": "Sales",
+      "aliases": ["Revenue", "Business Development", "Account Management", "Partnerships"],
+      "titlePatterns": [
+        "account executive",
+        "sales representative",
+        "sales rep",
+        "sales development representative",
+        "sdr",
+        "business development representative",
+        "bdr",
+        "account manager",
+        "key account manager",
+        "strategic account manager",
+        "enterprise account executive",
+        "mid.?market account executive",
+        "inside sales",
+        "outside sales",
+        "field sales",
+        "regional sales manager",
+        "sales manager",
+        "sales director",
+        "director of sales",
+        "vp of sales",
+        "head of sales",
+        "chief revenue officer",
+        "cro",
+        "business development manager",
+        "partnership manager",
+        "partnerships",
+        "channel sales",
+        "channel partner manager",
+        "sales operations",
+        "sales enablement",
+        "revenue operations",
+        "revops",
+        "presales",
+        "sales engineer"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Sales Manager", "Regional Sales Manager", "Director of Sales", "Head of Sales Development"],
+          "targetSeniority": ["manager", "senior_manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "enterprise"],
+          "targetTitles": ["VP of Sales", "Head of Sales", "CRO", "Director of Enterprise Sales"],
+          "targetSeniority": ["director", "vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["sales"]
+    },
+
+    "customer_success": {
+      "id": "customer_success",
+      "label": "Customer Success & Support",
+      "aliases": ["Customer Experience", "Client Services", "Support", "CX"],
+      "titlePatterns": [
+        "customer success manager",
+        "csm",
+        "customer success",
+        "client success",
+        "customer experience",
+        "cx manager",
+        "customer support",
+        "support engineer",
+        "support specialist",
+        "technical support",
+        "help desk",
+        "customer service",
+        "implementation manager",
+        "onboarding manager",
+        "solutions consultant",
+        "professional services",
+        "client partner",
+        "customer operations",
+        "director of customer success",
+        "vp of customer success",
+        "head of customer success",
+        "head of support",
+        "chief customer officer"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Customer Success Manager", "Director of Customer Success", "Head of Support"],
+          "targetSeniority": ["manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Customer Success", "Head of Customer Success", "Chief Customer Officer"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["support", "operations"]
+    },
+
+    "operations": {
+      "id": "operations",
+      "label": "Operations",
+      "aliases": ["Ops", "Business Operations", "Strategy & Operations", "Program Management"],
+      "titlePatterns": [
+        "operations manager",
+        "operations analyst",
+        "business operations",
+        "biz ops",
+        "strategy and operations",
+        "strategy & operations",
+        "program manager",
+        "project manager",
+        "pmo",
+        "chief of staff",
+        "office manager",
+        "operations coordinator",
+        "process improvement",
+        "continuous improvement",
+        "lean six sigma",
+        "supply chain",
+        "logistics",
+        "procurement",
+        "vendor manager",
+        "director of operations",
+        "vp of operations",
+        "head of operations",
+        "coo",
+        "chief operating officer"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Operations Manager", "Director of Operations", "Head of Operations"],
+          "targetSeniority": ["manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Operations", "COO", "Head of Operations"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["operations"]
+    },
+
+    "finance": {
+      "id": "finance",
+      "label": "Finance & Accounting",
+      "aliases": ["Accounting", "FP&A", "Financial Planning", "Treasury"],
+      "titlePatterns": [
+        "financial analyst",
+        "fp&a analyst",
+        "fp&a manager",
+        "accountant",
+        "senior accountant",
+        "staff accountant",
+        "controller",
+        "accounting manager",
+        "finance manager",
+        "director of finance",
+        "vp of finance",
+        "cfo",
+        "chief financial officer",
+        "treasury",
+        "tax manager",
+        "tax analyst",
+        "audit",
+        "internal audit",
+        "accounts payable",
+        "accounts receivable",
+        "billing specialist",
+        "revenue accountant",
+        "financial controller",
+        "head of finance",
+        "bookkeeper",
+        "payroll"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Accounting Manager", "Finance Manager", "Controller", "FP&A Manager"],
+          "targetSeniority": ["manager", "senior_manager"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "manager"],
+          "targetTitles": ["Director of Finance", "VP of Finance", "CFO", "Controller"],
+          "targetSeniority": ["director", "vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["finance"]
+    },
+
+    "hr": {
+      "id": "hr",
+      "label": "Human Resources & People",
+      "aliases": ["People", "People Operations", "Talent", "HR", "People & Culture"],
+      "titlePatterns": [
+        "hr manager",
+        "hr generalist",
+        "hr business partner",
+        "hrbp",
+        "hr coordinator",
+        "hr specialist",
+        "people operations",
+        "people ops",
+        "people partner",
+        "talent management",
+        "learning and development",
+        "l&d",
+        "training manager",
+        "compensation",
+        "benefits",
+        "total rewards",
+        "dei manager",
+        "diversity",
+        "employee relations",
+        "head of people",
+        "director of hr",
+        "vp of people",
+        "vp of hr",
+        "chief people officer",
+        "chro",
+        "culture manager",
+        "workplace experience",
+        "employee engagement"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["HR Manager", "People Operations Manager", "Director of People"],
+          "targetSeniority": ["manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["VP of People", "VP of HR", "CHRO", "Chief People Officer"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["human_resources"]
+    },
+
+    "legal": {
+      "id": "legal",
+      "label": "Legal & Compliance",
+      "aliases": ["Legal", "Compliance", "Regulatory", "Privacy"],
+      "titlePatterns": [
+        "general counsel",
+        "corporate counsel",
+        "associate counsel",
+        "staff attorney",
+        "legal counsel",
+        "paralegal",
+        "legal operations",
+        "compliance manager",
+        "compliance officer",
+        "regulatory affairs",
+        "privacy counsel",
+        "privacy officer",
+        "contract manager",
+        "contracts",
+        "head of legal",
+        "director of legal",
+        "vp of legal",
+        "chief legal officer",
+        "clo",
+        "ip counsel",
+        "patent attorney",
+        "employment attorney"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["General Counsel", "Head of Legal", "Director of Legal"],
+          "targetSeniority": ["director", "vp"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["General Counsel", "VP of Legal", "Chief Legal Officer"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["legal"]
+    },
+
+    "construction_real_estate": {
+      "id": "construction_real_estate",
+      "label": "Construction & Real Estate",
+      "aliases": ["Construction", "Real Estate", "Property", "Building", "Development"],
+      "titlePatterns": [
+        "project manager",
+        "construction manager",
+        "site manager",
+        "superintendent",
+        "estimator",
+        "quantity surveyor",
+        "project engineer",
+        "field engineer",
+        "safety manager",
+        "hse manager",
+        "foreman",
+        "project coordinator",
+        "real estate analyst",
+        "property manager",
+        "asset manager",
+        "development manager",
+        "acquisitions",
+        "leasing agent",
+        "broker",
+        "real estate agent",
+        "appraiser",
+        "title officer",
+        "loan officer",
+        "mortgage",
+        "director of construction",
+        "vp of construction",
+        "vp of development",
+        "head of real estate"
+      ],
+      "hiringManagerTargets": {
+        "ic_junior": {
+          "seniority": ["junior", "mid"],
+          "targetTitles": ["Project Manager", "Construction Manager", "Director of Construction", "VP of Development"],
+          "targetSeniority": ["manager", "director"]
+        },
+        "ic_senior": {
+          "seniority": ["senior", "director"],
+          "targetTitles": ["VP of Construction", "VP of Development", "Head of Real Estate", "COO"],
+          "targetSeniority": ["vp", "c_suite"]
+        }
+      },
+      "apolloSearchDepartments": ["operations", "engineering_technical"]
+    }
+  },
+
+  "seniorityLevels": {
+    "intern": {
+      "level": 0,
+      "patterns": ["intern", "internship", "co.?op", "apprentice", "trainee"],
+      "apolloSeniority": "entry"
+    },
+    "junior": {
+      "level": 1,
+      "patterns": ["junior", "entry.?level", "associate", "jr\\.?", "i$", "level 1", "l1"],
+      "apolloSeniority": "entry"
+    },
+    "mid": {
+      "level": 2,
+      "patterns": ["mid.?level", "intermediate", "ii$", "level 2", "l2", "2$"],
+      "apolloSeniority": "senior"
+    },
+    "senior": {
+      "level": 3,
+      "patterns": ["senior", "sr\\.?", "iii$", "level 3", "l3", "3$", "lead"],
+      "apolloSeniority": "senior"
+    },
+    "staff": {
+      "level": 4,
+      "patterns": ["staff", "principal", "iv$", "level 4", "l4", "distinguished"],
+      "apolloSeniority": "manager"
+    },
+    "manager": {
+      "level": 5,
+      "patterns": ["manager", "team lead", "supervisor", "group lead"],
+      "apolloSeniority": "manager"
+    },
+    "senior_manager": {
+      "level": 6,
+      "patterns": ["senior manager", "head of", "group manager"],
+      "apolloSeniority": "director"
+    },
+    "director": {
+      "level": 7,
+      "patterns": ["director", "senior director", "executive director"],
+      "apolloSeniority": "director"
+    },
+    "vp": {
+      "level": 8,
+      "patterns": ["vp", "vice president", "svp", "senior vice president", "evp"],
+      "apolloSeniority": "vp"
+    },
+    "c_suite": {
+      "level": 9,
+      "patterns": ["chief", "c-level", "cto", "cfo", "cmo", "coo", "cpo", "cro", "ceo", "founder", "co.?founder", "partner"],
+      "apolloSeniority": "c_suite"
+    }
+  },
+
+  "crossFunctionalRoles": {
+    "sales_engineer": {
+      "titlePatterns": ["sales engineer", "pre.?sales engineer", "solutions engineer"],
+      "primaryDepartment": "sales",
+      "secondaryDepartment": "engineering",
+      "searchBoth": true,
+      "hiringManagerTitles": ["VP of Sales Engineering", "Director of Sales Engineering", "Head of Solutions Engineering", "VP of Sales"]
+    },
+    "technical_product_manager": {
+      "titlePatterns": ["technical product manager", "technical pm"],
+      "primaryDepartment": "product",
+      "secondaryDepartment": "engineering",
+      "searchBoth": true,
+      "hiringManagerTitles": ["VP of Product", "Director of Product", "VP of Engineering"]
+    },
+    "product_marketing_manager": {
+      "titlePatterns": ["product marketing manager", "pmm", "product marketing"],
+      "primaryDepartment": "marketing",
+      "secondaryDepartment": "product",
+      "searchBoth": true,
+      "hiringManagerTitles": ["VP of Marketing", "Head of Product Marketing", "Director of Product Marketing", "CMO"]
+    },
+    "data_engineer": {
+      "titlePatterns": ["data engineer", "analytics engineer", "data platform engineer"],
+      "primaryDepartment": "engineering",
+      "secondaryDepartment": "data_science",
+      "searchBoth": true,
+      "hiringManagerTitles": ["Director of Data Engineering", "Head of Data", "VP of Engineering", "VP of Data"]
+    },
+    "devops_sre": {
+      "titlePatterns": ["devops", "site reliability", "sre", "platform engineer", "infrastructure engineer"],
+      "primaryDepartment": "engineering",
+      "secondaryDepartment": "operations",
+      "searchBoth": false,
+      "hiringManagerTitles": ["Director of Engineering", "VP of Infrastructure", "Head of Platform Engineering"]
+    },
+    "ux_researcher": {
+      "titlePatterns": ["ux researcher", "user researcher", "design researcher"],
+      "primaryDepartment": "design",
+      "secondaryDepartment": "product",
+      "searchBoth": false,
+      "hiringManagerTitles": ["Head of Design", "Director of UX Research", "VP of Design", "Director of Product"]
+    },
+    "revenue_operations": {
+      "titlePatterns": ["revenue operations", "revops", "sales operations", "marketing operations"],
+      "primaryDepartment": "operations",
+      "secondaryDepartment": "sales",
+      "searchBoth": true,
+      "hiringManagerTitles": ["VP of Revenue Operations", "CRO", "VP of Sales", "Director of Operations"]
+    },
+    "implementation_consultant": {
+      "titlePatterns": ["implementation", "solutions consultant", "professional services", "onboarding"],
+      "primaryDepartment": "customer_success",
+      "secondaryDepartment": "operations",
+      "searchBoth": false,
+      "hiringManagerTitles": ["Director of Professional Services", "VP of Customer Success", "Head of Implementation"]
+    }
+  },
+
+  "industrySpecificDepartments": {
+    "healthcare": {
+      "keywords": ["hospital", "health system", "clinic", "medical", "pharma", "biotech", "life sciences"],
+      "additionalDepartments": ["clinical_operations", "regulatory", "medical_affairs"],
+      "titleAdjustments": {
+        "project_manager": "Clinical Project Manager",
+        "operations_manager": "Clinical Operations Manager",
+        "data_analyst": "Biostatistician"
+      }
+    },
+    "fintech": {
+      "keywords": ["fintech", "financial technology", "banking", "insurance", "payments", "lending"],
+      "additionalDepartments": ["risk", "compliance", "underwriting"],
+      "titleAdjustments": {
+        "data_analyst": "Risk Analyst",
+        "operations_manager": "Trading Operations Manager"
+      }
+    },
+    "ecommerce": {
+      "keywords": ["ecommerce", "e-commerce", "retail", "marketplace", "dtc", "direct to consumer"],
+      "additionalDepartments": ["merchandising", "fulfillment", "supply_chain"],
+      "titleAdjustments": {
+        "marketing_manager": "Growth Marketing Manager",
+        "product_manager": "E-commerce Product Manager"
+      }
+    },
+    "saas": {
+      "keywords": ["saas", "software as a service", "cloud", "platform", "b2b software"],
+      "additionalDepartments": ["customer_success", "developer_relations"],
+      "titleAdjustments": {
+        "account_executive": "Enterprise Account Executive",
+        "support": "Technical Support Engineer"
+      }
+    }
+  },
+
+  "recruiterTitleVariations": [
+    "Recruiter",
+    "Technical Recruiter",
+    "Senior Recruiter",
+    "Lead Recruiter",
+    "Staff Recruiter",
+    "Principal Recruiter",
+    "Recruiting Manager",
+    "Recruiting Lead",
+    "Recruiting Coordinator",
+    "Talent Acquisition",
+    "Talent Acquisition Partner",
+    "Talent Acquisition Specialist",
+    "Talent Acquisition Manager",
+    "Talent Acquisition Lead",
+    "Senior Talent Acquisition",
+    "Talent Partner",
+    "Talent Sourcer",
+    "Sourcer",
+    "Sourcing Specialist",
+    "University Recruiter",
+    "Campus Recruiter",
+    "Executive Recruiter",
+    "Recruiting Director",
+    "Director of Recruiting",
+    "Director of Talent Acquisition",
+    "Head of Talent",
+    "Head of Recruiting",
+    "Head of Talent Acquisition",
+    "VP of Talent",
+    "VP of Talent Acquisition",
+    "VP of People",
+    "HR Business Partner",
+    "People Partner",
+    "People Operations",
+    "Staffing Specialist",
+    "Staffing Manager",
+    "Staffing Coordinator",
+    "Talent Coordinator"
+  ]
+}
