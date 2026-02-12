@@ -7,9 +7,7 @@ import { JobDetails } from "./components/JobDetails";
 import { AllContacts } from "./components/AllContacts";
 import { ContactDetail } from "./components/ContactDetail";
 import { Subscription } from "./components/Subscription";
-import { Credits } from "./components/Credits";
 import { Settings } from "./components/Settings";
-import { BillingHistory } from "./components/BillingHistory";
 import { OutreachProfile } from "./components/OutreachProfile";
 import { LoginScreen } from "../components/Login";
 import { SignupScreen } from "../components/Signup";
@@ -165,12 +163,8 @@ export default function App() {
         return <OutreachProfile />;
       case "billing":
         return <Subscription />;
-      case "credits":
-        return <Credits />;
       case "settings":
         return <Settings />;
-      case "billing-history":
-        return <BillingHistory />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }

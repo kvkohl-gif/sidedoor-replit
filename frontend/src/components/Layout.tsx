@@ -102,25 +102,40 @@ export function Layout({ children, currentPage, onNavigate, onLogout }: LayoutPr
 
           {/* Credits Display */}
           <div className="px-3 pb-4">
-            <button
-              onClick={() => {
-                onNavigate("credits");
-                setSidebarOpen(false);
-              }}
-              className="w-full bg-gradient-to-br from-[#F7F5FF] to-[#FAF9FC] rounded-lg p-4 border border-[#E9E3FF] hover:border-[#D4C5FF] transition-all group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[#64748B] text-[13px] font-medium">Credits remaining</span>
-                <ChevronRight className="w-4 h-4 text-[#94A3B8] group-hover:text-[#6B46C1] transition-colors" />
-              </div>
-              <div className="flex items-baseline gap-2 mb-3">
-                <div className="text-2xl font-bold text-[#1A202C]">50</div>
-                <div className="text-[13px] text-[#94A3B8]">of 250</div>
-              </div>
-              <div className="w-full bg-white rounded-full h-1.5 overflow-hidden">
-                <div className="bg-gradient-to-r from-[#6B46C1] to-[#9F7AEA] h-1.5 rounded-full transition-all" style={{ width: "20%" }}></div>
-              </div>
-            </button>
+            {(() => {
+              const creditsRemaining = 50;
+              const creditsTotal = 250;
+              const pct = creditsTotal > 0 ? (creditsRemaining / creditsTotal) * 100 : 0;
+              const barGradient = pct > 50
+                ? "from-[#059669] to-[#10b981]"
+                : pct >= 20
+                  ? "from-[#d97706] to-[#f59e0b]"
+                  : "from-[#dc2626] to-[#ef4444]";
+              const borderColor = pct > 50 ? "#a7f3d0" : pct >= 20 ? "#fde68a" : "#fecaca";
+
+              return (
+                <button
+                  onClick={() => {
+                    onNavigate("billing");
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full bg-gradient-to-br from-[#F7F5FF] to-[#FAF9FC] rounded-lg p-4 hover:border-[#D4C5FF] transition-all group`}
+                  style={{ border: `1px solid ${borderColor}` }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[#64748B] text-[13px] font-medium">Credits remaining</span>
+                    <ChevronRight className="w-4 h-4 text-[#94A3B8] group-hover:text-[#6B46C1] transition-colors" />
+                  </div>
+                  <div className="flex items-baseline gap-2 mb-3">
+                    <div className="text-2xl font-bold text-[#1A202C]">{creditsRemaining}</div>
+                    <div className="text-[13px] text-[#94A3B8]">of {creditsTotal}</div>
+                  </div>
+                  <div className="w-full bg-white rounded-full h-1.5 overflow-hidden">
+                    <div className={`bg-gradient-to-r ${barGradient} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }}></div>
+                  </div>
+                </button>
+              );
+            })()}
           </div>
 
           {/* Bottom Navigation */}
