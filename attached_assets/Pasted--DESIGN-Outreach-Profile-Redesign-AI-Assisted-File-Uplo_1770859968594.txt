@@ -1,0 +1,274 @@
+# DESIGN: Outreach Profile Redesign — AI-Assisted + File Upload
+
+## CONTEXT
+
+The Outreach Profile (called "Reference Profile" internally) is the data layer that powers personalized outreach. It's NOT just a form — it's the engine that turns generic AI emails into strategic, reply-worthy messages.
+
+Current state: 7 sections of empty text fields with placeholder text. No AI assistance, no file upload, no guidance on what's most important. Users see a long form and don't know where to start.
+
+## THE REDESIGN
+
+### Principle: Progressive Disclosure + AI Bootstrapping
+
+Instead of showing 7 empty sections, the profile should:
+1. Start with the MOST IMPACTFUL fields first (resume upload, then bio)
+2. Use AI to analyze uploaded resume and AUTO-FILL other sections
+3. Let users review, edit, and expand on AI suggestions
+4. Show a completeness indicator so users know how much more they can add
+
+### New Section Order (top to bottom):
+
+**1. Resume Upload (NEW — most important, first)**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  📄 Resume                                                       │
+│  Upload your resume to auto-fill your profile with AI            │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │          Drag & drop PDF or DOCX, or click to browse     │    │
+│  │                     [Upload Resume]                       │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  — OR paste your resume text —                                   │
+│  [textarea for manual paste]                                     │
+│                                                                  │
+│  ✅ Resume uploaded: Sarah_Johnson_Resume_2026.pdf               │
+│  [✨ Analyze with AI]  [Replace]  [Remove]                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Support PDF and DOCX file upload (store in Supabase Storage or parse text server-side)
+- Keep the paste option as fallback
+- After upload, show an "Analyze with AI" button
+- When clicked, AI reads the resume and suggests content for: Professional Bio, Key Achievements, Career Narrative
+- Store the parsed resume text in `resume_url` or a new `resume_text` field
+
+**2. Professional Bio**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  👤 Professional Bio                         [✨ AI Suggest]     │
+│  A brief overview of your background and what makes you unique   │
+│                                                                  │
+│  [textarea — may be pre-filled by AI from resume]                │
+│                                                                  │
+│  💡 Tip: Focus on your narrative, not just your job history.     │
+│  What's the thread that connects your career moves?              │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- "AI Suggest" button generates a bio draft based on resume content
+- Users can edit the suggestion or write from scratch
+- Tip text helps users understand what makes a good bio for outreach
+
+**3. Key Achievements (Signature Wins)**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  🏆 Signature Wins                           [✨ AI Suggest]     │
+│  Quantifiable wins that demonstrate your impact                  │
+│                                                                  │
+│  [input field]                                       [+ Add]     │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ Led team of 5 engineers to deliver product 2 months  [×]  │  │
+│  │ ahead of schedule                                          │  │
+│  ├────────────────────────────────────────────────────────────┤  │
+│  │ Increased conversion rate by 45% through A/B testing [×]  │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  💡 Include specific numbers: revenue, %, time saved, team size  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- "AI Suggest" analyzes resume and proposes 3-5 achievement bullets
+- User can accept, edit, or dismiss each suggestion
+- Tag-style input for manual entry (already exists, keep this)
+
+**4. Career Goals & Targeting**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  🎯 What You're Looking For                                      │
+│                                                                  │
+│  Target Roles:  [PM] [Growth] [Strategy & Ops]     [+ Add]      │
+│                                                                  │
+│  Target Industries: [B2B SaaS] [Fintech]            [+ Add]     │
+│                                                                  │
+│  Company Stage: [Series A-C] [Growth Stage]         [+ Add]     │
+│                                                                  │
+│  What excites you:                                               │
+│  [textarea: "I want to be the first growth PM at a company      │
+│   that's found product-market fit and needs to scale..."]        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Combines the current "Career Goals" section with NEW structured fields
+- Tag-style inputs for roles, industries, company stage
+- Free text for the narrative part
+- This data helps the AI personalize messages based on company fit
+
+**5. Voice & Tone (NEW)**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  🎙️ Your Voice                                                   │
+│  How do you want your outreach to sound?                         │
+│                                                                  │
+│  Formality:    [Casual ←——●——→ Formal]                          │
+│  Directness:   [Warm ←——●——→ Direct]                            │
+│  Length:        [Brief ←●——→ Detailed]                           │
+│                                                                  │
+│  Sample phrases you'd naturally use:                             │
+│  [textarea: "I tend to lead with specific examples rather       │
+│   than credentials. I don't use corporate jargon."]             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Slider-based preferences that map to prompt instructions
+- Store as JSON: `{ formality: 0.3, directness: 0.7, length: 0.2 }`
+- Free text for voice notes
+
+**6. Personal Story Hooks** (keep existing, add AI)
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ✨ Personal Story Hooks                     [✨ AI Suggest]     │
+│  Unique connections that create instant rapport                  │
+│                                                                  │
+│  Industry-specific hooks:                                        │
+│  [input]                                    [industry ▾] [+ Add] │
+│                                                                  │
+│  General hooks:                                                  │
+│  [input]                                             [+ Add]     │
+│                                                                  │
+│  💡 Examples: "My family has been in construction for 3          │
+│  generations", "I'm a real estate investor with 4 properties"    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Add optional industry tag to each hook so the AI can match hooks to companies
+- "AI Suggest" generates hooks based on resume + bio content
+
+**7. Cover Letter Template** (move to bottom, make optional)
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  📝 Cover Letter Template (Optional)                    [▸]      │
+│  A reference template the AI can use for longer-form outreach    │
+│                                                                  │
+│  [collapsed by default — click to expand]                        │
+│  [textarea or file upload for cover letter]                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Collapsed by default — this is lower priority signal
+- Support paste OR file upload
+
+**8. Hobbies & Interests** (move to bottom, make optional)
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ❤️ Hobbies & Interests (Optional)                      [▸]     │
+│  [collapsed — same tag input as current]                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Profile Completeness Indicator
+
+Add a progress bar at the top of the page:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Profile Strength: ████████░░░░ 65%                              │
+│  Add your key achievements to improve outreach quality →         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Scoring:
+- Resume uploaded: +25%
+- Professional Bio filled: +20%
+- 2+ Achievements added: +20%
+- Career Goals filled: +15%
+- Voice preferences set: +10%
+- Story hooks added: +10%
+
+Show a contextual tip about what to fill next.
+
+### AI Assist Implementation
+
+Each "✨ AI Suggest" button calls a new endpoint:
+
+```
+POST /api/outreach-profile/ai-suggest
+Body: {
+  section: "bio" | "achievements" | "story_hooks",
+  context: {
+    resumeText: "...",          // from uploaded/pasted resume
+    existingBio: "...",         // current bio if any
+    existingAchievements: [...], // current achievements if any
+  }
+}
+
+Response: {
+  suggestion: "..." // or array of suggestions for achievements
+}
+```
+
+This calls OpenAI with a prompt like:
+
+```
+You are helping a job seeker build their outreach profile for personalized 
+cold emails to recruiters and hiring managers.
+
+Based on their resume, suggest a professional bio that:
+- Tells a career narrative, not just lists jobs
+- Highlights what makes them unique
+- Is 2-3 sentences max
+- Sounds human, not corporate
+
+Resume:
+{resumeText}
+```
+
+For achievements:
+```
+Extract 3-5 quantifiable wins from this resume. Each should include 
+a specific metric (%, $, time, team size). Format as short bullet points.
+
+Resume:
+{resumeText}
+```
+
+### Resume File Upload Implementation
+
+**Option A (simpler — recommended for now):**
+- Accept PDF/DOCX upload on the frontend
+- Parse text client-side using pdf.js for PDFs or mammoth.js for DOCX
+- Send extracted text to the backend
+- Store in a new `resume_text` column on `user_outreach_profiles`
+- Optionally store the original file in Supabase Storage and save URL in `resume_url`
+
+**Option B (server-side):**
+- Upload file to backend
+- Parse with a server-side PDF library
+- Store text + file URL
+
+Option A is faster to implement and doesn't require new server dependencies.
+
+### Database Changes
+
+Add these columns to `user_outreach_profiles`:
+```sql
+ALTER TABLE user_outreach_profiles
+ADD COLUMN resume_text text,
+ADD COLUMN voice_formality real DEFAULT 0.5,
+ADD COLUMN voice_directness real DEFAULT 0.5,
+ADD COLUMN voice_length real DEFAULT 0.3,
+ADD COLUMN voice_notes text,
+ADD COLUMN target_roles text[],
+ADD COLUMN target_industries text[],
+ADD COLUMN target_company_stage text[],
+ADD COLUMN profile_completeness integer DEFAULT 0;
+```
+
+Or if array types are complex with Drizzle, store as JSON strings.
+
+## DO NOT
+- Do NOT remove any existing sections — just reorder and enhance them
+- Do NOT make this depend on the contact/job features — the profile is standalone
+- Do NOT change how the outreach message generation reads profile data (just add more data for it to use)
+- Do NOT auto-save aggressively — keep the explicit "Save Profile" button but add auto-save for notes

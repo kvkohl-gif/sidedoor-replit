@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerContactRoutes } from "./routes/contacts";
+import { registerOutreachProfileRoutes } from "./routes/outreachProfile";
 import dbTestRouter from "./routes/dbTest";
 import { supabase } from "./lib/supabaseClient";
 import OpenAI from "openai";
@@ -1187,6 +1188,7 @@ LinkedIn message tone: ${tone}`;
 
   // Register contact routes
   registerContactRoutes(app);
+  registerOutreachProfileRoutes(app);
 
   // Debug endpoint for department targeting (no auth for testing)
   app.post('/api/debug/department-test', async (req, res) => {
