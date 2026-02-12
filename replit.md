@@ -3,6 +3,9 @@
 ## Overview
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system. The project leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services, and stores it for user management.
 
+## Recent Changes
+*   **Feb 2026**: UX Polish - Created shared `statusColors.ts` utility for consistent status styling across components. Added Draft/View Draft button logic to AllContacts based on `generatedEmailMessage`. Added empty state with CTA to Contacts page. Cleaned up Dashboard AI messages card (removed placeholder personalization score). Consolidated Subscription, Credits, and BillingHistory into single tabbed "Plan & Billing" page. Added color-coded credits widget (green/amber/red) in sidebar.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
