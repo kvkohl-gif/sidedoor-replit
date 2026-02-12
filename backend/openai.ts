@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
+import { classifyJobRole } from "./roleTaxonomyService";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -257,7 +259,18 @@ export async function extractApolloSearchParams(content: string): Promise<{
   fallback_recruiter_titles: string[];
   fallback_departments: string[];
 }> {
+  // Pre-classify with taxonomy for context injection
+  const taxonomyClassification = classifyJobRole(
+    content.substring(0, 200) // Use first 200 chars which typically contain the job title
+  );
+  const taxonomyHint = taxonomyClassification.taxonomyMatch
+    ? `\n\nTAXONOMY PRE-CLASSIFICATION (use as strong prior):\n${taxonomyClassification.taxonomyContext}`
+    : '';
+
   const systemPrompt = `You prepare high-precision Apollo People Search parameters from a job description.
+
+${ROLE_TAXONOMY_CONTEXT}
+${taxonomyHint}
 
 Return ONLY valid JSON (no prose). Do not hallucinate. Use exact strings when present; otherwise omit or leave [].
 
@@ -416,6 +429,8 @@ Return the extracted data in the JSON format specified.`;
  */
 export async function extractJobData(content: string, originalJobUrl?: string): Promise<JobDataExtraction & RecruitingInsights> {
   const systemPrompt = `You are extracting structured job data for a job search and messaging platform.
+
+${ROLE_TAXONOMY_CONTEXT}
 
 Return ONLY valid JSON (no prose). Be strict: if a field is unknown, use "Not specified" (or [] for lists). Never hallucinate company domains or emails.
 

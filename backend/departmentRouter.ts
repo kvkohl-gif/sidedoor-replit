@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
+import { classifyJobRole } from "./roleTaxonomyService";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -46,12 +48,21 @@ export async function inferDepartmentTargets(
   job_title: string,
   job_description: string
 ): Promise<DepartmentInference> {
+  // Fast taxonomy pre-classification
+  const classification = classifyJobRole(job_title, job_description);
+  const taxonomyHint = classification.taxonomyMatch
+    ? `\n\nTAXONOMY PRE-CLASSIFICATION (use as strong prior, override only if job description clearly contradicts):\n${classification.taxonomyContext}`
+    : '';
+
   const systemPrompt = `You are a Department Router for recruiter contact discovery.
 
 INPUT:
 - company_name (string)
 - job_title (string)
 - job_description (string)
+
+${ROLE_TAXONOMY_CONTEXT}
+${taxonomyHint}
 
 TASKS:
 1) Infer the MOST LIKELY department(s) that own this role inside the company org chart.

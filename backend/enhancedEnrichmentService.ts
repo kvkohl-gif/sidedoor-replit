@@ -4,6 +4,7 @@ import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult 
 import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
 import { extractRecruiterName, generateTwoBucketTargets, type RecruiterNameExtraction, type TwoBucketTargets } from "./openai";
 import { inferDepartmentTargets, buildApolloPlans, isContactDeptAligned, type DepartmentInference, type ApolloSearchPlan } from "./departmentRouter";
+import { classifyJobRole, type RoleLookupResult } from "./roleTaxonomyService";
 import { EmailValidationGuardrails, ValidatedEmail } from "./emailValidationGuardrails";
 import type { InsertRecruiterContact } from "@shared/schema";
 
@@ -68,6 +69,21 @@ export class EnhancedEnrichmentService {
   async searchAndEnrichContacts(request: ContactSearchRequest): Promise<ContactSearchResult> {
     console.log(`Starting enhanced contact search for ${request.company_name}`);
     
+    // Step 0: Fast taxonomy lookup BEFORE AI inference
+    let taxonomyResult: RoleLookupResult | null = null;
+    if (request.job_title) {
+      const classification = classifyJobRole(request.job_title, request.job_content);
+      taxonomyResult = classification.taxonomyMatch;
+      if (taxonomyResult) {
+        console.log(`=== TAXONOMY FAST-LOOKUP ===`);
+        console.log(`Department: ${taxonomyResult.departmentLabel} (confidence: ${taxonomyResult.confidence.toFixed(2)})`);
+        console.log(`Seniority: ${taxonomyResult.seniority} (level ${taxonomyResult.seniorityLevel})`);
+        console.log(`Cross-functional: ${taxonomyResult.isCrossFunctional ? `Yes → ${taxonomyResult.secondaryDepartment}` : 'No'}`);
+        console.log(`Hiring manager titles: ${taxonomyResult.hiringManagerTitles.join(', ')}`);
+        console.log(`Should use AI: ${classification.shouldUseAI}`);
+      }
+    }
+
     // Generate department-aligned targets using enhanced router
     let departmentInference: DepartmentInference | null = null;
     let twoBucketTargets: TwoBucketTargets | null = null;
@@ -86,6 +102,17 @@ export class EnhancedEnrichmentService {
       console.log(`Department inference: ${departmentInference.summary}`);
       console.log(`Primary department: ${departmentInference.departments[0]?.label} (${departmentInference.departments[0]?.confidence}%)`);
       console.log(`Primary titles: ${departmentInference.primary_titles.slice(0, 3).map(t => t.title).join(', ')}`);
+
+      // Merge taxonomy hiring manager titles into department inference if available
+      if (taxonomyResult && taxonomyResult.confidence >= 0.85) {
+        const existingTitles = new Set(departmentInference.primary_titles.map(t => t.title.toLowerCase()));
+        for (const title of taxonomyResult.hiringManagerTitles) {
+          if (!existingTitles.has(title.toLowerCase())) {
+            departmentInference.primary_titles.push({ title, confidence: 88 });
+          }
+        }
+        console.log(`Merged ${taxonomyResult.hiringManagerTitles.length} taxonomy titles into department inference`);
+      }
     } else {
       console.log("Missing job content or job title - falling back to old two-bucket strategy...");
       twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
