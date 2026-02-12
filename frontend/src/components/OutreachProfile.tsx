@@ -1,66 +1,263 @@
-import { User, FileText, Target, Trophy, Heart, Sparkles, Save, Plus, X } from "lucide-react";
-import { useState } from "react";
+import {
+  User, FileText, Target, Trophy, Heart, Sparkles, Save, Plus, X,
+  Upload, ChevronDown, ChevronRight, Loader2, Copy, Check, Mic,
+  Briefcase, Building2, Zap
+} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "../lib/queryClient";
+
+interface ProfileData {
+  resumeText: string;
+  resumeFilename: string;
+  bio: string;
+  coverLetter: string;
+  careerGoals: string;
+  achievements: string[];
+  hobbies: string[];
+  storyHooks: string[];
+  voiceFormality: number;
+  voiceDirectness: number;
+  voiceLength: number;
+  voiceNotes: string;
+  targetRoles: string[];
+  targetIndustries: string[];
+  targetCompanyStage: string[];
+  profileCompleteness: number;
+}
+
+const defaultProfile: ProfileData = {
+  resumeText: "",
+  resumeFilename: "",
+  bio: "",
+  coverLetter: "",
+  careerGoals: "",
+  achievements: [],
+  hobbies: [],
+  storyHooks: [],
+  voiceFormality: 0.5,
+  voiceDirectness: 0.5,
+  voiceLength: 0.3,
+  voiceNotes: "",
+  targetRoles: [],
+  targetIndustries: [],
+  targetCompanyStage: [],
+  profileCompleteness: 0,
+};
+
+function computeCompleteness(p: ProfileData): number {
+  let score = 0;
+  if (p.resumeText.trim().length > 50) score += 25;
+  if (p.bio.trim().length > 20) score += 20;
+  if (p.achievements.length >= 2) score += 20;
+  if (p.careerGoals.trim().length > 10) score += 15;
+  if (p.voiceFormality !== 0.5 || p.voiceDirectness !== 0.5 || p.voiceLength !== 0.3 || p.voiceNotes.trim().length > 0) score += 10;
+  if (p.storyHooks.length >= 1) score += 10;
+  return Math.min(score, 100);
+}
+
+function getNextTip(p: ProfileData): string {
+  if (p.resumeText.trim().length <= 50) return "Upload your resume to get started";
+  if (p.bio.trim().length <= 20) return "Add a professional bio to improve outreach quality";
+  if (p.achievements.length < 2) return "Add your key achievements to improve outreach quality";
+  if (p.careerGoals.trim().length <= 10) return "Define your career goals for more targeted messages";
+  if (p.storyHooks.length < 1) return "Add personal story hooks to create rapport with recruiters";
+  return "Your profile is looking great!";
+}
+
+async function extractTextFromFile(file: File): Promise<string> {
+  if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).toString();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map((item: any) => item.str).join(" ") + "\n";
+    }
+    return text.trim();
+  } else if (file.name.endsWith(".docx") || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    const mammoth = await import("mammoth");
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value.trim();
+  }
+  throw new Error("Unsupported file type. Please upload a PDF or DOCX file.");
+}
 
 export function OutreachProfile() {
-  const [bio, setBio] = useState("");
-  const [resume, setResume] = useState("");
-  const [coverLetter, setCoverLetter] = useState("");
-  const [achievements, setAchievements] = useState<string[]>([
-    "Led team of 5 engineers to deliver product 2 months ahead of schedule",
-    "Increased conversion rate by 45% through A/B testing"
-  ]);
-  const [careerGoals, setCareerGoals] = useState("");
-  const [hobbies, setHobbies] = useState<string[]>(["Rock climbing", "Photography", "Cooking"]);
-  const [storyHooks, setStoryHooks] = useState<string[]>([
-    "My family has been in construction for 3 generations",
-    "I'm a real estate investor with 4 rental properties"
-  ]);
-  
+  const [profile, setProfile] = useState<ProfileData>(defaultProfile);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [newAchievement, setNewAchievement] = useState("");
   const [newHobby, setNewHobby] = useState("");
   const [newStoryHook, setNewStoryHook] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [newRole, setNewRole] = useState("");
+  const [newIndustry, setNewIndustry] = useState("");
+  const [newStage, setNewStage] = useState("");
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [hobbiesOpen, setHobbiesOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<{ bio?: string; achievements?: string[]; storyHooks?: string[] }>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  const { data: fetchedProfile, isLoading } = useQuery<ProfileData>({
+    queryKey: ["/api/outreach-profile"],
+  });
+
+  useEffect(() => {
+    if (fetchedProfile) {
+      setProfile(fetchedProfile);
+      if (fetchedProfile.coverLetter?.trim()) setCoverLetterOpen(true);
+      if (fetchedProfile.hobbies?.length > 0) setHobbiesOpen(true);
+    }
+  }, [fetchedProfile]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: ProfileData) => {
+      return await apiRequest("PUT", "/api/outreach-profile", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach-profile"] });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    },
+    onError: () => {
+      setSaveStatus("idle");
+    },
+  });
 
   const handleSave = () => {
     setSaveStatus("saving");
-    setTimeout(() => {
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    }, 800);
+    saveMutation.mutate(profile);
   };
 
-  const addAchievement = () => {
-    if (newAchievement.trim()) {
-      setAchievements([...achievements, newAchievement.trim()]);
-      setNewAchievement("");
+  const updateField = useCallback((field: keyof ProfileData, value: any) => {
+    setProfile(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError("");
+    try {
+      const text = await extractTextFromFile(file);
+      setProfile(prev => ({
+        ...prev,
+        resumeText: text,
+        resumeFilename: file.name,
+      }));
+    } catch (err: any) {
+      setUploadError(err.message || "Failed to parse file");
+    } finally {
+      setUploading(false);
     }
   };
 
-  const removeAchievement = (index: number) => {
-    setAchievements(achievements.filter((_, i) => i !== index));
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
   };
 
-  const addHobby = () => {
-    if (newHobby.trim()) {
-      setHobbies([...hobbies, newHobby.trim()]);
-      setNewHobby("");
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const aiSuggest = async (section: string) => {
+    setAiLoading(section);
+    try {
+      const resp = await apiRequest("POST", "/api/outreach-profile/ai-suggest", {
+        section,
+        context: {
+          resumeText: profile.resumeText,
+          existingBio: profile.bio,
+          existingAchievements: profile.achievements,
+        },
+      });
+      const data = await resp.json();
+
+      if (section === "bio") {
+        setAiSuggestions(prev => ({ ...prev, bio: data.suggestion }));
+      } else if (section === "achievements") {
+        const items = Array.isArray(data.suggestion) ? data.suggestion : [];
+        setAiSuggestions(prev => ({ ...prev, achievements: items }));
+      } else if (section === "story_hooks") {
+        const items = Array.isArray(data.suggestion) ? data.suggestion : [];
+        setAiSuggestions(prev => ({ ...prev, storyHooks: items }));
+      } else if (section === "analyze_resume") {
+        const s = data.suggestion;
+        if (s.bio) setAiSuggestions(prev => ({ ...prev, bio: s.bio }));
+        if (s.achievements) setAiSuggestions(prev => ({ ...prev, achievements: s.achievements }));
+        if (s.storyHooks) setAiSuggestions(prev => ({ ...prev, storyHooks: s.storyHooks }));
+      }
+    } catch (err: any) {
+      console.error("AI suggestion error:", err);
+    } finally {
+      setAiLoading(null);
     }
   };
 
-  const removeHobby = (index: number) => {
-    setHobbies(hobbies.filter((_, i) => i !== index));
-  };
-
-  const addStoryHook = () => {
-    if (newStoryHook.trim()) {
-      setStoryHooks([...storyHooks, newStoryHook.trim()]);
-      setNewStoryHook("");
+  const acceptBioSuggestion = () => {
+    if (aiSuggestions.bio) {
+      updateField("bio", aiSuggestions.bio);
+      setAiSuggestions(prev => ({ ...prev, bio: undefined }));
     }
   };
 
-  const removeStoryHook = (index: number) => {
-    setStoryHooks(storyHooks.filter((_, i) => i !== index));
+  const acceptAchievementSuggestions = () => {
+    if (aiSuggestions.achievements) {
+      const combined = [...profile.achievements, ...aiSuggestions.achievements];
+      const unique = [...new Set(combined)];
+      updateField("achievements", unique);
+      setAiSuggestions(prev => ({ ...prev, achievements: undefined }));
+    }
   };
+
+  const acceptHookSuggestions = () => {
+    if (aiSuggestions.storyHooks) {
+      const combined = [...profile.storyHooks, ...aiSuggestions.storyHooks];
+      const unique = [...new Set(combined)];
+      updateField("storyHooks", unique);
+      setAiSuggestions(prev => ({ ...prev, storyHooks: undefined }));
+    }
+  };
+
+  const addTag = (field: "achievements" | "hobbies" | "storyHooks" | "targetRoles" | "targetIndustries" | "targetCompanyStage", value: string) => {
+    if (value.trim()) {
+      const current = profile[field] as string[];
+      if (!current.includes(value.trim())) {
+        updateField(field, [...current, value.trim()]);
+      }
+    }
+  };
+
+  const removeTag = (field: "achievements" | "hobbies" | "storyHooks" | "targetRoles" | "targetIndustries" | "targetCompanyStage", index: number) => {
+    const current = profile[field] as string[];
+    updateField(field, current.filter((_, i) => i !== index));
+  };
+
+  const completeness = computeCompleteness(profile);
+  const tip = getNextTip(profile);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 md:p-6 lg:p-8 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-[#6B46C1] animate-spin mx-auto mb-4" />
+          <p className="text-[#718096]">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFBFC]">
@@ -71,7 +268,7 @@ export function OutreachProfile() {
             <div className="flex-1">
               <h1 className="text-[#1A202C] mb-2">Outreach Profile</h1>
               <p className="text-[15px] text-[#718096] leading-relaxed">
-                The more detail you provide, the better our AI can craft personalized, compelling outreach emails that resonate with recruiters and hiring managers.
+                The more detail you provide, the better our AI can craft personalized, compelling outreach emails.
               </p>
             </div>
             <button
@@ -89,7 +286,133 @@ export function OutreachProfile() {
       {/* Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Bio */}
+
+          {/* Profile Completeness */}
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-[#1A202C]">Profile Strength</span>
+              <span className="text-sm font-bold text-[#6B46C1]">{completeness}%</span>
+            </div>
+            <div className="w-full h-2.5 bg-[#EDF2F7] rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${completeness}%`,
+                  background: completeness >= 80 ? "#059669" : completeness >= 50 ? "#d97706" : "#6B46C1",
+                }}
+              />
+            </div>
+            <p className="text-xs text-[#718096]">{tip}</p>
+          </div>
+
+          {/* Section 1: Resume Upload */}
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[#1A202C] font-semibold mb-1">Resume</h3>
+                <p className="text-[14px] text-[#718096]">
+                  Upload your resume to auto-fill your profile with AI
+                </p>
+              </div>
+            </div>
+
+            {!profile.resumeText ? (
+              <>
+                <div
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                    dragActive ? "border-[#6B46C1] bg-purple-50" : "border-[#E2E8F0] hover:border-[#6B46C1]"
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="w-8 h-8 text-[#6B46C1] animate-spin mx-auto mb-2" />
+                  ) : (
+                    <Upload className="w-8 h-8 text-[#A0AEC0] mx-auto mb-2" />
+                  )}
+                  <p className="text-sm text-[#718096] mb-1">
+                    {uploading ? "Parsing your resume..." : "Drag & drop PDF or DOCX, or click to browse"}
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+                {uploadError && (
+                  <p className="text-sm text-red-600 mt-2">{uploadError}</p>
+                )}
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-[#E2E8F0]" />
+                  <span className="text-xs text-[#A0AEC0]">OR paste your resume text</span>
+                  <div className="flex-1 h-px bg-[#E2E8F0]" />
+                </div>
+                <textarea
+                  value={profile.resumeText}
+                  onChange={(e) => updateField("resumeText", e.target.value)}
+                  placeholder="Paste your full resume text here..."
+                  className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0] font-mono"
+                  rows={8}
+                />
+              </>
+            ) : (
+              <div>
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <span className="text-sm text-green-800 flex-1">
+                    {profile.resumeFilename ? `Resume uploaded: ${profile.resumeFilename}` : "Resume text added"}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => aiSuggest("analyze_resume")}
+                      disabled={aiLoading === "analyze_resume"}
+                      className="px-3 py-1.5 bg-[#6B46C1] hover:bg-[#5a3ba1] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {aiLoading === "analyze_resume" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      Analyze with AI
+                    </button>
+                    <button
+                      onClick={() => { fileInputRef.current?.click(); }}
+                      className="px-3 py-1.5 bg-white border border-[#E2E8F0] text-[#718096] rounded-lg text-xs font-medium hover:border-[#6B46C1]"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      onClick={() => { updateField("resumeText", ""); updateField("resumeFilename", ""); }}
+                      className="px-3 py-1.5 bg-white border border-[#E2E8F0] text-red-500 rounded-lg text-xs font-medium hover:border-red-300"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+                <details className="group">
+                  <summary className="text-xs text-[#A0AEC0] cursor-pointer hover:text-[#718096]">View resume text</summary>
+                  <textarea
+                    value={profile.resumeText}
+                    onChange={(e) => updateField("resumeText", e.target.value)}
+                    className="w-full mt-2 px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[13px] text-[#1A202C] font-mono"
+                    rows={8}
+                  />
+                </details>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Professional Bio */}
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
@@ -98,88 +421,130 @@ export function OutreachProfile() {
               <div className="flex-1">
                 <h3 className="text-[#1A202C] font-semibold mb-1">Professional Bio</h3>
                 <p className="text-[14px] text-[#718096]">
-                  A brief overview of your professional background, expertise, and what makes you unique.
+                  A brief overview of your background and what makes you unique
                 </p>
               </div>
+              <button
+                onClick={() => aiSuggest("bio")}
+                disabled={!!aiLoading || !profile.resumeText.trim()}
+                className="px-3 py-1.5 bg-purple-50 text-[#6B46C1] border border-purple-200 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-purple-100 disabled:opacity-40"
+              >
+                {aiLoading === "bio" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                AI Suggest
+              </button>
             </div>
+
+            {aiSuggestions.bio && (
+              <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-[#6B46C1]">AI Suggestion</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={acceptBioSuggestion}
+                      className="px-2.5 py-1 bg-[#6B46C1] text-white rounded text-xs font-medium hover:bg-[#5a3ba1]"
+                    >
+                      Use This
+                    </button>
+                    <button
+                      onClick={() => setAiSuggestions(prev => ({ ...prev, bio: undefined }))}
+                      className="px-2.5 py-1 bg-white border border-[#E2E8F0] text-[#718096] rounded text-xs font-medium hover:border-[#6B46C1]"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-[#4A5568]">{aiSuggestions.bio}</p>
+              </div>
+            )}
+
             <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="e.g., I'm a Senior Product Designer with 8 years of experience building user-centric SaaS products. I specialize in design systems and have led design teams at both early-stage startups and Fortune 500 companies..."
+              value={profile.bio}
+              onChange={(e) => updateField("bio", e.target.value)}
+              placeholder="e.g., I'm a Senior Product Designer with 8 years of experience building user-centric SaaS products..."
               className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
-              rows={5}
+              rows={4}
             />
-          </div>
-
-          {/* Resume */}
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[#1A202C] font-semibold mb-1">Resume / CV</h3>
-                <p className="text-[14px] text-[#718096]">
-                  Paste your resume text here. Include work experience, education, skills, and certifications.
-                </p>
-              </div>
+            <div className="mt-2 p-2.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg">
+              <p className="text-xs text-[#92400E]">
+                <span className="font-medium">Tip:</span> Focus on your narrative, not just your job history. What's the thread that connects your career moves?
+              </p>
             </div>
-            <textarea
-              value={resume}
-              onChange={(e) => setResume(e.target.value)}
-              placeholder="Paste your full resume here..."
-              className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0] font-mono"
-              rows={10}
-            />
           </div>
 
-          {/* Cover Letter */}
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[#1A202C] font-semibold mb-1">Master Cover Letter</h3>
-                <p className="text-[14px] text-[#718096]">
-                  A template or example cover letter that showcases your writing style and key selling points.
-                </p>
-              </div>
-            </div>
-            <textarea
-              value={coverLetter}
-              onChange={(e) => setCoverLetter(e.target.value)}
-              placeholder="Paste your cover letter template here..."
-              className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
-              rows={8}
-            />
-          </div>
-
-          {/* Achievements */}
+          {/* Section 3: Signature Wins */}
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
                 <Trophy className="w-5 h-5 text-yellow-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[#1A202C] font-semibold mb-1">Key Achievements</h3>
+                <h3 className="text-[#1A202C] font-semibold mb-1">Signature Wins</h3>
                 <p className="text-[14px] text-[#718096]">
-                  Quantifiable wins, awards, and accomplishments that demonstrate your impact.
+                  Quantifiable wins that demonstrate your impact
                 </p>
               </div>
+              <button
+                onClick={() => aiSuggest("achievements")}
+                disabled={!!aiLoading || !profile.resumeText.trim()}
+                className="px-3 py-1.5 bg-purple-50 text-[#6B46C1] border border-purple-200 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-purple-100 disabled:opacity-40"
+              >
+                {aiLoading === "achievements" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                AI Suggest
+              </button>
             </div>
-            
+
+            {aiSuggestions.achievements && aiSuggestions.achievements.length > 0 && (
+              <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-[#6B46C1]">AI Suggestions</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={acceptAchievementSuggestions}
+                      className="px-2.5 py-1 bg-[#6B46C1] text-white rounded text-xs font-medium hover:bg-[#5a3ba1]"
+                    >
+                      Add All
+                    </button>
+                    <button
+                      onClick={() => setAiSuggestions(prev => ({ ...prev, achievements: undefined }))}
+                      className="px-2.5 py-1 bg-white border border-[#E2E8F0] text-[#718096] rounded text-xs font-medium hover:border-[#6B46C1]"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {aiSuggestions.achievements.map((a, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          addTag("achievements", a);
+                          setAiSuggestions(prev => ({
+                            ...prev,
+                            achievements: prev.achievements?.filter((_, idx) => idx !== i),
+                          }));
+                        }}
+                        className="text-xs text-[#6B46C1] hover:text-[#5a3ba1]"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-sm text-[#4A5568]">{a}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
                 value={newAchievement}
                 onChange={(e) => setNewAchievement(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && addAchievement()}
+                onKeyDown={(e) => { if (e.key === "Enter") { addTag("achievements", newAchievement); setNewAchievement(""); } }}
                 placeholder="e.g., Increased revenue by 150% in first quarter"
                 className="flex-1 px-4 py-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
               />
               <button
-                onClick={addAchievement}
+                onClick={() => { addTag("achievements", newAchievement); setNewAchievement(""); }}
                 className="px-4 py-2.5 bg-[#6B46C1] hover:bg-[#5a3ba1] text-white rounded-lg transition-colors flex items-center gap-2 font-medium text-[14px]"
               >
                 <Plus className="w-4 h-4" />
@@ -187,97 +552,222 @@ export function OutreachProfile() {
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {achievements.map((achievement, index) => (
-                <div
-                  key={index}
-                  className="bg-[#F7F5FF] border border-[#E9E3FF] text-[#6B46C1] px-3 py-2 rounded-lg text-[14px] flex items-center gap-2 group hover:border-[#6B46C1] transition-colors"
-                >
-                  <span>{achievement}</span>
-                  <button
-                    onClick={() => removeAchievement(index)}
-                    className="opacity-60 hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+            {profile.achievements.length > 0 && (
+              <div className="space-y-2">
+                {profile.achievements.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-[#F7F5FF] border border-[#E9E3FF] text-[#6B46C1] px-3 py-2 rounded-lg text-[14px] group hover:border-[#6B46C1] transition-colors">
+                    <span className="flex-1">{a}</span>
+                    <button onClick={() => removeTag("achievements", i)} className="opacity-60 hover:opacity-100 transition-opacity">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 p-2.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg">
+              <p className="text-xs text-[#92400E]">
+                <span className="font-medium">Tip:</span> Include specific numbers: revenue, %, time saved, team size
+              </p>
             </div>
           </div>
 
-          {/* Career Goals */}
+          {/* Section 4: Career Goals & Targeting */}
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
                 <Target className="w-5 h-5 text-indigo-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[#1A202C] font-semibold mb-1">Career Goals</h3>
+                <h3 className="text-[#1A202C] font-semibold mb-1">What You're Looking For</h3>
                 <p className="text-[14px] text-[#718096]">
-                  What you're looking for in your next role and where you want to take your career.
+                  Define your targets so AI can personalize messages based on company fit
                 </p>
               </div>
             </div>
-            <textarea
-              value={careerGoals}
-              onChange={(e) => setCareerGoals(e.target.value)}
-              placeholder="e.g., I'm looking to transition into a leadership role where I can mentor junior designers while still staying hands-on with product design. Ideally at a high-growth B2B SaaS company that values design excellence..."
-              className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
-              rows={5}
-            />
-          </div>
 
-          {/* Hobbies & Interests */}
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                <Heart className="w-5 h-5 text-pink-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[#1A202C] font-semibold mb-1">Hobbies & Interests</h3>
-                <p className="text-[14px] text-[#718096]">
-                  Personal interests that help you connect with people and show your personality.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={newHobby}
-                onChange={(e) => setNewHobby(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && addHobby()}
-                placeholder="e.g., Hiking, Playing guitar, Volunteering"
-                className="flex-1 px-4 py-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
-              />
-              <button
-                onClick={addHobby}
-                className="px-4 py-2.5 bg-[#6B46C1] hover:bg-[#5a3ba1] text-white rounded-lg transition-colors flex items-center gap-2 font-medium text-[14px]"
-              >
-                <Plus className="w-4 h-4" />
-                Add
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {hobbies.map((hobby, index) => (
-                <div
-                  key={index}
-                  className="bg-pink-50 border border-pink-200 text-pink-700 px-3 py-2 rounded-lg text-[14px] flex items-center gap-2 group hover:border-pink-400 transition-colors"
-                >
-                  <span>{hobby}</span>
+            <div className="space-y-4">
+              {/* Target Roles */}
+              <div>
+                <label className="text-sm font-medium text-[#4A5568] mb-2 block">Target Roles</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addTag("targetRoles", newRole); setNewRole(""); } }}
+                    placeholder="e.g., Product Manager, Growth Lead"
+                    className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  />
                   <button
-                    onClick={() => removeHobby(index)}
-                    className="opacity-60 hover:opacity-100 transition-opacity"
+                    onClick={() => { addTag("targetRoles", newRole); setNewRole(""); }}
+                    className="px-3 py-2 bg-[#6B46C1] text-white rounded-lg text-sm hover:bg-[#5a3ba1]"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
-              ))}
+                <div className="flex flex-wrap gap-2">
+                  {profile.targetRoles.map((r, i) => (
+                    <span key={i} className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-lg text-[13px] flex items-center gap-1.5">
+                      {r}
+                      <button onClick={() => removeTag("targetRoles", i)} className="opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target Industries */}
+              <div>
+                <label className="text-sm font-medium text-[#4A5568] mb-2 block">Target Industries</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newIndustry}
+                    onChange={(e) => setNewIndustry(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addTag("targetIndustries", newIndustry); setNewIndustry(""); } }}
+                    placeholder="e.g., B2B SaaS, Fintech"
+                    className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  />
+                  <button
+                    onClick={() => { addTag("targetIndustries", newIndustry); setNewIndustry(""); }}
+                    className="px-3 py-2 bg-[#6B46C1] text-white rounded-lg text-sm hover:bg-[#5a3ba1]"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {profile.targetIndustries.map((ind, i) => (
+                    <span key={i} className="bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-lg text-[13px] flex items-center gap-1.5">
+                      {ind}
+                      <button onClick={() => removeTag("targetIndustries", i)} className="opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Company Stage */}
+              <div>
+                <label className="text-sm font-medium text-[#4A5568] mb-2 block">Company Stage</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newStage}
+                    onChange={(e) => setNewStage(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addTag("targetCompanyStage", newStage); setNewStage(""); } }}
+                    placeholder="e.g., Series A-C, Growth Stage"
+                    className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  />
+                  <button
+                    onClick={() => { addTag("targetCompanyStage", newStage); setNewStage(""); }}
+                    className="px-3 py-2 bg-[#6B46C1] text-white rounded-lg text-sm hover:bg-[#5a3ba1]"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {profile.targetCompanyStage.map((s, i) => (
+                    <span key={i} className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-1 rounded-lg text-[13px] flex items-center gap-1.5">
+                      {s}
+                      <button onClick={() => removeTag("targetCompanyStage", i)} className="opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* What excites you */}
+              <div>
+                <label className="text-sm font-medium text-[#4A5568] mb-2 block">What excites you about your next role</label>
+                <textarea
+                  value={profile.careerGoals}
+                  onChange={(e) => updateField("careerGoals", e.target.value)}
+                  placeholder="e.g., I want to be the first growth PM at a company that's found product-market fit and needs to scale..."
+                  className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Story Hooks */}
+          {/* Section 5: Voice & Tone */}
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                <Mic className="w-5 h-5 text-teal-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[#1A202C] font-semibold mb-1">Your Voice</h3>
+                <p className="text-[14px] text-[#718096]">
+                  How do you want your outreach to sound?
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <div className="flex justify-between text-xs text-[#718096] mb-1.5">
+                  <span>Casual</span>
+                  <span className="font-medium text-[#4A5568]">Formality</span>
+                  <span>Formal</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={profile.voiceFormality}
+                  onChange={(e) => updateField("voiceFormality", parseFloat(e.target.value))}
+                  className="w-full h-2 bg-[#EDF2F7] rounded-full appearance-none cursor-pointer accent-[#6B46C1]"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs text-[#718096] mb-1.5">
+                  <span>Warm</span>
+                  <span className="font-medium text-[#4A5568]">Directness</span>
+                  <span>Direct</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={profile.voiceDirectness}
+                  onChange={(e) => updateField("voiceDirectness", parseFloat(e.target.value))}
+                  className="w-full h-2 bg-[#EDF2F7] rounded-full appearance-none cursor-pointer accent-[#6B46C1]"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs text-[#718096] mb-1.5">
+                  <span>Brief</span>
+                  <span className="font-medium text-[#4A5568]">Length</span>
+                  <span>Detailed</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={profile.voiceLength}
+                  onChange={(e) => updateField("voiceLength", parseFloat(e.target.value))}
+                  className="w-full h-2 bg-[#EDF2F7] rounded-full appearance-none cursor-pointer accent-[#6B46C1]"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-[#4A5568] mb-2 block">Sample phrases you'd naturally use</label>
+                <textarea
+                  value={profile.voiceNotes}
+                  onChange={(e) => updateField("voiceNotes", e.target.value)}
+                  placeholder="e.g., I tend to lead with specific examples rather than credentials. I don't use corporate jargon."
+                  className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 6: Personal Story Hooks */}
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
@@ -285,32 +775,72 @@ export function OutreachProfile() {
               </div>
               <div className="flex-1">
                 <h3 className="text-[#1A202C] font-semibold mb-1">Personal Story Hooks</h3>
-                <p className="text-[14px] text-[#718096] mb-3">
-                  Unique personal facts, experiences, or connections that can create instant rapport with companies in specific industries.
+                <p className="text-[14px] text-[#718096]">
+                  Unique connections that create instant rapport with recruiters
                 </p>
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                  <p className="text-[13px] text-orange-900 mb-2 font-medium">Examples:</p>
-                  <ul className="text-[13px] text-orange-800 space-y-1 ml-4 list-disc">
-                    <li>"My family has been in construction for 3 generations"</li>
-                    <li>"I'm a real estate investor with 4 rental properties"</li>
-                    <li>"I grew up working in my parents' restaurant"</li>
-                    <li>"I'm an avid woodworker and built my own home office"</li>
-                  </ul>
+              </div>
+              <button
+                onClick={() => aiSuggest("story_hooks")}
+                disabled={!!aiLoading || !profile.resumeText.trim()}
+                className="px-3 py-1.5 bg-purple-50 text-[#6B46C1] border border-purple-200 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-purple-100 disabled:opacity-40"
+              >
+                {aiLoading === "story_hooks" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                AI Suggest
+              </button>
+            </div>
+
+            {aiSuggestions.storyHooks && aiSuggestions.storyHooks.length > 0 && (
+              <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-[#6B46C1]">AI Suggestions</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={acceptHookSuggestions}
+                      className="px-2.5 py-1 bg-[#6B46C1] text-white rounded text-xs font-medium hover:bg-[#5a3ba1]"
+                    >
+                      Add All
+                    </button>
+                    <button
+                      onClick={() => setAiSuggestions(prev => ({ ...prev, storyHooks: undefined }))}
+                      className="px-2.5 py-1 bg-white border border-[#E2E8F0] text-[#718096] rounded text-xs font-medium hover:border-[#6B46C1]"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {aiSuggestions.storyHooks.map((h, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          addTag("storyHooks", h);
+                          setAiSuggestions(prev => ({
+                            ...prev,
+                            storyHooks: prev.storyHooks?.filter((_, idx) => idx !== i),
+                          }));
+                        }}
+                        className="text-xs text-[#6B46C1] hover:text-[#5a3ba1]"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-sm text-[#4A5568]">{h}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-            
+            )}
+
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
                 value={newStoryHook}
                 onChange={(e) => setNewStoryHook(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && addStoryHook()}
+                onKeyDown={(e) => { if (e.key === "Enter") { addTag("storyHooks", newStoryHook); setNewStoryHook(""); } }}
                 placeholder="Add a personal story hook..."
                 className="flex-1 px-4 py-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
               />
               <button
-                onClick={addStoryHook}
+                onClick={() => { addTag("storyHooks", newStoryHook); setNewStoryHook(""); }}
                 className="px-4 py-2.5 bg-[#6B46C1] hover:bg-[#5a3ba1] text-white rounded-lg transition-colors flex items-center gap-2 font-medium text-[14px]"
               >
                 <Plus className="w-4 h-4" />
@@ -319,21 +849,103 @@ export function OutreachProfile() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {storyHooks.map((hook, index) => (
+              {profile.storyHooks.map((hook, index) => (
                 <div
                   key={index}
                   className="bg-orange-50 border border-orange-200 text-orange-700 px-3 py-2 rounded-lg text-[14px] flex items-center gap-2 group hover:border-orange-400 transition-colors"
                 >
                   <span>{hook}</span>
-                  <button
-                    onClick={() => removeStoryHook(index)}
-                    className="opacity-60 hover:opacity-100 transition-opacity"
-                  >
+                  <button onClick={() => removeTag("storyHooks", index)} className="opacity-60 hover:opacity-100 transition-opacity">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
             </div>
+
+            <div className="mt-3 p-2.5 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs text-orange-800">
+                <span className="font-medium">Examples:</span> "My family has been in construction for 3 generations", "I'm a real estate investor with 4 properties"
+              </p>
+            </div>
+          </div>
+
+          {/* Section 7: Cover Letter (Collapsible) */}
+          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+            <button
+              onClick={() => setCoverLetterOpen(!coverLetterOpen)}
+              className="w-full flex items-center gap-3 p-6 hover:bg-[#FAFBFC] transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="text-[#1A202C] font-semibold">Cover Letter Template <span className="text-[#A0AEC0] font-normal text-sm">(Optional)</span></h3>
+                <p className="text-[14px] text-[#718096]">A reference template the AI can use for longer-form outreach</p>
+              </div>
+              {coverLetterOpen ? <ChevronDown className="w-5 h-5 text-[#A0AEC0]" /> : <ChevronRight className="w-5 h-5 text-[#A0AEC0]" />}
+            </button>
+            {coverLetterOpen && (
+              <div className="px-6 pb-6">
+                <textarea
+                  value={profile.coverLetter}
+                  onChange={(e) => updateField("coverLetter", e.target.value)}
+                  placeholder="Paste your cover letter template here..."
+                  className="w-full px-4 py-3 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent resize-none text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  rows={8}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section 8: Hobbies (Collapsible) */}
+          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+            <button
+              onClick={() => setHobbiesOpen(!hobbiesOpen)}
+              className="w-full flex items-center gap-3 p-6 hover:bg-[#FAFBFC] transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                <Heart className="w-5 h-5 text-pink-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="text-[#1A202C] font-semibold">Hobbies & Interests <span className="text-[#A0AEC0] font-normal text-sm">(Optional)</span></h3>
+                <p className="text-[14px] text-[#718096]">Personal interests that help connect with people</p>
+              </div>
+              {hobbiesOpen ? <ChevronDown className="w-5 h-5 text-[#A0AEC0]" /> : <ChevronRight className="w-5 h-5 text-[#A0AEC0]" />}
+            </button>
+            {hobbiesOpen && (
+              <div className="px-6 pb-6">
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={newHobby}
+                    onChange={(e) => setNewHobby(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addTag("hobbies", newHobby); setNewHobby(""); } }}
+                    placeholder="e.g., Hiking, Playing guitar, Volunteering"
+                    className="flex-1 px-4 py-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
+                  />
+                  <button
+                    onClick={() => { addTag("hobbies", newHobby); setNewHobby(""); }}
+                    className="px-4 py-2.5 bg-[#6B46C1] hover:bg-[#5a3ba1] text-white rounded-lg transition-colors flex items-center gap-2 font-medium text-[14px]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {profile.hobbies.map((hobby, index) => (
+                    <div
+                      key={index}
+                      className="bg-pink-50 border border-pink-200 text-pink-700 px-3 py-2 rounded-lg text-[14px] flex items-center gap-2 group hover:border-pink-400 transition-colors"
+                    >
+                      <span>{hobby}</span>
+                      <button onClick={() => removeTag("hobbies", index)} className="opacity-60 hover:opacity-100 transition-opacity">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Bottom Save Button */}
