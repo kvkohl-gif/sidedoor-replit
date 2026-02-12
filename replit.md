@@ -3,6 +3,19 @@
 ## Overview
 Recruiter Contact Finder is a full-stack web application designed to help users identify recruiter contact information from job postings and generate personalized outreach messages. It leverages OpenAI's API for extracting recruiter details, enriches this data through third-party services like Apollo.io and NeverBounce, and stores it for user management. The project aims to streamline the job application process by providing direct access to hiring contacts, enhancing outreach effectiveness, and maintaining a robust contact management system.
 
+## Recent Changes (February 12, 2026)
+*   **Role Taxonomy System Integration (COMPLETE)**: Added fast-lookup role classification before AI inference for improved department detection accuracy:
+    *   **Taxonomy Data**: backend/data/roleTaxonomy.json — 714-line taxonomy covering 12 departments, seniority levels, cross-functional roles, industry adjustments
+    *   **System Prompt Context**: backend/systemPromptTaxonomy.ts — ROLE_TAXONOMY_CONTEXT injected into all AI classification prompts
+    *   **Fast-Lookup Service**: backend/roleTaxonomyService.ts — Regex-based role classification (classifyJobRole, lookupRole, detectSeniority, getHiringManagerTargets, detectIndustry) using fs.readFileSync with ESM-compatible __dirname via fileURLToPath
+    *   **EnhancedEnrichmentService**: Step 0 taxonomy fast-lookup runs before AI inference; high-confidence matches (>=0.85) merge hiring manager titles directly into department inference results
+    *   **DepartmentRouter**: Taxonomy pre-classification hint + full ROLE_TAXONOMY_CONTEXT appended to AI system prompt for department inference
+    *   **OpenAI Functions**: ROLE_TAXONOMY_CONTEXT injected into extractApolloSearchParams and extractJobData system prompts for consistent classification
+    *   **Config**: Added resolveJsonModule to tsconfig.json
+    *   **Architecture**: Fast deterministic lookup → AI inference fallback pattern; taxonomy overrides AI only when confidence >= 0.85
+    *   **Files Added**: backend/data/roleTaxonomy.json, backend/systemPromptTaxonomy.ts, backend/roleTaxonomyService.ts
+    *   **Files Modified**: backend/enhancedEnrichmentService.ts, backend/departmentRouter.ts, backend/openai.ts, tsconfig.json
+
 ## Recent Changes (November 20, 2025)
 *   **Authentication System Migration (COMPLETE)**: Replaced Replit OpenID Connect with custom server-side session-based authentication:
     *   **Backend Auth Routes**: Created backend/routes/auth.ts with POST /api/auth/register, /login, /logout endpoints using Supabase direct queries
