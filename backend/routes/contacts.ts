@@ -38,6 +38,7 @@ export function registerContactRoutes(app: Express) {
           outreach_bucket,
           contact_status,
           seniority,
+          generated_email_message,
           job_submissions!inner (
             job_title,
             company_name,
@@ -71,6 +72,7 @@ export function registerContactRoutes(app: Express) {
         outreachBucket: contact.outreach_bucket,
         contactStatus: contact.contact_status,
         seniority: contact.seniority,
+        generatedEmailMessage: contact.generated_email_message,
         jobTitle: contact.job_submissions?.job_title,
         companyName: contact.job_submissions?.company_name,
         submissionId: contact.job_submission_id,

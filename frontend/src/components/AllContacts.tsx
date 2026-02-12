@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, Plus } from "lucide-react";
+import { STATUS_COLORS, VERIFICATION_COLORS, getContactStatusStyle, getVerificationStyle } from "../lib/statusColors";
 
 interface AllContactsProps {
   onNavigate: (page: string, data?: any) => void;
@@ -19,23 +20,8 @@ interface Contact {
   createdAt: string;
   jobTitle?: string | null;
   companyName?: string | null;
+  generatedEmailMessage?: string | null;
 }
-
-const VERIFICATION: Record<string, { label: string; dot: string }> = {
-  valid:   { label: "Verified",   dot: "#10b981" },
-  risky:   { label: "Risky",      dot: "#f59e0b" },
-  invalid: { label: "Invalid",    dot: "#ef4444" },
-  unknown: { label: "Unverified", dot: "#9ca3af" },
-};
-
-const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  not_contacted:       { label: "Not Contacted",      color: "#6b7280", bg: "#f3f4f6" },
-  email_sent:          { label: "Emailed",             color: "#2563eb", bg: "#eff6ff" },
-  awaiting_reply:      { label: "Awaiting Reply",      color: "#d97706", bg: "#fffbeb" },
-  follow_up_needed:    { label: "Follow Up",           color: "#ea580c", bg: "#fff7ed" },
-  interview_scheduled: { label: "Interview",           color: "#059669", bg: "#ecfdf5" },
-  rejected:            { label: "Rejected",            color: "#dc2626", bg: "#fef2f2" },
-};
 
 const css = `
   .contacts-root {
@@ -317,6 +303,12 @@ const css = `
     box-shadow: 0 1px 2px rgba(124,58,237,0.15);
   }
   .gen-btn.primary:hover { background: #6d28d9; }
+  .gen-btn.secondary {
+    background: #fff;
+    color: #7c3aed;
+    border: 1.5px solid #7c3aed;
+  }
+  .gen-btn.secondary:hover { background: #f5f3ff; }
 
   .sourced-label {
     font-size: 12px;
@@ -514,11 +506,11 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
           </thead>
           <tbody>
             {sorted.length > 0 ? sorted.map(c => {
-              const v = VERIFICATION[c.verificationStatus] || VERIFICATION.unknown;
-              const statusKey = c.contactStatus || "not_contacted";
-              const s = STATUS[statusKey] || STATUS.not_contacted;
+              const v = getVerificationStyle(c.verificationStatus);
+              const s = getContactStatusStyle(c.contactStatus);
               const initials = getInitials(c.name);
               const isRecruiter = c.outreachBucket === "recruiter";
+              const hasDraft = !!c.generatedEmailMessage;
 
               return (
                 <tr key={c.id} onClick={() => onNavigate("contact-detail", { contactId: c.id })}>
@@ -578,12 +570,12 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                         </a>
                       )}
                       <button
-                        className="gen-btn primary"
-                        title="Generate outreach"
+                        className={`gen-btn ${hasDraft ? "secondary" : "primary"}`}
+                        title={hasDraft ? "View existing draft" : "Generate outreach"}
                         onClick={() => onNavigate("contact-detail", { contactId: c.id })}
                       >
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                        Draft
+                        {hasDraft ? "View Draft" : "Draft"}
                       </button>
                     </div>
                   </td>
@@ -600,11 +592,11 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
 
       <div className="contacts-cards">
         {sorted.length > 0 ? sorted.map(c => {
-          const v = VERIFICATION[c.verificationStatus] || VERIFICATION.unknown;
-          const statusKey = c.contactStatus || "not_contacted";
-          const s = STATUS[statusKey] || STATUS.not_contacted;
+          const v = getVerificationStyle(c.verificationStatus);
+          const s = getContactStatusStyle(c.contactStatus);
           const initials = getInitials(c.name);
           const isRecruiter = c.outreachBucket === "recruiter";
+          const hasDraft = !!c.generatedEmailMessage;
 
           return (
             <div key={c.id} className="contact-card" onClick={() => onNavigate("contact-detail", { contactId: c.id })}>
@@ -652,11 +644,11 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                   </a>
                 )}
                 <button
-                  className="gen-btn primary"
+                  className={`gen-btn ${hasDraft ? "secondary" : "primary"}`}
                   onClick={() => onNavigate("contact-detail", { contactId: c.id })}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                  Draft
+                  {hasDraft ? "View Draft" : "Draft"}
                 </button>
               </div>
             </div>
