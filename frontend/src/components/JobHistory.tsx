@@ -1,4 +1,4 @@
-import { Search, Filter, ChevronDown, MapPin, Users, Calendar, Plus, Building2, Archive, Clock, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
+import { Search, Filter, ChevronDown, MapPin, Users, Calendar, Plus, Building2, Archive, Clock, ArrowRight, CheckCircle, Loader2, Mail, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "../lib/queryClient";
@@ -22,7 +22,35 @@ interface JobSubmissionWithRecruiters {
     name: string | null;
     email: string | null;
     verificationStatus: string;
+    contactStatus: string | null;
   }>;
+}
+
+const JOB_STATUSES = [
+  { value: "saved", label: "Saved", color: "#6b7280", bg: "#f3f4f6", border: "#e5e7eb" },
+  { value: "applied", label: "Applied", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+  { value: "reaching_out", label: "Reaching Out", color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
+  { value: "in_conversation", label: "In Conversation", color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
+  { value: "interviewing", label: "Interviewing", color: "#059669", bg: "#ecfdf5", border: "#a7f3d0" },
+  { value: "closed", label: "Closed", color: "#9ca3af", bg: "#f9fafb", border: "#e5e7eb" },
+];
+
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  "not_contacted": "saved",
+  "email_sent": "reaching_out",
+  "awaiting_reply": "reaching_out",
+  "follow_up_needed": "reaching_out",
+  "interview_scheduled": "interviewing",
+  "rejected": "closed",
+};
+
+function normalizeStatus(raw: string | null | undefined): string {
+  const s = raw || "saved";
+  return LEGACY_STATUS_MAP[s] || (JOB_STATUSES.some(js => js.value === s) ? s : "saved");
+}
+
+function getStatusConfig(value: string) {
+  return JOB_STATUSES.find(s => s.value === value) || JOB_STATUSES[0];
 }
 
 export function JobHistory({ onNavigate }: JobHistoryProps) {
@@ -37,12 +65,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const statusBackendMap: Record<string, string> = {
-        "Not Contacted": "not_contacted",
-        "Reached Out": "email_sent",
-        "Responded": "interview_scheduled",
-      };
-      return await apiRequest("PATCH", `/api/submissions/${id}`, { status: statusBackendMap[status] || status });
+      return await apiRequest("PATCH", `/api/submissions/${id}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
@@ -52,28 +75,29 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
 
   const jobs = submissions.map((sub) => {
     const validContacts = sub.recruiters.filter(
-      (r: any) => r.verificationStatus === "valid"
+      (r) => r.verificationStatus === "valid"
     ).length;
-    
-    const statusMap: Record<string, string> = {
-      "not_contacted": "Not Contacted",
-      "email_sent": "Reached Out",
-      "awaiting_reply": "Reached Out",
-      "follow_up_needed": "Reached Out",
-      "rejected": "Responded",
-      "interview_scheduled": "Responded",
-    };
+
+    const emailedCount = sub.recruiters.filter(
+      (r) => r.contactStatus && r.contactStatus !== "not_contacted"
+    ).length;
+
+    const repliedCount = sub.recruiters.filter(
+      (r) => r.contactStatus && ["replied", "interview_scheduled"].includes(r.contactStatus)
+    ).length;
+
+    const normalizedStatus = normalizeStatus(sub.status);
 
     return {
       id: sub.id,
       title: sub.jobTitle || "Unknown Position",
       company: sub.companyName || "Unknown Company",
       location: "Remote",
-      status: statusMap[sub.status || "not_contacted"] || "Not Contacted",
-      statusColor: sub.status === "interview_scheduled" || sub.status === "rejected" ? "green" : 
-                   sub.status === "email_sent" || sub.status === "awaiting_reply" ? "yellow" : "gray",
+      status: normalizedStatus,
       contactsFound: sub.recruiters.length,
       contactsValid: validContacts,
+      emailedCount,
+      repliedCount,
       date: (() => {
         try {
           const d = new Date(sub.submittedAt);
@@ -90,27 +114,6 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
       archived: sub.isArchived === "true",
     };
   });
-
-  const statusConfig = {
-    "Not Contacted": { 
-      bg: "bg-gray-50", 
-      text: "text-gray-700", 
-      border: "border-gray-200",
-      dot: "bg-gray-400" 
-    },
-    "Reached Out": { 
-      bg: "bg-yellow-50", 
-      text: "text-yellow-700", 
-      border: "border-yellow-200",
-      dot: "bg-yellow-500" 
-    },
-    "Responded": { 
-      bg: "bg-green-50", 
-      text: "text-green-700", 
-      border: "border-green-200",
-      dot: "bg-green-500" 
-    },
-  };
 
   const filteredJobs = jobs.filter((job) => {
     const matchesFilter = activeFilter === "all" || job.status === activeFilter;
@@ -129,7 +132,10 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
     updateStatusMutation.mutate({ id: jobId, status: newStatus });
   };
 
-  const statusOptions = ["Not Contacted", "Reached Out", "Responded"];
+  const filterPills = [
+    { value: "all", label: "All Jobs" },
+    ...JOB_STATUSES.map(s => ({ value: s.value, label: s.label })),
+  ];
 
   if (isLoading) {
     return (
@@ -215,50 +221,20 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
 
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-[#718096]">Status:</span>
-          <button
-            onClick={() => setActiveFilter("all")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              activeFilter === "all"
-                ? "bg-[#6B46C1] text-white"
-                : "bg-white border border-[#E2E8F0] text-[#718096] hover:border-[#6B46C1]"
-            }`}
-            data-testid="filter-all"
-          >
-            All Jobs
-          </button>
-          <button
-            onClick={() => setActiveFilter("Not Contacted")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              activeFilter === "Not Contacted"
-                ? "bg-[#6B46C1] text-white"
-                : "bg-white border border-[#E2E8F0] text-[#718096] hover:border-[#6B46C1]"
-            }`}
-            data-testid="filter-not-contacted"
-          >
-            Not Contacted
-          </button>
-          <button
-            onClick={() => setActiveFilter("Reached Out")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              activeFilter === "Reached Out"
-                ? "bg-[#6B46C1] text-white"
-                : "bg-white border border-[#E2E8F0] text-[#718096] hover:border-[#6B46C1]"
-            }`}
-            data-testid="filter-reached-out"
-          >
-            Reached Out
-          </button>
-          <button
-            onClick={() => setActiveFilter("Responded")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              activeFilter === "Responded"
-                ? "bg-[#6B46C1] text-white"
-                : "bg-white border border-[#E2E8F0] text-[#718096] hover:border-[#6B46C1]"
-            }`}
-            data-testid="filter-responded"
-          >
-            Responded
-          </button>
+          {filterPills.map(pill => (
+            <button
+              key={pill.value}
+              onClick={() => setActiveFilter(pill.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                activeFilter === pill.value
+                  ? "bg-[#6B46C1] text-white"
+                  : "bg-white border border-[#E2E8F0] text-[#718096] hover:border-[#6B46C1]"
+              }`}
+              data-testid={`filter-${pill.value}`}
+            >
+              {pill.label}
+            </button>
+          ))}
           
           <div className="flex-1"></div>
           
@@ -284,7 +260,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
       {/* Job Cards */}
       <div className="space-y-3">
         {filteredJobs.map((job) => {
-          const colors = statusConfig[job.status as keyof typeof statusConfig];
+          const cfg = getStatusConfig(job.status);
           const validRate = job.contactsFound > 0 ? Math.round((job.contactsValid / job.contactsFound) * 100) : 0;
           
           return (
@@ -303,10 +279,37 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                           <Building2 className="w-3.5 h-3.5" />
                           {job.company}
                         </span>
-                        <span>•</span>
+                        <span>·</span>
                         <span>{job.location}</span>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-sm text-[#718096] mt-2 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" />
+                      {job.contactsFound} Contacts
+                    </span>
+                    <span>·</span>
+                    <span>{job.contactsValid} Verified</span>
+                    {job.emailedCount > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="flex items-center gap-1 text-[#d97706]">
+                          <Mail className="w-3.5 h-3.5" />
+                          {job.emailedCount} Emailed
+                        </span>
+                      </>
+                    )}
+                    {job.repliedCount > 0 && (
+                      <>
+                        <span>·</span>
+                        <span className="flex items-center gap-1 text-[#059669]">
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          {job.repliedCount} Replied
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {job.notes && (
@@ -316,51 +319,34 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-6 text-sm">
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-[#1A202C]">{job.contactsFound}</div>
-                    <div className="text-xs text-[#718096]">Contacts</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-green-600">{job.contactsValid}</div>
-                    <div className="text-xs text-[#718096]">Verified</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-[#6B46C1]">{validRate}%</div>
-                    <div className="text-xs text-[#718096]">Valid Rate</div>
-                  </div>
-                </div>
-
                 <div className="flex flex-col gap-3 lg:items-end">
                   <div className="relative">
                     <button
                       onClick={() => setOpenStatusDropdown(openStatusDropdown === job.id ? null : job.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border ${colors.bg} ${colors.text} ${colors.border} w-fit hover:opacity-80 transition-opacity`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border w-fit hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.border }}
                       data-testid={`status-dropdown-${job.id}`}
                     >
-                      <span className={`w-2 h-2 rounded-full ${colors.dot}`}></span>
-                      {job.status}
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }}></span>
+                      {cfg.label}
                       <ChevronDown className="w-3.5 h-3.5 ml-1" />
                     </button>
 
                     {openStatusDropdown === job.id && (
-                      <div className="absolute top-full mt-1 right-0 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 z-10 min-w-[160px]">
-                        {statusOptions.map((status) => {
-                          const statusStyle = statusConfig[status as keyof typeof statusConfig];
-                          return (
-                            <button
-                              key={status}
-                              onClick={() => handleStatusChange(job.id, status)}
-                              className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors flex items-center gap-2 ${
-                                job.status === status ? "bg-purple-50" : ""
-                              }`}
-                              data-testid={`status-option-${status}`}
-                            >
-                              <span className={`w-2 h-2 rounded-full ${statusStyle.dot}`}></span>
-                              {status}
-                            </button>
-                          );
-                        })}
+                      <div className="absolute top-full mt-1 right-0 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 z-10 min-w-[180px]">
+                        {JOB_STATUSES.map((s) => (
+                          <button
+                            key={s.value}
+                            onClick={() => handleStatusChange(job.id, s.value)}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors flex items-center gap-2 ${
+                              job.status === s.value ? "bg-purple-50" : ""
+                            }`}
+                            data-testid={`status-option-${s.value}`}
+                          >
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }}></span>
+                            {s.label}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>

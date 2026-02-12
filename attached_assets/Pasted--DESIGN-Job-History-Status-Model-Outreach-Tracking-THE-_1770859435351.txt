@@ -1,0 +1,99 @@
+# DESIGN: Job History Status Model & Outreach Tracking
+
+## THE PROBLEM
+
+The Job History page currently has a status dropdown per job card with three options:
+- Not Contacted
+- Reached Out
+- Responded
+
+These are outreach statuses, but they're applied at the JOB level — not the contact level. A user might email 3 out of 12 contacts at the same company. The current model can't express "I emailed the recruiter but not the hiring manager yet."
+
+Additionally, these statuses don't reflect the actual JOB SEARCH workflow. A job seeker's relationship with a job posting goes through stages like: saved → applied → reached out → interviewing → offered → accepted/rejected.
+
+## THE FIX
+
+### New Job-Level Statuses
+Replace the current 3 statuses with these 6 that reflect the job search lifecycle:
+
+```
+Saved          → Just ingested, haven't done anything yet (default)
+Applied        → Submitted formal application through ATS/website
+Reaching Out   → Currently contacting people at this company
+In Conversation → Got a reply from someone, active dialogue
+Interviewing   → Have an interview scheduled or in process
+Closed         → Final state (got offer, rejected, or withdrew)
+```
+
+Update the status dropdown on job cards AND on the Job Details page to use these.
+
+**Database change:** The `status` column on `job_submissions` already accepts varchar. Just change the frontend dropdown options. The old values ("not_contacted", "email_sent", etc.) should map:
+- "not_contacted" → "saved"
+- "email_sent" → "reaching_out"
+- "awaiting_reply" → "reaching_out"
+- "interview_scheduled" → "interviewing"
+- "rejected" → "closed"
+
+### Add Outreach Summary to Job Cards
+
+Currently each job card shows: Contacts count, Verified count, Valid Rate.
+
+Add an outreach summary line:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Senior Product Manager - PLG                                        │
+│  🏢 Quickbase · 📍 Remote                                           │
+│                                                                      │
+│  12 Contacts  ·  0 Verified  ·  3 Emailed  ·  1 Replied             │
+│                                                                      │
+│  Status: [Reaching Out ▾]                     ⏱ 28 days ago         │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+The "3 Emailed" and "1 Replied" counts come from counting `recruiter_contacts` for this job submission where `contact_status` is not "not_contacted".
+
+### Implementation
+
+**Frontend changes only for the status dropdown:**
+
+In `frontend/src/components/JobHistory.tsx` (or wherever the job cards are rendered):
+
+```typescript
+const JOB_STATUSES = [
+  { value: 'saved', label: 'Saved', color: '#6b7280' },
+  { value: 'applied', label: 'Applied', color: '#2563eb' },
+  { value: 'reaching_out', label: 'Reaching Out', color: '#d97706' },
+  { value: 'in_conversation', label: 'In Conversation', color: '#7c3aed' },
+  { value: 'interviewing', label: 'Interviewing', color: '#059669' },
+  { value: 'closed', label: 'Closed', color: '#9ca3af' },
+];
+```
+
+**For the outreach summary counts:**
+
+The GET /api/submissions endpoint already returns nested `recruiters` array. Count contact statuses on the frontend:
+
+```typescript
+const emailedCount = submission.recruiters.filter(
+  r => r.contactStatus !== 'not_contacted'
+).length;
+const repliedCount = submission.recruiters.filter(
+  r => ['replied', 'in_conversation', 'interview_scheduled'].includes(r.contactStatus)
+).length;
+```
+
+## Filter Pills Update
+
+The Job History page filter pills should also update:
+
+```
+Status: [All Jobs] [Saved] [Applied] [Reaching Out] [In Conversation] [Interviewing] [Closed]
+```
+
+And keep the "Archived" toggle separate.
+
+## DO NOT
+- Do NOT change the database schema — the status column is varchar, any string works
+- Do NOT change the contact-level statuses — those remain separate (not_contacted, email_sent, etc.)
+- Do NOT remove the Contacts/Verified/Valid Rate metrics — just add the outreach counts alongside them

@@ -50,15 +50,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const verificationRate = totalContacts > 0 ? Math.round((verifiedEmails / totalContacts) * 100) : 0;
 
   const totalJobs = submissions.length;
+
+  const LEGACY_STATUS_MAP: Record<string, string> = {
+    "not_contacted": "saved",
+    "email_sent": "reaching_out",
+    "awaiting_reply": "reaching_out",
+    "follow_up_needed": "reaching_out",
+    "interview_scheduled": "interviewing",
+    "rejected": "closed",
+  };
+  const normalizeStatus = (raw: string) => LEGACY_STATUS_MAP[raw] || raw;
+
   const statusCounts = submissions.reduce(
     (acc, sub) => {
-      const status = (sub as any).status || "not_contacted";
-      if (status === "not_contacted") acc.notContacted++;
-      else if (status === "email_sent" || status === "awaiting_reply" || status === "follow_up_needed") acc.reachedOut++;
-      else acc.responded++;
+      const status = normalizeStatus((sub as any).status || "saved");
+      if (status === "saved") acc.saved++;
+      else if (status === "applied") acc.applied++;
+      else if (status === "reaching_out") acc.reachingOut++;
+      else if (status === "in_conversation") acc.inConversation++;
+      else if (status === "interviewing") acc.interviewing++;
+      else if (status === "closed") acc.closed++;
+      else acc.saved++;
       return acc;
     },
-    { notContacted: 0, reachedOut: 0, responded: 0 }
+    { saved: 0, applied: 0, reachingOut: 0, inConversation: 0, interviewing: 0, closed: 0 }
   );
 
   if (isLoading) {
@@ -174,16 +189,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748B]">Not contacted</span>
-              <span className="text-[#0F172A] font-medium">{statusCounts.notContacted}</span>
+              <span className="text-[#64748B]">Saved</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.saved}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748B]">Reached out</span>
-              <span className="text-[#0F172A] font-medium">{statusCounts.reachedOut}</span>
+              <span className="text-[#64748B]">Applied</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.applied}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[#64748B]">Responded</span>
-              <span className="text-[#0F172A] font-medium">{statusCounts.responded}</span>
+              <span className="text-[#64748B]">Reaching out</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.reachingOut}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#64748B]">In conversation</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.inConversation}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#64748B]">Interviewing</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.interviewing}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#64748B]">Closed</span>
+              <span className="text-[#0F172A] font-medium">{statusCounts.closed}</span>
             </div>
           </div>
         </div>

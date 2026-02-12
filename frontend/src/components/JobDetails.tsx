@@ -675,12 +675,24 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
   const selectedContactData = selectedContact ? allContacts.find(c => c.id === selectedContact) : null;
 
+  const LEGACY_STATUS_MAP: Record<string, string> = {
+    "not_contacted": "saved",
+    "email_sent": "reaching_out",
+    "awaiting_reply": "reaching_out",
+    "follow_up_needed": "reaching_out",
+    "interview_scheduled": "interviewing",
+    "rejected": "closed",
+  };
   const statusOptions = [
-    { display: "Not Contacted", value: "not_contacted", dot: "#9ca3af", bg: "#f3f4f6", color: "#6b7280" },
-    { display: "Reached Out", value: "email_sent", dot: "#f59e0b", bg: "#fffbeb", color: "#d97706" },
-    { display: "Responded", value: "interview_scheduled", dot: "#10b981", bg: "#ecfdf5", color: "#059669" },
+    { display: "Saved", value: "saved", dot: "#6b7280", bg: "#f3f4f6", color: "#6b7280" },
+    { display: "Applied", value: "applied", dot: "#2563eb", bg: "#eff6ff", color: "#2563eb" },
+    { display: "Reaching Out", value: "reaching_out", dot: "#d97706", bg: "#fffbeb", color: "#d97706" },
+    { display: "In Conversation", value: "in_conversation", dot: "#7c3aed", bg: "#f5f3ff", color: "#7c3aed" },
+    { display: "Interviewing", value: "interviewing", dot: "#059669", bg: "#ecfdf5", color: "#059669" },
+    { display: "Closed", value: "closed", dot: "#9ca3af", bg: "#f9fafb", color: "#9ca3af" },
   ];
-  const currentStatusOpt = statusOptions.find(s => s.value === submission.status) || statusOptions[0];
+  const normalizedStatus = LEGACY_STATUS_MAP[submission.status] || (statusOptions.some(s => s.value === submission.status) ? submission.status : "saved");
+  const currentStatusOpt = statusOptions.find(s => s.value === normalizedStatus) || statusOptions[0];
 
   const companyWebsite = submission.companyDomain
     ? `https://${submission.companyDomain.replace(/^https?:\/\//, "")}`
