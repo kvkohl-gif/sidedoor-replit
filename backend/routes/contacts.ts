@@ -83,6 +83,78 @@ export function registerContactRoutes(app: Express) {
     }
   });
 
+  // Get single contact by ID
+  app.get("/api/contacts/:id", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const contactId = parseInt(req.params.id);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+
+      const { data: contact, error: fetchError } = await supabase
+        .from('recruiter_contacts')
+        .select(`
+          *,
+          job_submissions!inner (
+            id,
+            job_title,
+            company_name,
+            user_id
+          )
+        `)
+        .eq('id', contactId)
+        .single();
+
+      if (fetchError || !contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      const jobSubmission = Array.isArray(contact.job_submissions)
+        ? contact.job_submissions[0]
+        : contact.job_submissions;
+      if (!jobSubmission || jobSubmission.user_id !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json({
+        id: contact.id,
+        jobSubmissionId: contact.job_submission_id,
+        name: contact.name,
+        title: contact.title,
+        email: contact.email,
+        linkedinUrl: contact.linkedin_url,
+        department: contact.department,
+        seniority: contact.seniority,
+        source: contact.source,
+        sourcePlatform: contact.source_platform,
+        confidenceScore: contact.confidence_score,
+        recruiterConfidence: contact.recruiter_confidence,
+        emailVerified: contact.email_verified,
+        verificationStatus: contact.verification_status,
+        verificationData: contact.verification_data,
+        apolloId: contact.apollo_id,
+        suggestedEmail: contact.suggested_email,
+        emailSuggestionReasoning: contact.email_suggestion_reasoning,
+        contactStatus: contact.contact_status,
+        lastContactedAt: contact.last_contacted_at,
+        notes: contact.notes,
+        outreachBucket: contact.outreach_bucket,
+        emailDraft: contact.email_draft,
+        linkedinMessage: contact.linkedin_message,
+        generatedEmailMessage: contact.generated_email_message,
+        generatedLinkedInMessage: contact.generated_linkedin_message,
+        createdAt: contact.created_at,
+        jobTitle: jobSubmission.job_title,
+        companyName: jobSubmission.company_name,
+      });
+    } catch (error) {
+      console.error("Error fetching contact:", error);
+      res.status(500).json({ message: "Failed to fetch contact" });
+    }
+  });
+
   // Update contact
   app.patch("/api/contacts/:id", requireAuth, async (req: any, res) => {
     try {
