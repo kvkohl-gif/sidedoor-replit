@@ -24,11 +24,12 @@ export function log(message: string, source = "express") {
 
 export async function setupVite(app: Express, server: Server) {
   // Dynamic imports for dev-only dependencies to avoid bundling issues
-  const { createServer as createViteServer, createLogger } = await import("vite");
+  const viteModule = await import("vite");
+  const createViteServer = viteModule.createServer;
+  const viteLogger = viteModule.createLogger();
   const viteConfig = (await import("../vite.config")).default;
-  const { nanoid } = await import("nanoid");
-
-  const viteLogger = createLogger();
+  const nanoidModule = await import("nanoid");
+  const nanoid = nanoidModule.nanoid;
 
   const serverOptions = {
     middlewareMode: true,
