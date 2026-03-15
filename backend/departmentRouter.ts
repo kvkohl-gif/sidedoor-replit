@@ -2,7 +2,9 @@ import OpenAI from "openai";
 import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
 import { classifyJobRole } from "./roleTaxonomyService";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI() { if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "dummy" }); return _openai; }
+const openai = new Proxy({} as OpenAI, { get(_, p) { return (getOpenAI() as any)[p]; } });
 
 export type DeptId = 'product' | 'engineering' | 'design' | 'data' | 'it' | 'marketing' | 'sales' | 'customer_success' | 'operations' | 'people' | 'finance' | 'legal';
 

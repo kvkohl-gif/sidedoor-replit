@@ -2,9 +2,21 @@ import OpenAI from "openai";
 import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
 import { classifyJobRole } from "./roleTaxonomyService";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY
+// Lazy-init: allow app to start without OPENAI_API_KEY (AI features will be unavailable)
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured. AI features are unavailable.");
+    }
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
+const openai = new Proxy({} as OpenAI, {
+  get(_, prop) {
+    return (getOpenAI() as any)[prop];
+  }
 });
 
 export interface JobDataExtraction {

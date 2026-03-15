@@ -2,7 +2,9 @@ import type { Express, Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI() { if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "dummy" }); return _openai; }
+const openai = new Proxy({} as OpenAI, { get(_, p) { return (getOpenAI() as any)[p]; } });
 
 function requireAuth(req: Request, res: Response, next: () => void) {
   if (!req.user) return res.status(401).json({ error: "Not authenticated" });
