@@ -7,7 +7,12 @@ import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// In dev, __dirname is backend/, so ".." goes to project root.
+// In production (bundled), use process.cwd() which IS the project root,
+// so we override the ".." pattern by pointing one level deeper.
+const __dirname = process.env.NODE_ENV === "production"
+  ? path.join(process.cwd(), "backend")
+  : path.dirname(fileURLToPath(import.meta.url));
 
 const viteLogger = createLogger();
 
