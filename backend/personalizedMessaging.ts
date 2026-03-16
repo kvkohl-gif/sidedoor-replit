@@ -7,6 +7,15 @@ interface MessageGenerationParams {
   jobTitle: string;
   jobDescription: string;
   recruiterEmail?: string | null;
+  // Outreach profile fields for personalization
+  userBio?: string;
+  userAchievements?: string[];
+  userStoryHooks?: string[];
+  userCareerGoals?: string;
+  voiceFormality?: number;
+  voiceDirectness?: number;
+  voiceLength?: number;
+  voiceNotes?: string;
 }
 
 interface GeneratedMessages {
@@ -16,45 +25,61 @@ interface GeneratedMessages {
 }
 
 export async function generatePersonalizedMessages(params: MessageGenerationParams): Promise<GeneratedMessages> {
-  const prompt = `
-Generate personalized outreach messages for a job seeker contacting a recruiter. Create both an email and LinkedIn message that are professional, engaging, and tailored to the specific context.
+  // Build voice instruction from slider values
+  const voiceInstruction = [
+    (params.voiceFormality ?? 0.5) < 0.3 ? 'Casual, conversational tone.' : (params.voiceFormality ?? 0.5) > 0.7 ? 'Formal, polished tone.' : '',
+    (params.voiceDirectness ?? 0.5) > 0.7 ? 'Direct — get to the point fast.' : (params.voiceDirectness ?? 0.5) < 0.3 ? 'Warm — build rapport before the ask.' : '',
+    (params.voiceLength ?? 0.3) > 0.6 ? 'Full length with detail.' : (params.voiceLength ?? 0.3) < 0.2 ? 'Extremely brief.' : 'Concise.',
+    params.voiceNotes ? `Voice notes: ${params.voiceNotes}` : ''
+  ].filter(Boolean).join(' ');
 
-Context:
+  // Build profile context block
+  const profileLines = [
+    params.userBio ? `About the sender: ${params.userBio}` : '',
+    params.userAchievements?.length ? `Key achievements:\n${params.userAchievements.slice(0, 3).map(a => `- ${a}`).join('\n')}` : '',
+    params.userStoryHooks?.length ? `Personal hooks for rapport: ${params.userStoryHooks.slice(0, 2).join('; ')}` : '',
+    params.userCareerGoals ? `Career direction: ${params.userCareerGoals}` : ''
+  ].filter(Boolean).join('\n\n');
+
+  const firstName = params.recruiterName.split(' ')[0];
+
+  const prompt = `Generate outreach messages for a job seeker. Return JSON with emailSubject, emailContent, linkedinContent.
+
+TARGET:
 - Recruiter: ${params.recruiterName} (${params.recruiterTitle})
 - Company: ${params.companyName}
-- Job Position: ${params.jobTitle}
-- Recruiter Email: ${params.recruiterEmail || "Not provided"}
+- Job: ${params.jobTitle}
 
-Job Description Summary:
-${params.jobDescription.slice(0, 1000)}...
+JOB DESCRIPTION (first 800 chars):
+${params.jobDescription.slice(0, 800)}
 
-Requirements:
-1. EMAIL: Create a complete email with subject line and body (300-400 words max)
-   - Professional tone but warm and engaging
-   - Personalized to the recruiter and role
-   - Highlight relevant skills/experience
-   - Clear call-to-action
-   - Include a compelling subject line
+${profileLines ? `SENDER PROFILE:\n${profileLines}` : '(No profile available — write generic but still authentic messages)'}
 
-2. LINKEDIN: Create a LinkedIn message (250 words max)
-   - Conversational but professional
-   - Shorter and more direct than email
-   - Reference mutual connection to the company/role
-   - Easy to respond to
+${voiceInstruction ? `VOICE: ${voiceInstruction}` : ''}
 
-Output format (JSON):
+EMAIL RULES (3 paragraphs, 75-125 words total):
+1. Personal hook — reference something specific about ${params.companyName}, the role, or use a story hook. NO "I hope this email finds you well."
+2. Value match — 1-2 specific experiences/achievements that map to this role. Not a resume dump.
+3. Soft CTA — "Would love to chat" not "Please review my resume."
+- Greeting: "Hi ${firstName},"
+- Sign off: "Best,\\n[Your Name]"
+- Subject line: under 7 words, specific to role/company. No "Regarding" or "Re:" prefix.
+
+LINKEDIN RULES (under 200 characters):
+- One conversational sentence + question
+- Reference something specific
+- Make it easy to say yes
+
+OUTPUT (JSON):
 {
-  "emailSubject": "Subject line for the email",
-  "emailContent": "Full email body content",
-  "linkedinContent": "LinkedIn message content"
-}
-
-Important: Make messages genuine and personal, not generic templates. Reference specific aspects of the role or company when possible.
-`;
+  "emailSubject": "...",
+  "emailContent": "...",
+  "linkedinContent": "..."
+}`;
 
   try {
     const raw = await callClaude({
-      system: "You are an expert career coach and professional writer who creates compelling, personalized outreach messages for job seekers. Your messages are authentic, engaging, and result in high response rates.",
+      system: "You write authentic cold outreach that sounds human, not templated. Every message has something specific. You never use cliches like 'I hope this finds you well', 'I am writing to express', or 'exciting opportunity'. Your emails consistently get responses because they feel personal and genuine.",
       user: prompt,
       jsonMode: true,
       temperature: 0.7,
@@ -64,18 +89,17 @@ Important: Make messages genuine and personal, not generic templates. Reference 
     const result = JSON.parse(raw);
 
     return {
-      emailSubject: result.emailSubject || "Interested in discussing the " + params.jobTitle + " role",
+      emailSubject: result.emailSubject || `${params.jobTitle} at ${params.companyName}`,
       emailContent: result.emailContent || "Generated content not available",
       linkedinContent: result.linkedinContent || "Generated content not available"
     };
   } catch (error) {
     console.error("Error generating personalized messages:", error);
 
-    // Fallback messages
     return {
-      emailSubject: `Interested in the ${params.jobTitle} position at ${params.companyName}`,
-      emailContent: `Hi ${params.recruiterName},\n\nI hope this email finds you well. I came across the ${params.jobTitle} position at ${params.companyName} and I'm very interested in learning more about this opportunity.\n\nI'd love to discuss how my background and experience could contribute to your team. Would you be available for a brief conversation about this role?\n\nThank you for your time and consideration.\n\nBest regards`,
-      linkedinContent: `Hi ${params.recruiterName}, I saw the ${params.jobTitle} opening at ${params.companyName} and I'm very interested. Would you be open to a brief conversation about this opportunity?`
+      emailSubject: `${params.jobTitle} at ${params.companyName}`,
+      emailContent: `Hi ${firstName},\n\nI came across the ${params.jobTitle} role at ${params.companyName} and it caught my attention. I'd love to learn more about the team and how my background could be a fit.\n\nWould you be open to a brief conversation?\n\nBest,\n[Your Name]`,
+      linkedinContent: `Hi ${firstName}, saw the ${params.jobTitle} role at ${params.companyName} — would love to chat about it. Open to connecting?`
     };
   }
 }
