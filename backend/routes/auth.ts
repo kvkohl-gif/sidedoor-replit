@@ -67,7 +67,7 @@ router.post("/register", async (req: Request, res: Response) => {
     res.cookie("session_id", sessionId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
@@ -92,7 +92,12 @@ router.post("/login", async (req: Request, res: Response) => {
       .select("id, password_hash")
       .eq("email", email);
 
-    if (fetchError || !users || users.length === 0) {
+    if (fetchError) {
+      console.error("Login DB error:", fetchError);
+      return res.status(500).json({ error: "Service temporarily unavailable. Please try again." });
+    }
+
+    if (!users || users.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -126,7 +131,7 @@ router.post("/login", async (req: Request, res: Response) => {
     res.cookie("session_id", sessionId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
