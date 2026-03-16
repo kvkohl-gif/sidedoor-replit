@@ -1,8 +1,4 @@
-import OpenAI from "openai";
-
-let _openai: OpenAI | null = null;
-function getOpenAI() { if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "dummy" }); return _openai; }
-const openai = new Proxy({} as OpenAI, { get(_, p) { return (getOpenAI() as any)[p]; } });
+import { callClaude } from "./claude";
 
 export interface EmailSuggestion {
   name: string;
@@ -28,11 +24,11 @@ export async function analyzeEmailPatterns(
 ): Promise<PatternAnalysisResult> {
   try {
     // Separate verified and risky contacts
-    const verifiedContacts = contacts.filter(c => 
+    const verifiedContacts = contacts.filter(c =>
       c.emailVerified && c.verificationStatus === "valid"
     );
-    
-    const riskyContacts = contacts.filter(c => 
+
+    const riskyContacts = contacts.filter(c =>
       !c.emailVerified || c.verificationStatus === "risky" || c.verificationStatus === "catchall"
     );
 
@@ -45,53 +41,44 @@ export async function analyzeEmailPatterns(
     }
 
     // Prepare the prompt
-    const verifiedSection = verifiedContacts.length > 0 
+    const verifiedSection = verifiedContacts.length > 0
       ? `Verified:\n${verifiedContacts.map(c => `- ${c.name}: ${c.email} (Verified)`).join('\n')}\n\n`
       : "No verified emails available.\n\n";
 
-    const riskySection = `Risky:\n${riskyContacts.map(c => 
+    const riskySection = `Risky:\n${riskyContacts.map(c =>
       `- ${c.name}: ${c.email} (${c.verificationStatus || 'Risky'})`
     ).join('\n')}\n\n`;
 
     const prompt = `Here are recruiter contacts for ${companyDomain}:
 
-${verifiedSection}${riskySection}Please analyze the email patterns and suggest improvements for risky emails. Return a JSON array with this structure:
-[
-  {
-    "name": "Full Name",
-    "original_email": "original@company.com",
-    "suggested_email": "suggested@company.com",
-    "confidence_reasoning": "Explanation of why this suggestion is likely correct"
-  }
-]
+${verifiedSection}${riskySection}Please analyze the email patterns and suggest improvements for risky emails. Return a JSON object with this structure:
+{
+  "suggestions": [
+    {
+      "name": "Full Name",
+      "original_email": "original@company.com",
+      "suggested_email": "suggested@company.com",
+      "confidence_reasoning": "Explanation of why this suggestion is likely correct"
+    }
+  ]
+}
 
 Only suggest alternatives for risky emails. Base suggestions on verified patterns when available, or common professional email formats.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        {
-          role: "system",
-          content: "You are an intelligent assistant that evaluates and improves email contact data for job applicants. You identify patterns in verified email addresses and suggest alternatives when an email is marked 'risky' or unverifiable. Always return valid JSON."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3
+    const raw = await callClaude({
+      system: "You are an intelligent assistant that evaluates and improves email contact data for job applicants. You identify patterns in verified email addresses and suggest alternatives when an email is marked 'risky' or unverifiable. Always return valid JSON.",
+      user: prompt,
+      jsonMode: true,
+      temperature: 0.3,
     });
 
-    const aiResponse = response.choices[0].message.content;
-    
     // Parse the response
     let suggestions: EmailSuggestion[] = [];
     let parsedResponse;
-    
+
     try {
-      parsedResponse = JSON.parse(aiResponse || "{}");
-      
+      parsedResponse = JSON.parse(raw);
+
       // Handle both array and object responses
       if (Array.isArray(parsedResponse)) {
         suggestions = parsedResponse;
@@ -101,7 +88,7 @@ Only suggest alternatives for risky emails. Base suggestions on verified pattern
         suggestions = parsedResponse.emails;
       }
     } catch (parseError) {
-      console.error("Failed to parse OpenAI response:", parseError);
+      console.error("Failed to parse Claude response:", parseError);
       suggestions = [];
     }
 
@@ -111,7 +98,7 @@ Only suggest alternatives for risky emails. Base suggestions on verified pattern
       const email = verifiedContacts[0].email;
       const domain = email.split('@')[1];
       const localPart = email.split('@')[0];
-      
+
       if (localPart.includes('.')) {
         verifiedPattern = `first.last@${domain}`;
       } else if (localPart.includes('_')) {

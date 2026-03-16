@@ -1,8 +1,4 @@
-import OpenAI from "openai";
-
-let _openai: OpenAI | null = null;
-function getOpenAI() { if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "dummy" }); return _openai; }
-const openai = new Proxy({} as OpenAI, { get(_, p) { return (getOpenAI() as any)[p]; } });
+import { callClaude } from "./claude";
 
 interface MessageGenerationParams {
   recruiterName: string;
@@ -57,25 +53,16 @@ Important: Make messages genuine and personal, not generic templates. Reference 
 `;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert career coach and professional writer who creates compelling, personalized outreach messages for job seekers. Your messages are authentic, engaging, and result in high response rates."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: "You are an expert career coach and professional writer who creates compelling, personalized outreach messages for job seekers. Your messages are authentic, engaging, and result in high response rates.",
+      user: prompt,
+      jsonMode: true,
       temperature: 0.7,
-      max_tokens: 1500
+      maxTokens: 1500,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || '{}');
-    
+    const result = JSON.parse(raw);
+
     return {
       emailSubject: result.emailSubject || "Interested in discussing the " + params.jobTitle + " role",
       emailContent: result.emailContent || "Generated content not available",
@@ -83,7 +70,7 @@ Important: Make messages genuine and personal, not generic templates. Reference 
     };
   } catch (error) {
     console.error("Error generating personalized messages:", error);
-    
+
     // Fallback messages
     return {
       emailSubject: `Interested in the ${params.jobTitle} position at ${params.companyName}`,

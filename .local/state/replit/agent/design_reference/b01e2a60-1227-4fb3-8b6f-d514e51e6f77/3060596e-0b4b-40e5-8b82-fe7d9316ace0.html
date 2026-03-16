@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruiter Contact Finder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#64748b', 
+                        accent: '#10b981',
+                        neutral: '#f8fafc'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/heroicons@2.0.18/24/outline/index.js"></script>
+</head>
+<body class="bg-slate-50 font-sans">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-slate-900">Recruiter Contact Finder</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-slate-600 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium">
+                        Login
+                    </button>
+                    <button class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                        Sign Up
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Container -->
+    <div id="pageContainer">
+        
+        <!-- HOME PAGE -->
+        <div id="homePage" class="page-content">
+            <!-- Hero Section -->
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+                <div class="text-center">
+                    <h1 class="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">
+                        Find the right recruiter for any job instantly.
+                    </h1>
+                    <p class="text-xl text-slate-600 mb-12 max-w-2xl mx-auto">
+                        Paste a job description or URL and get recruiter contacts with personalized outreach messages powered by AI.
+                    </p>
+                </div>
+
+                <!-- Input Form -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                    <div class="space-y-6">
+                        <!-- Toggle Buttons -->
+                        <div class="flex bg-slate-100 p-1 rounded-lg w-fit mx-auto">
+                            <button id="textToggle" class="px-4 py-2 rounded-md text-sm font-medium bg-white text-slate-900 shadow-sm">
+                                Job Description
+                            </button>
+                            <button id="urlToggle" class="px-4 py-2 rounded-md text-sm font-medium text-slate-600 hover:text-slate-900">
+                                Job URL
+                            </button>
+                        </div>
+
+                        <!-- Text Input Area -->
+                        <div id="textInput" class="input-area">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">
+                                Paste Job Description
+                            </label>
+                            <textarea 
+                                placeholder="Paste the full job description here..."
+                                class="w-full h-48 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                                data-mock="true"
+                            ></textarea>
+                        </div>
+
+                        <!-- URL Input Area -->
+                        <div id="urlInput" class="input-area hidden">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">
+                                Job URL
+                            </label>
+                            <input 
+                                type="url" 
+                                placeholder="https://company.com/jobs/position"
+                                class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                data-mock="true"
+                            />
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="text-center">
+                            <button class="bg-primary text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition inline-flex items-center space-x-2">
+                                <span>Find Recruiters & Generate Messages</span>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Features Grid -->
+                <div class="grid md:grid-cols-3 gap-8 mt-20">
+                    <div class="text-center">
+                        <div class="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-900 mb-2">AI-Powered Search</h3>
+                        <p class="text-slate-600">Advanced AI extracts recruiter information and contact details from job postings.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-emerald-100 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-900 mb-2">Personalized Messages</h3>
+                        <p class="text-slate-600">Get tailored email and LinkedIn messages for effective outreach.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="bg-amber-100 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-900 mb-2">Track History</h3>
+                        <p class="text-slate-600">Keep track of all your searches and generated messages in your dashboard.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LOGIN PAGE -->
+        <div id="loginPage" class="page-content hidden">
+            <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+                <div class="max-w-md w-full space-y-8">
+                    <div>
+                        <h2 class="mt-6 text-center text-3xl font-bold text-slate-900">
+                            Sign in to your account
+                        </h2>
+                        <p class="mt-2 text-center text-sm text-slate-600">
+                            Or 
+                            <a href="#" class="font-medium text-primary hover:text-blue-700">
+                                create a new account
+                            </a>
+                        </p>
+                    </div>
+                    <form class="mt-8 space-y-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-slate-700">
+                                    Email address
+                                </label>
+                                <input 
+                                    id="email" 
+                                    name="email" 
+                                    type="email" 
+                                    required 
+                                    class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    placeholder="Enter your email"
+                                    data-mock="true"
+                                />
+                            </div>
+                            <div>
+                                <label for="password" class="block text-sm font-medium text-slate-700">
+                                    Password
+                                </label>
+                                <input 
+                                    id="password" 
+                                    name="password" 
+                                    type="password" 
+                                    required 
+                                    class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    placeholder="Enter your password"
+                                    data-mock="true"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <input id="remember" name="remember" type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                                <label for="remember" class="ml-2 block text-sm text-slate-900">
+                                    Remember me
+                                </label>
+                            </div>
+                            <div class="text-sm">
+                                <a href="#" class="font-medium text-primary hover:text-blue-700">
+                                    Forgot your password?
+                                </a>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition">
+                            Sign in
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD PAGE -->
+        <div id="dashboardPage" class="page-content hidden">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+                        <p class="text-slate-600">Your recruiter search history</p>
+                    </div>
+                    <button class="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition inline-flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        <span>New Search</span>
+                    </button>
+                </div>
+
+                <!-- Search History Cards -->
+                <div class="grid gap-6">
+                    <!-- @MAP: jobSubmissions.map(submission => ( -->
+                    <div class="bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold text-slate-900 mb-2" data-bind="submission.job_title">
+                                    Senior Software Engineer
+                                </h3>
+                                <p class="text-slate-600 mb-4" data-bind="submission.company_name">
+                                    TechCorp Inc.
+                                </p>
+                                <div class="flex items-center space-x-4 text-sm text-slate-500">
+                                    <span data-bind="submission.submitted_at">2 days ago</span>
+                                    <span>•</span>
+                                    <span data-bind="submission.recruiters.length">3 recruiters found</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    Complete
+                                </span>
+                                <button class="text-primary hover:text-blue-700 font-medium text-sm">
+                                    View Results
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold text-slate-900 mb-2" data-bind="submission.job_title">
+                                    Product Manager
+                                </h3>
+                                <p class="text-slate-600 mb-4" data-bind="submission.company_name">
+                                    StartupXYZ
+                                </p>
+                                <div class="flex items-center space-x-4 text-sm text-slate-500">
+                                    <span data-bind="submission.submitted_at">1 week ago</span>
+                                    <span>•</span>
+                                    <span data-bind="submission.recruiters.length">2 recruiters found</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    Complete
+                                </span>
+                                <button class="text-primary hover:text-blue-700 font-medium text-sm">
+                                    View Results
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold text-slate-900 mb-2" data-bind="submission.job_title">
+                                    Data Scientist
+                                </h3>
+                                <p class="text-slate-600 mb-4" data-bind="submission.company_name">
+                                    BigData Corp
+                                </p>
+                                <div class="flex items-center space-x-4 text-sm text-slate-500">
+                                    <span data-bind="submission.submitted_at">2 weeks ago</span>
+                                    <span>•</span>
+                                    <span data-bind="submission.recruiters.length">1 recruiter found</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    Complete
+                                </span>
+                                <button class="text-primary hover:text-blue-700 font-medium text-sm">
+                                    View Results
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP )) -->
+                </div>
+
+                <!-- Empty State (show when no submissions) -->
+                <div class="text-center py-12 hidden" id="emptyState">
+                    <svg class="w-16 h-16 text-slate-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-slate-900 mb-2">No searches yet</h3>
+                    <p class="text-slate-600 mb-6">Start by searching for recruiters using a job description or URL.</p>
+                    <button class="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
+                        Start First Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESULTS PAGE -->
+        <div id="resultsPage" class="page-content hidden">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Header -->
+                <div class="mb-8">
+                    <button class="text-primary hover:text-blue-700 font-medium text-sm mb-4 inline-flex items-center space-x-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        <span>Back to Dashboard</span>
+                    </button>
+                    <h1 class="text-2xl font-bold text-slate-900 mb-2" data-bind="jobSubmission.job_title">
+                        Senior Software Engineer
+                    </h1>
+                    <p class="text-slate-600" data-bind="jobSubmission.company_name">
+                        TechCorp Inc.
+                    </p>
+                </div>
+
+                <div class="grid lg:grid-cols-3 gap-8">
+                    <!-- Recruiters Column -->
+                    <div class="lg:col-span-2">
+                        <h2 class="text-xl font-semibold text-slate-900 mb-6">Recruiter Contacts</h2>
+                        
+                        <!-- @MAP: jobSubmission.recruiters.map(recruiter => ( -->
+                        <div class="bg-white rounded-lg border border-slate-200 p-6 mb-4">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-slate-900" data-bind="recruiter.name">
+                                        Sarah Johnson
+                                    </h3>
+                                    <p class="text-slate-600" data-bind="recruiter.title">
+                                        Senior Technical Recruiter
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-xs font-medium" data-bind="recruiter.confidence_score">
+                                        92% confidence
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span class="text-slate-700" data-bind="recruiter.email">sarah.johnson@techcorp.com</span>
+                                    <button class="text-xs text-primary hover:text-blue-700 ml-auto" data-event="click:copyEmail">
+                                        Copy
+                                    </button>
+                                </div>
+                                
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                    </svg>
+                                    <a href="#" class="text-primary hover:text-blue-700" data-bind="recruiter.linkedin_url">
+                                        LinkedIn Profile
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg border border-slate-200 p-6 mb-4">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-slate-900" data-bind="recruiter.name">
+                                        Mike Chen
+                                    </h3>
+                                    <p class="text-slate-600" data-bind="recruiter.title">
+                                        Talent Acquisition Lead
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-xs font-medium" data-bind="recruiter.confidence_score">
+                                        87% confidence
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span class="text-slate-700" data-bind="recruiter.email">mike.chen@techcorp.com</span>
+                                    <button class="text-xs text-primary hover:text-blue-700 ml-auto" data-event="click:copyEmail">
+                                        Copy
+                                    </button>
+                                </div>
+                                
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                    </svg>
+                                    <a href="#" class="text-primary hover:text-blue-700" data-bind="recruiter.linkedin_url">
+                                        LinkedIn Profile
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg border border-slate-200 p-6">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-slate-900" data-bind="recruiter.name">
+                                        Lisa Rodriguez
+                                    </h3>
+                                    <p class="text-slate-600" data-bind="recruiter.title">
+                                        Engineering Recruiter
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded-full text-xs font-medium" data-bind="recruiter.confidence_score">
+                                        74% confidence
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span class="text-slate-700" data-bind="recruiter.email">lisa.rodriguez@techcorp.com</span>
+                                    <button class="text-xs text-primary hover:text-blue-700 ml-auto" data-event="click:copyEmail">
+                                        Copy
+                                    </button>
+                                </div>
+                                
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                    </svg>
+                                    <a href="#" class="text-primary hover:text-blue-700" data-bind="recruiter.linkedin_url">
+                                        LinkedIn Profile
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- @END_MAP )) -->
+                    </div>
+
+                    <!-- Messages Column -->
+                    <div class="lg:col-span-1">
+                        <h2 class="text-xl font-semibold text-slate-900 mb-6">Generated Messages</h2>
+                        
+                        <!-- Email Draft -->
+                        <div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-slate-900">Email Draft</h3>
+                                <button class="text-primary hover:text-blue-700 text-sm font-medium inline-flex items-center space-x-1" data-event="click:copyToClipboard">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>Copy</span>
+                                </button>
+                            </div>
+                            <div class="bg-slate-50 rounded-lg p-4">
+                                <p class="text-sm text-slate-700 leading-relaxed" data-bind="jobSubmission.email_draft" data-mock="true">
+                                    Subject: Interested in Senior Software Engineer Position<br><br>
+                                    
+                                    Hi Sarah,<br><br>
+                                    
+                                    I hope this email finds you well. I recently came across the Senior Software Engineer position at TechCorp Inc. and I'm very excited about the opportunity to contribute to your team.<br><br>
+                                    
+                                    With my 5+ years of experience in full-stack development and expertise in React, Node.js, and cloud technologies, I believe I would be a strong fit for this role. I'm particularly drawn to TechCorp's innovative approach to solving complex technical challenges.<br><br>
+                                    
+                                    I would love to discuss how my skills and passion for technology could contribute to your team's success. Would you be available for a brief call this week?<br><br>
+                                    
+                                    Thank you for your time and consideration.<br><br>
+                                    
+                                    Best regards,<br>
+                                    [Your Name]
+                                </p>
+                            </div>
+                            <button class="mt-4 w-full text-primary hover:text-blue-700 text-sm font-medium border border-primary rounded-lg py-2 hover:bg-blue-50 transition">
+                                Edit Message
+                            </button>
+                        </div>
+
+                        <!-- LinkedIn Message -->
+                        <div class="bg-white rounded-lg border border-slate-200 p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-slate-900">LinkedIn Message</h3>
+                                <button class="text-primary hover:text-blue-700 text-sm font-medium inline-flex items-center space-x-1" data-event="click:copyToClipboard">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>Copy</span>
+                                </button>
+                            </div>
+                            <div class="bg-slate-50 rounded-lg p-4">
+                                <p class="text-sm text-slate-700 leading-relaxed" data-bind="jobSubmission.linkedin_message" data-mock="true">
+                                    Hi Sarah,<br><br>
+                                    
+                                    I noticed the Senior Software Engineer opening at TechCorp and I'm really interested in the role. Your background in technical recruiting and TechCorp's reputation for innovation caught my attention.<br><br>
+                                    
+                                    I have 5+ years in full-stack development with strong React and Node.js experience. I'd love to learn more about the team and discuss how I could contribute.<br><br>
+                                    
+                                    Would you be open to a quick chat about this opportunity?<br><br>
+                                    
+                                    Thanks!<br>
+                                    [Your Name]
+                                </p>
+                            </div>
+                            <button class="mt-4 w-full text-primary hover:text-blue-700 text-sm font-medium border border-primary rounded-lg py-2 hover:bg-blue-50 transition">
+                                Edit Message
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Simple page navigation for demo purposes
+        // TODO: Replace with proper routing in React implementation
+        (function() {
+            // Toggle between text and URL input
+            const textToggle = document.getElementById('textToggle');
+            const urlToggle = document.getElementById('urlToggle');
+            const textInput = document.getElementById('textInput');
+            const urlInput = document.getElementById('urlInput');
+
+            if (textToggle && urlToggle && textInput && urlInput) {
+                textToggle.addEventListener('click', () => {
+                    textToggle.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+                    textToggle.classList.remove('text-slate-600');
+                    urlToggle.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+                    urlToggle.classList.add('text-slate-600');
+                    textInput.classList.remove('hidden');
+                    urlInput.classList.add('hidden');
+                });
+
+                urlToggle.addEventListener('click', () => {
+                    urlToggle.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+                    urlToggle.classList.remove('text-slate-600');
+                    textToggle.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+                    textToggle.classList.add('text-slate-600');
+                    urlInput.classList.remove('hidden');
+                    textInput.classList.add('hidden');
+                });
+            }
+
+            // Copy to clipboard functionality
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('[data-event*="copyToClipboard"]')) {
+                    // TODO: Implement actual clipboard API integration
+                    const messageText = e.target.closest('.bg-white').querySelector('.bg-slate-50 p').textContent;
+                    console.log('Copy to clipboard:', messageText);
+                    
+                    // Visual feedback
+                    const button = e.target.closest('button');
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '<span class="text-accent">Copied!</span>';
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                    }, 2000);
+                }
+            });
+
+            // Show different pages for demo
+            // In real implementation, this would be handled by React Router
+            window.showPage = function(pageId) {
+                document.querySelectorAll('.page-content').forEach(page => {
+                    page.classList.add('hidden');
+                });
+                document.getElementById(pageId).classList.remove('hidden');
+            };
+
+            // Demo navigation
+            window.showDashboard = () => showPage('dashboardPage');
+            window.showResults = () => showPage('resultsPage');
+            window.showLogin = () => showPage('loginPage');
+            window.showHome = () => showPage('homePage');
+
+            // For demo purposes - uncomment to see different pages
+            // setTimeout(() => showPage('dashboardPage'), 1000);
+            // setTimeout(() => showPage('resultsPage'), 2000);
+        })();
+    </script>
+</body>
+</html>

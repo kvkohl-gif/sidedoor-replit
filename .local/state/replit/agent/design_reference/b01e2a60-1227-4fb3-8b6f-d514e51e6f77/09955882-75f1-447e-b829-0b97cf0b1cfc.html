@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruiter Contact Finder - Find the right recruiter instantly</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6366F1',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        error: '#EF4444',
+                    }
+                }
+            }
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="font-inter bg-gray-50 text-gray-900">
+    <!-- @COMPONENT: NavigationHeader -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-gray-900">
+                            <i class="fas fa-search-plus text-primary mr-2"></i>
+                            Recruiter Finder
+                        </h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#home" class="text-gray-900 hover:text-primary px-3 py-2 text-sm font-medium transition-colors">Home</a>
+                        <a href="#features" class="text-gray-500 hover:text-primary px-3 py-2 text-sm font-medium transition-colors">Features</a>
+                        <a href="#pricing" class="text-gray-500 hover:text-primary px-3 py-2 text-sm font-medium transition-colors">Pricing</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="loginBtn" class="text-gray-500 hover:text-primary text-sm font-medium transition-colors">Sign In</button>
+                    <button id="signupBtn" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors">Get Started</button>
+                    <!-- Logged in state (hidden by default) -->
+                    <div id="userMenu" class="hidden flex items-center space-x-4">
+                        <button id="dashboardBtn" class="text-gray-500 hover:text-primary text-sm font-medium transition-colors">Dashboard</button>
+                        <div class="relative">
+                            <button class="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors">
+                                <img class="w-8 h-8 rounded-full object-cover" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=100&h=100" alt="User profile" data-mock="true">
+                                <span data-bind="user.full_name" data-mock="true">John Doe</span>
+                                <i class="fas fa-chevron-down text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <!-- @END_COMPONENT: NavigationHeader -->
+
+    <!-- @COMPONENT: HomePage [default view] -->
+    <div id="homePage" class="min-h-screen">
+        <!-- Hero Section -->
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 py-20">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+                    Find the right recruiter for any job instantly
+                </h1>
+                <p class="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
+                    Paste any job description or URL and get AI-powered recruiter contacts, company insights, and personalized outreach messages in seconds.
+                </p>
+
+                <!-- Input Form -->
+                <div class="bg-white rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
+                    <div class="space-y-6">
+                        <!-- Tab Selection -->
+                        <div class="flex bg-gray-100 rounded-lg p-1">
+                            <button id="textTab" class="flex-1 py-2 px-4 text-sm font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all">
+                                <i class="fas fa-file-text mr-2"></i>Job Description
+                            </button>
+                            <button id="urlTab" class="flex-1 py-2 px-4 text-sm font-medium rounded-md text-gray-500 hover:text-gray-900 transition-all">
+                                <i class="fas fa-link mr-2"></i>Job URL
+                            </button>
+                        </div>
+
+                        <!-- Text Input -->
+                        <div id="textInput" class="space-y-4">
+                            <label class="block text-left text-sm font-medium text-gray-700">Paste the job description here</label>
+                            <textarea 
+                                placeholder="Paste the full job description here..."
+                                class="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                                data-mock="true"
+                            ></textarea>
+                        </div>
+
+                        <!-- URL Input -->
+                        <div id="urlInput" class="hidden space-y-4">
+                            <label class="block text-left text-sm font-medium text-gray-700">Job posting URL</label>
+                            <input 
+                                type="url"
+                                placeholder="https://company.com/careers/job-posting"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                data-mock="true"
+                            >
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button id="findRecruitersBtn" class="w-full bg-primary text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center justify-center" data-event="click:handleJobSubmission">
+                            <i class="fas fa-search mr-2"></i>
+                            Find Recruiters & Generate Messages
+                        </button>
+
+                        <!-- Loading State -->
+                        <div id="loadingState" class="hidden text-center py-4">
+                            <div class="inline-flex items-center">
+                                <i class="fas fa-spinner fa-spin text-primary mr-2"></i>
+                                <span class="text-gray-600">Analyzing job posting and finding recruiters...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Features Preview -->
+                <div class="mt-16 grid md:grid-cols-3 gap-8">
+                    <div class="text-center">
+                        <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-users text-primary text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-2">Find Key Contacts</h3>
+                        <p class="text-gray-600 text-sm">Get recruiter names, titles, emails, and LinkedIn profiles with confidence scores</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-envelope text-secondary text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-2">Personalized Messages</h3>
+                        <p class="text-gray-600 text-sm">AI-generated email and LinkedIn messages tailored to the specific role</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-history text-success text-xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-2">Track Everything</h3>
+                        <p class="text-gray-600 text-sm">Keep a history of all your searches and organize your outreach efforts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: HomePage -->
+
+    <!-- @COMPONENT: AuthModals -->
+    <!-- Login Modal -->
+    <div id="loginModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Welcome back</h2>
+                <p class="text-gray-600">Sign in to your account to continue</p>
+            </div>
+            <form class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter your email" data-mock="true">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter your password" data-mock="true">
+                </div>
+                <button type="submit" class="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors" data-event="click:handleLogin">
+                    Sign In
+                </button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-gray-600 text-sm">
+                    Don't have an account? 
+                    <button id="switchToSignup" class="text-primary hover:text-blue-600 font-medium">Sign up</button>
+                </p>
+            </div>
+            <button id="closeLoginModal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signupModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Create your account</h2>
+                <p class="text-gray-600">Start finding recruiters in seconds</p>
+            </div>
+            <form class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter your full name" data-mock="true">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter your email" data-mock="true">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Create a password" data-mock="true">
+                </div>
+                <button type="submit" class="w-full bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors" data-event="click:handleSignup">
+                    Create Account
+                </button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-gray-600 text-sm">
+                    Already have an account? 
+                    <button id="switchToLogin" class="text-primary hover:text-blue-600 font-medium">Sign in</button>
+                </p>
+            </div>
+            <button id="closeSignupModal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: AuthModals -->
+
+    <!-- @COMPONENT: Dashboard [logged in users] -->
+    <div id="dashboardPage" class="hidden min-h-screen py-8">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Dashboard Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">Your Dashboard</h1>
+                <p class="text-gray-600">Manage your job submissions and recruiter contacts</p>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-briefcase text-primary"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="stats.totalSubmissions" data-mock="true">12</p>
+                            <p class="text-gray-600 text-sm">Total Submissions</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-users text-secondary"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="stats.totalRecruiters" data-mock="true">34</p>
+                            <p class="text-gray-600 text-sm">Recruiters Found</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-success/10 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-envelope text-success"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900" data-bind="stats.messagesGenerated" data-mock="true">68</p>
+                            <p class="text-gray-600 text-sm">Messages Generated</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Submissions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Submissions</h2>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    <!-- @MAP: jobSubmissions.map(submission => ( -->
+                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" data-event="click:viewSubmission">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-medium text-gray-900" data-bind="submission.job_title" data-mock="true">Senior Software Engineer</h3>
+                                <p class="text-gray-600 text-sm" data-bind="submission.company_name" data-mock="true">TechCorp Inc.</p>
+                                <div class="flex items-center mt-2 space-x-4">
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-calendar mr-1"></i>
+                                        <span data-bind="submission.submitted_at" data-mock="true">2 days ago</span>
+                                    </span>
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-users mr-1"></i>
+                                        <span data-bind="submission.recruiters.length" data-mock="true">3</span> recruiters found
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                                    <i class="fas fa-check mr-1"></i>
+                                    Complete
+                                </span>
+                                <i class="fas fa-chevron-right text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" data-event="click:viewSubmission">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-medium text-gray-900" data-mock="true">Product Manager</h3>
+                                <p class="text-gray-600 text-sm" data-mock="true">StartupXYZ</p>
+                                <div class="flex items-center mt-2 space-x-4">
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-calendar mr-1"></i>
+                                        <span data-mock="true">1 week ago</span>
+                                    </span>
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-users mr-1"></i>
+                                        <span data-mock="true">2</span> recruiters found
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                                    <i class="fas fa-check mr-1"></i>
+                                    Complete
+                                </span>
+                                <i class="fas fa-chevron-right text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" data-event="click:viewSubmission">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-medium text-gray-900" data-mock="true">UX Designer</h3>
+                                <p class="text-gray-600 text-sm" data-mock="true">Design Studio Co.</p>
+                                <div class="flex items-center mt-2 space-x-4">
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-calendar mr-1"></i>
+                                        <span data-mock="true">2 weeks ago</span>
+                                    </span>
+                                    <span class="inline-flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-users mr-1"></i>
+                                        <span data-mock="true">1</span> recruiter found
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                                    <i class="fas fa-check mr-1"></i>
+                                    Complete
+                                </span>
+                                <i class="fas fa-chevron-right text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP )) -->
+                </div>
+            </div>
+
+            <!-- New Search Button -->
+            <div class="mt-8 text-center">
+                <button id="newSearchBtn" class="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors inline-flex items-center">
+                    <i class="fas fa-plus mr-2"></i>
+                    New Job Search
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: Dashboard -->
+
+    <!-- @COMPONENT: ResultsPage -->
+    <div id="resultsPage" class="hidden min-h-screen py-8">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Back Button -->
+            <div class="mb-6">
+                <button id="backToDashboard" class="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Back to Dashboard
+                </button>
+            </div>
+
+            <!-- Job Info Header -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 mb-2" data-bind="jobSubmission.job_title" data-mock="true">Senior Software Engineer</h1>
+                        <p class="text-lg text-gray-600 mb-4" data-bind="jobSubmission.company_name" data-mock="true">TechCorp Inc.</p>
+                        <div class="flex items-center space-x-4 text-sm text-gray-500">
+                            <span class="flex items-center">
+                                <i class="fas fa-calendar mr-1"></i>
+                                <span data-bind="jobSubmission.submitted_at" data-mock="true">Submitted 2 days ago</span>
+                            </span>
+                            <span class="flex items-center">
+                                <i class="fas fa-users mr-1"></i>
+                                <span data-bind="jobSubmission.recruiters.length" data-mock="true">3</span> recruiters found
+                            </span>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-success/10 text-success">
+                        <i class="fas fa-check mr-1"></i>
+                        Complete
+                    </span>
+                </div>
+            </div>
+
+            <!-- Recruiter Contacts -->
+            <div class="space-y-6 mb-8">
+                <h2 class="text-xl font-semibold text-gray-900">Recruiter Contacts</h2>
+                
+                <!-- @MAP: recruiters.map(recruiter => ( -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900" data-bind="recruiter.name" data-mock="true">Sarah Johnson</h3>
+                            <p class="text-gray-600" data-bind="recruiter.title" data-mock="true">Senior Technical Recruiter</p>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-sm text-gray-500">Confidence:</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-success/10 text-success">
+                                <span data-bind="recruiter.confidence_score" data-mock="true">95%</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <i class="fas fa-envelope text-gray-400 w-5"></i>
+                                <span class="ml-2 text-gray-600" data-bind="recruiter.email" data-mock="true">sarah.johnson@techcorp.com</span>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyEmail" title="Copy email">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fab fa-linkedin text-gray-400 w-5"></i>
+                                <a href="#" class="ml-2 text-primary hover:text-blue-600" data-bind="recruiter.linkedin_url" data-mock="true">LinkedIn Profile</a>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyLinkedIn" title="Copy LinkedIn URL">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                <span data-bind="recruiter.source" data-mock="true">OpenAI</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900" data-mock="true">Michael Chen</h3>
+                            <p class="text-gray-600" data-mock="true">Talent Acquisition Manager</p>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-sm text-gray-500">Confidence:</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-warning/10 text-warning">
+                                <span data-mock="true">78%</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <i class="fas fa-envelope text-gray-400 w-5"></i>
+                                <span class="ml-2 text-gray-600" data-mock="true">m.chen@techcorp.com</span>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyEmail" title="Copy email">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fab fa-linkedin text-gray-400 w-5"></i>
+                                <a href="#" class="ml-2 text-primary hover:text-blue-600" data-mock="true">LinkedIn Profile</a>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyLinkedIn" title="Copy LinkedIn URL">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                <span data-mock="true">OpenAI</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900" data-mock="true">Lisa Rodriguez</h3>
+                            <p class="text-gray-600" data-mock="true">Engineering Recruiter</p>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-sm text-gray-500">Confidence:</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-success/10 text-success">
+                                <span data-mock="true">89%</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <i class="fas fa-envelope text-gray-400 w-5"></i>
+                                <span class="ml-2 text-gray-600" data-mock="true">lisa.r@techcorp.com</span>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyEmail" title="Copy email">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fab fa-linkedin text-gray-400 w-5"></i>
+                                <a href="#" class="ml-2 text-primary hover:text-blue-600" data-mock="true">LinkedIn Profile</a>
+                                <button class="ml-2 text-primary hover:text-blue-600" data-event="click:copyLinkedIn" title="Copy LinkedIn URL">
+                                    <i class="fas fa-copy text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                <span data-mock="true">OpenAI</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <!-- @END_MAP )) -->
+            </div>
+
+            <!-- Generated Messages -->
+            <div class="space-y-6">
+                <h2 class="text-xl font-semibold text-gray-900">Generated Messages</h2>
+                
+                <!-- Email Draft -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <i class="fas fa-envelope text-gray-400 mr-2"></i>
+                            Email Draft
+                        </h3>
+                        <button class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors" data-event="click:copyEmailDraft">
+                            <i class="fas fa-copy mr-1"></i>
+                            Copy
+                        </button>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <pre class="whitespace-pre-wrap text-gray-700 text-sm" data-bind="jobSubmission.email_draft" data-mock="true">Subject: Interest in Senior Software Engineer Position at TechCorp
+
+Hi Sarah,
+
+I hope this email finds you well. I came across the Senior Software Engineer position at TechCorp and I'm very excited about the opportunity to contribute to your engineering team.
+
+With 5+ years of experience in full-stack development, particularly in React, Node.js, and Python, I believe I would be a strong fit for this role. I'm especially drawn to TechCorp's mission of building innovative solutions that impact millions of users.
+
+I've attached my resume for your review and would love the opportunity to discuss how my background in scalable web applications and team leadership aligns with your current needs.
+
+Thank you for your time and consideration. I look forward to hearing from you.
+
+Best regards,
+[Your Name]</pre>
+                    </div>
+                </div>
+
+                <!-- LinkedIn Message -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <i class="fab fa-linkedin text-gray-400 mr-2"></i>
+                            LinkedIn Message
+                        </h3>
+                        <button class="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors" data-event="click:copyLinkedInMessage">
+                            <i class="fas fa-copy mr-1"></i>
+                            Copy
+                        </button>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <pre class="whitespace-pre-wrap text-gray-700 text-sm" data-bind="jobSubmission.linkedin_message" data-mock="true">Hi Sarah,
+
+I noticed the Senior Software Engineer opening at TechCorp and I'm really impressed by the company's innovative approach to technology solutions.
+
+With my background in full-stack development and passion for building scalable applications, I believe I could make a valuable contribution to your engineering team.
+
+Would you be open to a brief conversation about this opportunity? I'd love to learn more about the role and share how my experience might align with your team's goals.
+
+Thanks for your time!
+
+Best,
+[Your Name]</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-8 flex justify-center space-x-4">
+                <button id="backToDashboardBtn" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                    Back to Dashboard
+                </button>
+                <button id="newSearchFromResults" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    New Search
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: ResultsPage -->
+
+    <!-- @STATE: currentUser:Object = null -->
+    <!-- @STATE: currentPage:string = 'home' -->
+    <!-- @STATE: isLoading:boolean = false -->
+
+    <script>
+        (function() {
+            // TODO: Implement state management, API calls, and business logic
+            
+            // Navigation state
+            let currentPage = 'home';
+            let isLoggedIn = false;
+
+            // DOM elements
+            const elements = {
+                // Pages
+                homePage: document.getElementById('homePage'),
+                dashboardPage: document.getElementById('dashboardPage'),
+                resultsPage: document.getElementById('resultsPage'),
+                
+                // Auth modals
+                loginModal: document.getElementById('loginModal'),
+                signupModal: document.getElementById('signupModal'),
+                
+                // Navigation
+                loginBtn: document.getElementById('loginBtn'),
+                signupBtn: document.getElementById('signupBtn'),
+                dashboardBtn: document.getElementById('dashboardBtn'),
+                userMenu: document.getElementById('userMenu'),
+                
+                // Form elements
+                textTab: document.getElementById('textTab'),
+                urlTab: document.getElementById('urlTab'),
+                textInput: document.getElementById('textInput'),
+                urlInput: document.getElementById('urlInput'),
+                
+                // Loading
+                loadingState: document.getElementById('loadingState'),
+                findRecruitersBtn: document.getElementById('findRecruitersBtn')
+            };
+
+            // Page navigation
+            function showPage(page) {
+                // Hide all pages
+                elements.homePage.classList.add('hidden');
+                elements.dashboardPage.classList.add('hidden');
+                elements.resultsPage.classList.add('hidden');
+                
+                // Show selected page
+                switch(page) {
+                    case 'home':
+                        elements.homePage.classList.remove('hidden');
+                        break;
+                    case 'dashboard':
+                        if (isLoggedIn) {
+                            elements.dashboardPage.classList.remove('hidden');
+                        } else {
+                            showLoginModal();
+                        }
+                        break;
+                    case 'results':
+                        elements.resultsPage.classList.remove('hidden');
+                        break;
+                }
+                currentPage = page;
+            }
+
+            // Auth modals
+            function showLoginModal() {
+                elements.loginModal.classList.remove('hidden');
+            }
+
+            function hideLoginModal() {
+                elements.loginModal.classList.add('hidden');
+            }
+
+            function showSignupModal() {
+                elements.signupModal.classList.remove('hidden');
+            }
+
+            function hideSignupModal() {
+                elements.signupModal.classList.add('hidden');
+            }
+
+            // Simulate login
+            function simulateLogin() {
+                isLoggedIn = true;
+                elements.loginBtn.classList.add('hidden');
+                elements.signupBtn.classList.add('hidden');
+                elements.userMenu.classList.remove('hidden');
+                hideLoginModal();
+                hideSignupModal();
+                showPage('dashboard');
+            }
+
+            // Input type toggle
+            function toggleInputType(type) {
+                if (type === 'text') {
+                    elements.textTab.className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all';
+                    elements.urlTab.className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md text-gray-500 hover:text-gray-900 transition-all';
+                    elements.textInput.classList.remove('hidden');
+                    elements.urlInput.classList.add('hidden');
+                } else {
+                    elements.urlTab.className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all';
+                    elements.textTab.className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md text-gray-500 hover:text-gray-900 transition-all';
+                    elements.urlInput.classList.remove('hidden');
+                    elements.textInput.classList.add('hidden');
+                }
+            }
+
+            // Copy to clipboard functionality
+            function copyToClipboard(text, button) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalIcon = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check text-sm"></i>';
+                    button.className = button.className.replace('text-primary', 'text-success');
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalIcon;
+                        button.className = button.className.replace('text-success', 'text-primary');
+                    }, 2000);
+                });
+            }
+
+            // Event listeners
+            elements.loginBtn.addEventListener('click', showLoginModal);
+            elements.signupBtn.addEventListener('click', showSignupModal);
+            elements.dashboardBtn.addEventListener('click', () => showPage('dashboard'));
+
+            // Modal event listeners
+            document.getElementById('closeLoginModal').addEventListener('click', hideLoginModal);
+            document.getElementById('closeSignupModal').addEventListener('click', hideSignupModal);
+            document.getElementById('switchToSignup').addEventListener('click', () => {
+                hideLoginModal();
+                showSignupModal();
+            });
+            document.getElementById('switchToLogin').addEventListener('click', () => {
+                hideSignupModal();
+                showLoginModal();
+            });
+
+            // Tab switching
+            elements.textTab.addEventListener('click', () => toggleInputType('text'));
+            elements.urlTab.addEventListener('click', () => toggleInputType('url'));
+
+            // Search simulation
+            elements.findRecruitersBtn.addEventListener('click', function() {
+                // Show loading state
+                elements.loadingState.classList.remove('hidden');
+                elements.findRecruitersBtn.disabled = true;
+                
+                // Simulate API call
+                setTimeout(() => {
+                    elements.loadingState.classList.add('hidden');
+                    elements.findRecruitersBtn.disabled = false;
+                    
+                    // If not logged in, show signup modal
+                    if (!isLoggedIn) {
+                        showSignupModal();
+                    } else {
+                        showPage('results');
+                    }
+                }, 3000);
+            });
+
+            // Form submissions (simulate login/signup)
+            document.querySelector('#loginModal form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                simulateLogin();
+            });
+
+            document.querySelector('#signupModal form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                simulateLogin();
+            });
+
+            // Dashboard navigation
+            document.getElementById('newSearchBtn').addEventListener('click', () => showPage('home'));
+            document.getElementById('backToDashboard').addEventListener('click', () => showPage('dashboard'));
+            document.getElementById('backToDashboardBtn').addEventListener('click', () => showPage('dashboard'));
+            document.getElementById('newSearchFromResults').addEventListener('click', () => showPage('home'));
+
+            // Copy functionality for results page
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('[data-event="click:copyEmail"]')) {
+                    const email = e.target.closest('.space-y-2').querySelector('span').textContent;
+                    copyToClipboard(email, e.target.closest('button'));
+                }
+                
+                if (e.target.closest('[data-event="click:copyLinkedIn"]')) {
+                    const linkedinUrl = e.target.closest('.space-y-2').querySelector('a').href;
+                    copyToClipboard(linkedinUrl, e.target.closest('button'));
+                }
+                
+                if (e.target.closest('[data-event="click:copyEmailDraft"]')) {
+                    const emailDraft = document.querySelector('[data-bind="jobSubmission.email_draft"]').textContent;
+                    copyToClipboard(emailDraft, e.target.closest('button'));
+                }
+                
+                if (e.target.closest('[data-event="click:copyLinkedInMessage"]')) {
+                    const linkedinMessage = document.querySelector('[data-bind="jobSubmission.linkedin_message"]').textContent;
+                    copyToClipboard(linkedinMessage, e.target.closest('button'));
+                }
+
+                if (e.target.closest('[data-event="click:viewSubmission"]')) {
+                    showPage('results');
+                }
+            });
+
+            // Close modals on outside click
+            elements.loginModal.addEventListener('click', function(e) {
+                if (e.target === elements.loginModal) hideLoginModal();
+            });
+
+            elements.signupModal.addEventListener('click', function(e) {
+                if (e.target === elements.signupModal) hideSignupModal();
+            });
+
+        })();
+    </script>
+</body>
+</html>

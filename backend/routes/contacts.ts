@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { supabase } from "../lib/supabaseClient";
-import OpenAI from "openai";
+import { callClaude } from "../claude";
 
 // Session-based authentication middleware
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -291,11 +291,9 @@ export function registerContactRoutes(app: Express) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Generate message using OpenAI GPT-4o
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      
-      const prompt = messageType === "email" 
-        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}. 
+      // Generate message using Claude
+      const prompt = messageType === "email"
+        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
 
 Keep it concise (under 150 words), personalized, and include:
 - Brief introduction
@@ -321,23 +319,12 @@ Job: ${contact.job_submissions.job_title || "Unknown Position"}
 
 LinkedIn message tone: ${tone}`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system", 
-            content: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages."
-          },
-          { 
-            role: "user", 
-            content: prompt 
-          }
-        ],
-        max_tokens: 300,
+      const generatedMessage = await callClaude({
+        system: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages.",
+        user: prompt,
         temperature: 0.7,
+        maxTokens: 300,
       });
-
-      const generatedMessage = response.choices[0].message.content;
 
       // Update contact with generated message using Supabase
       const updateData: any = {};
