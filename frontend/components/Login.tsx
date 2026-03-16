@@ -1,5 +1,6 @@
 import { Key, Mail, Lock, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { loginUser } from "@/lib/auth";
 
 interface LoginScreenProps {
@@ -11,16 +12,17 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     const result = await loginUser(email, password);
-    
+
     if (result.success) {
       onLogin();
-      window.location.href = '/';
+      setLocation('/dashboard');
     } else {
       alert(result.error || 'Login failed');
       setIsLoading(false);

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useLocation, Route, Switch, Redirect } from "wouter";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
 import { SearchPage } from "./components/SearchPage";
@@ -12,15 +13,47 @@ import { OutreachProfile } from "./components/OutreachProfile";
 import { LoginScreen } from "../components/Login";
 import { SignupScreen } from "../components/Signup";
 
-interface NavigationState {
-  page: string;
-  params?: Record<string, any>;
+// Map page names (used by child components) to URL paths
+const pageToPath: Record<string, string> = {
+  dashboard: "/dashboard",
+  search: "/search",
+  "job-history": "/jobs",
+  "job-details": "/jobs", // needs /:id appended
+  contacts: "/contacts",
+  "all-contacts": "/contacts",
+  "contact-detail": "/contacts", // needs /:id appended
+  "outreach-profile": "/outreach-profile",
+  billing: "/billing",
+  settings: "/settings",
+  login: "/login",
+  signup: "/signup",
+};
+
+// Map URL paths back to page names (for Layout highlighting)
+const pathToPage: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/search": "search",
+  "/jobs": "job-history",
+  "/contacts": "contacts",
+  "/outreach-profile": "outreach-profile",
+  "/billing": "billing",
+  "/settings": "settings",
+  "/login": "login",
+  "/signup": "signup",
+};
+
+function getCurrentPage(location: string): string {
+  // Exact match first
+  if (pathToPage[location]) return pathToPage[location];
+  // Check prefix matches for parameterized routes
+  if (location.startsWith("/jobs/")) return "job-details";
+  if (location.startsWith("/contacts/")) return "contact-detail";
+  // Default
+  return "dashboard";
 }
 
 export default function App() {
-  const [navigationState, setNavigationState] = useState<NavigationState>({ 
-    page: "login" 
-  });
+  const [location, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
@@ -31,24 +64,24 @@ export default function App() {
         const response = await fetch('/api/auth/user', {
           credentials: 'include',
         });
-        
+
         if (response.ok) {
           setIsAuthenticated(true);
           // If authenticated and on login/signup page, redirect to dashboard
-          if (navigationState.page === "login" || navigationState.page === "signup") {
-            setNavigationState({ page: "dashboard" });
+          if (location === "/login" || location === "/signup" || location === "/") {
+            setLocation("/dashboard");
           }
         } else {
           setIsAuthenticated(false);
           // If not authenticated and not on auth pages, redirect to login
-          if (navigationState.page !== "login" && navigationState.page !== "signup") {
-            setNavigationState({ page: "login" });
+          if (location !== "/login" && location !== "/signup") {
+            setLocation("/login");
           }
         }
       } catch (error) {
         console.error('Auth check failed:', error);
         setIsAuthenticated(false);
-        setNavigationState({ page: "login" });
+        setLocation("/login");
       } finally {
         setIsCheckingAuth(false);
       }
@@ -57,53 +90,20 @@ export default function App() {
     checkAuth();
   }, []);
 
-  const handleNavigate = (page: string, params?: Record<string, any>) => {
-    setNavigationState({ page, params });
-  };
+  // Translate legacy page-name navigation to URL-based navigation
+  // This keeps all child components working without changes
+  const handleNavigate = useCallback((page: string, params?: Record<string, any>) => {
+    let path = pageToPath[page] || "/dashboard";
 
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        setIsAuthenticated(true);
-        setNavigationState({ page: "dashboard" });
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Login failed');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed');
+    // Append IDs for parameterized routes
+    if (page === "job-details" && params?.submissionId) {
+      path = `/jobs/${params.submissionId}`;
+    } else if (page === "contact-detail" && params?.contactId) {
+      path = `/contacts/${params.contactId}`;
     }
-  };
 
-  const handleSignup = async (email: string, password: string, firstName: string, lastName: string) => {
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password, firstName, lastName }),
-      });
-
-      if (response.ok) {
-        setIsAuthenticated(true);
-        setNavigationState({ page: "dashboard" });
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Signup failed');
-      }
-    } catch (error) {
-      console.error('Signup error:', error);
-      alert('Signup failed');
-    }
-  };
+    setLocation(path);
+  }, [setLocation]);
 
   const handleLogout = async () => {
     try {
@@ -112,61 +112,9 @@ export default function App() {
         credentials: 'include',
       });
       setIsAuthenticated(false);
-      setNavigationState({ page: "login" });
+      setLocation("/login");
     } catch (error) {
       console.error('Logout error:', error);
-    }
-  };
-
-  const renderPage = () => {
-    const { page, params } = navigationState;
-    
-    // Show login/signup without Layout wrapper
-    // Note: Wrapped in max-w container because components use max-w-md which isn't in compiled CSS
-    if (page === "login") {
-      return (
-        <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
-          <LoginScreen
-            onNavigate={handleNavigate}
-            onLogin={() => {}} // Will be handled inside component
-          />
-        </div>
-      );
-    }
-    
-    if (page === "signup") {
-      return (
-        <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
-          <SignupScreen
-            onNavigate={handleNavigate}
-            onSignup={() => {}} // Will be handled inside component
-          />
-        </div>
-      );
-    }
-    
-    // Protected pages - require authentication
-    switch (page) {
-      case "dashboard":
-        return <Dashboard onNavigate={handleNavigate} />;
-      case "search":
-        return <SearchPage onNavigate={handleNavigate} />;
-      case "job-history":
-        return <JobHistory onNavigate={handleNavigate} />;
-      case "job-details":
-        return <JobDetails submissionId={params?.submissionId} onNavigate={handleNavigate} />;
-      case "contacts":
-        return <AllContacts onNavigate={handleNavigate} />;
-      case "contact-detail":
-        return <ContactDetail contactId={params?.contactId} onNavigate={handleNavigate} />;
-      case "outreach-profile":
-        return <OutreachProfile />;
-      case "billing":
-        return <Subscription />;
-      case "settings":
-        return <Settings />;
-      default:
-        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
@@ -179,19 +127,78 @@ export default function App() {
     );
   }
 
-  // Render auth pages without Layout, app pages with Layout
-  const page = navigationState.page;
-  if (page === "login" || page === "signup") {
-    return renderPage();
+  // Auth pages — no Layout wrapper
+  if (location === "/login" || location === "/signup") {
+    return (
+      <Switch>
+        <Route path="/login">
+          <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
+            <LoginScreen
+              onNavigate={handleNavigate}
+              onLogin={() => {}}
+            />
+          </div>
+        </Route>
+        <Route path="/signup">
+          <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
+            <SignupScreen
+              onNavigate={handleNavigate}
+              onSignup={() => {}}
+            />
+          </div>
+        </Route>
+      </Switch>
+    );
   }
 
+  // Protected pages — redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  const currentPage = getCurrentPage(location);
+
   return (
-    <Layout 
-      currentPage={navigationState.page} 
+    <Layout
+      currentPage={currentPage}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
     >
-      {renderPage()}
+      <Switch>
+        <Route path="/dashboard">
+          <Dashboard onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/search">
+          <SearchPage onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/jobs/:id">
+          {(params) => <JobDetails submissionId={params.id} onNavigate={handleNavigate} />}
+        </Route>
+        <Route path="/jobs">
+          <JobHistory onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/contacts/:id">
+          {(params) => <ContactDetail contactId={params.id} onNavigate={handleNavigate} />}
+        </Route>
+        <Route path="/contacts">
+          <AllContacts onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/outreach-profile">
+          <OutreachProfile />
+        </Route>
+        <Route path="/billing">
+          <Subscription />
+        </Route>
+        <Route path="/settings">
+          <Settings />
+        </Route>
+        <Route path="/">
+          <Redirect to="/dashboard" />
+        </Route>
+        <Route>
+          <Redirect to="/dashboard" />
+        </Route>
+      </Switch>
     </Layout>
   );
 }

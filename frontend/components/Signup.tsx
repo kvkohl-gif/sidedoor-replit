@@ -1,5 +1,6 @@
 import { Key, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { registerUser } from "@/lib/auth";
 
 interface SignupScreenProps {
@@ -15,6 +16,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +33,12 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
     }
 
     setIsLoading(true);
-    
+
     const result = await registerUser(firstName, lastName, email, password);
-    
+
     if (result.success) {
       onSignup();
-      window.location.href = '/';
+      setLocation('/dashboard');
     } else {
       alert(result.error || 'Signup failed');
       setIsLoading(false);
