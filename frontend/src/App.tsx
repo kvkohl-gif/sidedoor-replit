@@ -23,6 +23,23 @@ export default function App() {
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [userData, setUserData] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+
+  const fetchUserData = async () => {
+    try {
+      const response = await fetch('/api/auth/user', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setUserData({
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          email: data.email || '',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to fetch user data:', e);
+    }
+  };
 
   // Check authentication status on mount
   useEffect(() => {
@@ -33,6 +50,12 @@ export default function App() {
         });
         
         if (response.ok) {
+          const data = await response.json();
+          setUserData({
+            firstName: data.first_name || '',
+            lastName: data.last_name || '',
+            email: data.email || '',
+          });
           setIsAuthenticated(true);
           // If authenticated and on login/signup page, redirect to dashboard
           if (navigationState.page === "login" || navigationState.page === "signup") {
@@ -71,11 +94,12 @@ export default function App() {
       });
 
       if (response.ok) {
+        await fetchUserData();
         setIsAuthenticated(true);
         setNavigationState({ page: "dashboard" });
       } else {
         const data = await response.json();
-        alert(data.message || 'Login failed');
+        alert(data.error || data.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -93,6 +117,7 @@ export default function App() {
       });
 
       if (response.ok) {
+        await fetchUserData();
         setIsAuthenticated(true);
         setNavigationState({ page: "dashboard" });
       } else {
@@ -186,10 +211,11 @@ export default function App() {
   }
 
   return (
-    <Layout 
-      currentPage={navigationState.page} 
+    <Layout
+      currentPage={navigationState.page}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
+      userName={userData ? `${userData.firstName} ${userData.lastName}` : undefined}
     >
       {renderPage()}
     </Layout>

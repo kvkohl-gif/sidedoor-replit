@@ -6,9 +6,10 @@ interface LayoutProps {
   currentPage: string;
   onNavigate: (page: string) => void;
   onLogout?: () => void;
+  userName?: string;
 }
 
-export function Layout({ children, currentPage, onNavigate, onLogout }: LayoutProps) {
+export function Layout({ children, currentPage, onNavigate, onLogout, userName }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutMenu, setShowLogoutMenu] = useState(false);
 
@@ -178,8 +179,8 @@ export function Layout({ children, currentPage, onNavigate, onLogout }: LayoutPr
                   <User className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0 text-left">
-                  <div className="font-medium text-[#1A202C] text-[13px] truncate">Sarah Johnson</div>
-                  <div className="text-[12px] text-[#94A3B8]">Business Plan</div>
+                  <div className="font-medium text-[#1A202C] text-[13px] truncate">{userName || "User"}</div>
+                  <div className="text-[12px] text-[#94A3B8]">Free Plan</div>
                 </div>
               </button>
               {onLogout && (
