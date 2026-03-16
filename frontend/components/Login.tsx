@@ -85,7 +85,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
                 </label>
                 <button
                   type="button"
-                  onClick={() => onNavigate("forgot-password")}
+                  onClick={() => alert("Please contact support to reset your password.")}
                   className="text-[13px] text-[#6B46C1] hover:text-[#5a3ba1] transition-colors"
                 >
                   Forgot password?
