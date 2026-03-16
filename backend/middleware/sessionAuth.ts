@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { pool } from "../lib/neonClient";
+import { supabaseAdmin } from "../lib/supabaseClient";
 
 declare global {
   namespace Express {
@@ -24,18 +24,18 @@ export async function sessionAuth(
       return next();
     }
 
-    // Validate session with direct SQL
-    const sessionsResult = await pool.query(
-      "SELECT user_id FROM sessions WHERE sid = $1",
-      [sessionId]
-    );
+    // Validate session via Supabase
+    const { data: sessions, error } = await supabaseAdmin
+      .from("sessions")
+      .select("user_id")
+      .eq("sid", sessionId);
 
-    if (sessionsResult.rows.length === 0) {
+    if (error || !sessions || sessions.length === 0) {
       req.user = null;
       return next();
     }
 
-    req.user = { id: sessionsResult.rows[0].user_id };
+    req.user = { id: sessions[0].user_id };
     return next();
   } catch (error) {
     console.error("Session auth error:", error);
