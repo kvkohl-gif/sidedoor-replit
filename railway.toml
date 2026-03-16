@@ -3,5 +3,5 @@ builder = "nixpacks"
 buildCommand = "npm install && npm run build"
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "NODE_OPTIONS='--dns-result-order=ipv4first' npm run start"
 restartPolicyType = "on_failure"
