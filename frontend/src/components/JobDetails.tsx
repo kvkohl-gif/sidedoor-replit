@@ -12,9 +12,7 @@ import {
   HelpCircle,
   Plus,
   ExternalLink,
-  X,
   Sparkles,
-  Eye,
   Loader2,
   Building2,
   Briefcase,
@@ -177,7 +175,6 @@ function getMatchInfo(contact: Recruiter): { label: string; color: string; dotCo
 
 export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const [openStatusDropdown, setOpenStatusDropdown] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showFullJD, setShowFullJD] = useState(false);
   const [showJobInfo, setShowJobInfo] = useState(false);
@@ -189,6 +186,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedContact, setExpandedContact] = useState<number | null>(null);
   const [showNotes, setShowNotes] = useState(false);
+  const [editingDrafts, setEditingDrafts] = useState<Record<number, { email?: string; linkedin?: string }>>({});
 
   const { data: submission, isLoading, error } = useQuery<JobSubmissionWithRecruiters>({
     queryKey: ["/api/submissions", submissionId],
@@ -334,13 +332,18 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
     if (activeFilter === "recruiter") return c.outreachBucket === "recruiter";
     if (activeFilter === "hiring-manager") return c.outreachBucket === "department_lead";
     return true;
+  }).sort((a, b) => {
+    // Contacted first, then drafted, then undrafted
+    const aContacted = a.contactStatus && a.contactStatus !== "not_contacted" ? 2 : 0;
+    const bContacted = b.contactStatus && b.contactStatus !== "not_contacted" ? 2 : 0;
+    const aDrafted = (a.emailDraft || a.linkedinMessage) ? 1 : 0;
+    const bDrafted = (b.emailDraft || b.linkedinMessage) ? 1 : 0;
+    return (bContacted + bDrafted) - (aContacted + aDrafted);
   });
 
   const validContacts = allContacts.filter(c => c.verificationStatus === "valid").length;
   const recruiters = allContacts.filter(c => c.outreachBucket === "recruiter").length;
   const hiringManagers = allContacts.filter(c => c.outreachBucket === "department_lead").length;
-
-  const selectedContactData = selectedContact ? allContacts.find(c => c.id === selectedContact) : null;
 
   const LEGACY_STATUS_MAP: Record<string, string> = {
     "not_contacted": "saved", "email_sent": "reaching_out", "awaiting_reply": "reaching_out",
@@ -728,14 +731,14 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                   </div>
                 </div>
 
-                {/* Expanded panel */}
+                {/* Expanded panel — inline outreach workspace */}
                 {isExpanded && (
                   <div style={{
                     padding: "16px 20px 20px 68px", borderBottom: isLast ? "none" : "1px solid #f3f4f6",
                     background: "#fafafe", animation: "fadeUp 0.15s ease",
                   }}>
-                    {/* Info chips */}
-                    <div style={{ display: "flex", gap: 16, marginBottom: 14, fontSize: 12, color: "#6b7280" }}>
+                    {/* Info row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14, fontSize: 12, color: "#6b7280" }}>
                       {formatSeniority(contact.seniority) && (
                         <span><span style={{ color: "#9ca3af" }}>Seniority:</span> {formatSeniority(contact.seniority)}</span>
                       )}
@@ -745,11 +748,18 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                       {contact.email && (
                         <span><span style={{ color: "#9ca3af" }}>Email:</span> <span style={{ color: cfg.color }}>{cfg.text}</span></span>
                       )}
+                      {contact.linkedinUrl && (
+                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#2563eb", textDecoration: "none", fontWeight: 500 }}
+                        >
+                          <Linkedin size={12} /> LinkedIn Profile
+                        </a>
+                      )}
                     </div>
 
                     {/* Email copy row */}
                     {contact.email && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #e5e7eb" }}>
                           <Mail size={13} style={{ color: "#9ca3af" }} />
                           <span style={{ fontSize: 13, color: "#374151", fontFamily: "'SF Mono', monospace" }}>{contact.email}</span>
@@ -762,46 +772,96 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                       </div>
                     )}
 
-                    {/* Action buttons */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      {!hasMessages ? (
-                        <button disabled={isGenerating} onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px",
-                            borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-                            cursor: isGenerating ? "default" : "pointer", border: "none",
-                            background: "#111827", color: "#fff", opacity: isGenerating ? 0.7 : 1,
-                          }}
-                        >
-                          {isGenerating ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Drafting...</> : <><Sparkles size={13} /> Draft Messages</>}
-                        </button>
-                      ) : (
-                        <>
-                          <button onClick={e => { e.stopPropagation(); setSelectedContact(contact.id); }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-                          >
-                            <Eye size={13} /> View Messages
-                          </button>
-                          <button onClick={e => { e.stopPropagation(); copyToClipboard(contact.emailDraft || "", `draft-${contact.id}`); }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-                          >
-                            {copiedId === `draft-${contact.id}` ? <><Check size={13} style={{ color: "#059669" }} /> Copied</> : <><Copy size={13} /> Copy Email</>}
-                          </button>
-                        </>
-                      )}
-                      {contact.linkedinUrl && (
-                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #dbeafe", background: "#fff", color: "#2563eb", textDecoration: "none" }}
-                        >
-                          <Linkedin size={13} /> LinkedIn
-                        </a>
-                      )}
-                      <button onClick={e => { e.stopPropagation(); onNavigate("contact-detail", { contactId: contact.id }); }}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", border: "none", background: "transparent", color: "#7c3aed", marginLeft: "auto" }}
+                    {/* Draft / Message section */}
+                    {!hasMessages ? (
+                      <button disabled={isGenerating} onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px",
+                          borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                          cursor: isGenerating ? "default" : "pointer", border: "none",
+                          background: "#111827", color: "#fff", opacity: isGenerating ? 0.7 : 1,
+                        }}
                       >
-                        Full Profile <ChevronRight size={13} />
+                        {isGenerating ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Drafting messages...</> : <><Sparkles size={13} /> Draft Messages</>}
                       </button>
-                    </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        {/* Email Draft — inline editable */}
+                        {contact.emailDraft && (
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                <Mail size={12} style={{ color: "#7c3aed" }} /> Email Draft
+                              </div>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button onClick={e => { e.stopPropagation(); copyToClipboard(editingDrafts[contact.id]?.email || contact.emailDraft || "", `draft-email-${contact.id}`); }}
+                                  style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
+                                >
+                                  {copiedId === `draft-email-${contact.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
+                                </button>
+                                <button onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
+                                  disabled={isGenerating}
+                                  style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500, opacity: isGenerating ? 0.5 : 1 }}
+                                >
+                                  {isGenerating ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={11} />} Regenerate
+                                </button>
+                              </div>
+                            </div>
+                            <textarea
+                              value={editingDrafts[contact.id]?.email ?? contact.emailDraft}
+                              onChange={e => {
+                                e.stopPropagation();
+                                setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], email: e.target.value } }));
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                width: "100%", minHeight: 140, padding: 14, border: "1px solid #e5e7eb", borderRadius: 10,
+                                fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none",
+                                lineHeight: 1.7, boxSizing: "border-box", background: "#fff",
+                              }}
+                              onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
+                              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
+                            />
+                          </div>
+                        )}
+
+                        {/* LinkedIn Message — inline editable */}
+                        {contact.linkedinMessage && (
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                <Linkedin size={12} style={{ color: "#0a66c2" }} /> LinkedIn Message
+                              </div>
+                              <button onClick={e => { e.stopPropagation(); copyToClipboard(editingDrafts[contact.id]?.linkedin || contact.linkedinMessage || "", `draft-li-${contact.id}`); }}
+                                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
+                              >
+                                {copiedId === `draft-li-${contact.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
+                              </button>
+                            </div>
+                            <textarea
+                              value={editingDrafts[contact.id]?.linkedin ?? contact.linkedinMessage}
+                              onChange={e => {
+                                e.stopPropagation();
+                                setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], linkedin: e.target.value } }));
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                width: "100%", minHeight: 60, padding: 14, border: "1px solid #e5e7eb", borderRadius: 10,
+                                fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none",
+                                lineHeight: 1.7, boxSizing: "border-box", background: "#fff",
+                              }}
+                              onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
+                              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
+                            />
+                            {contact.linkedinMessage && (
+                              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                                {(editingDrafts[contact.id]?.linkedin ?? contact.linkedinMessage).length} characters
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -868,79 +928,6 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
         </div>
       )}
 
-      {/* ═══ MESSAGE PREVIEW MODAL ═══ */}
-      {selectedContact && selectedContactData && (
-        <div onClick={() => setSelectedContact(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, backdropFilter: "blur(4px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.15)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid #f3f4f6" }}>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#111827" }}>{selectedContactData.name}</h3>
-                <p style={{ fontSize: 13, color: "#6b7280", marginTop: 2, marginBottom: 0 }}>{selectedContactData.title}</p>
-              </div>
-              <button onClick={() => setSelectedContact(null)} style={{ background: "#f3f4f6", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex" }}>
-                <X size={16} style={{ color: "#6b7280" }} />
-              </button>
-            </div>
-
-            <div style={{ overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-              {selectedContactData.emailDraft && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <Mail size={13} style={{ color: "#7c3aed" }} /> Email Draft
-                    </div>
-                    <button onClick={() => copyToClipboard(selectedContactData.emailDraft || "", `modal-email-${selectedContactData.id}`)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
-                    >
-                      {copiedId === `modal-email-${selectedContactData.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
-                    </button>
-                  </div>
-                  <div style={{ padding: 18, fontSize: 13.5, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.7, background: "#f9fafb", borderRadius: 10, border: "1px solid #f0f0f3" }}>
-                    {selectedContactData.emailDraft}
-                  </div>
-                </div>
-              )}
-
-              {selectedContactData.linkedinMessage && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <Linkedin size={13} style={{ color: "#0a66c2" }} /> LinkedIn Message
-                    </div>
-                    <button onClick={() => copyToClipboard(selectedContactData.linkedinMessage || "", `modal-li-${selectedContactData.id}`)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
-                    >
-                      {copiedId === `modal-li-${selectedContactData.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
-                    </button>
-                  </div>
-                  <div style={{ padding: 18, fontSize: 13.5, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.7, background: "#f9fafb", borderRadius: 10, border: "1px solid #f0f0f3" }}>
-                    {selectedContactData.linkedinMessage}
-                  </div>
-                </div>
-              )}
-
-              {!selectedContactData.emailDraft && !selectedContactData.linkedinMessage && (
-                <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                  <Sparkles size={24} style={{ color: "#d1d5db", marginBottom: 12 }} />
-                  <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 16 }}>No messages generated yet</p>
-                  <button disabled={generatingMessageFor === selectedContactData.id}
-                    onClick={() => generateMessageMutation.mutate(selectedContactData.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none", background: "#111827", color: "#fff" }}
-                  >
-                    {generatingMessageFor === selectedContactData.id ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</> : <><Sparkles size={13} /> Generate Messages</>}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div style={{ padding: "14px 24px", borderTop: "1px solid #f3f4f6" }}>
-              <button onClick={() => setSelectedContact(null)}
-                style={{ width: "100%", padding: 11, borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-              >Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
