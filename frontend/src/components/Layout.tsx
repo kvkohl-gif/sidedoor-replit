@@ -15,6 +15,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
 
   const navItems = [
     { icon: Home, label: "Dashboard", id: "dashboard" },
+    { icon: Search, label: "New Search", id: "search" },
     { icon: Clock, label: "Job History", id: "job-history" },
     { icon: Users, label: "Contacts", id: "contacts" },
     { icon: UserCircle, label: "Outreach Profile", id: "outreach-profile" },

@@ -997,6 +997,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                         transition: "background 0.1s",
                         cursor: "pointer",
                       }}
+                      onClick={() => onNavigate("contact-detail", { contactId: contact.id })}
                       onMouseEnter={e => (e.currentTarget.style.background = "#fafafd")}
                       onMouseLeave={e => (e.currentTarget.style.background = "")}
                     >
