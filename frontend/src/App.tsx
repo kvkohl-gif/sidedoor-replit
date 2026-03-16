@@ -172,13 +172,13 @@ export default function App() {
           <SearchPage onNavigate={handleNavigate} />
         </Route>
         <Route path="/jobs/:id">
-          {(params) => <JobDetails submissionId={params.id} onNavigate={handleNavigate} />}
+          {(params) => <JobDetails submissionId={Number(params.id)} onNavigate={handleNavigate} />}
         </Route>
         <Route path="/jobs">
           <JobHistory onNavigate={handleNavigate} />
         </Route>
         <Route path="/contacts/:id">
-          {(params) => <ContactDetail contactId={params.id} onNavigate={handleNavigate} />}
+          {(params) => <ContactDetail contactId={Number(params.id)} onNavigate={handleNavigate} />}
         </Route>
         <Route path="/contacts">
           <AllContacts onNavigate={handleNavigate} />

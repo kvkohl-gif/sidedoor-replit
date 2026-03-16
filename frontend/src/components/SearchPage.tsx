@@ -1,5 +1,5 @@
-import { Search, Sparkles, Loader2, Zap } from "lucide-react";
-import { useState } from "react";
+import { Search, Sparkles, Loader2, Zap, CheckCircle2, FileText, Building2, Users, Mail, MessageSquare } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { nanoid } from "nanoid";
@@ -8,9 +8,20 @@ interface SearchPageProps {
   onNavigate: (page: string, data?: any) => void;
 }
 
+const LOADING_STEPS = [
+  { icon: FileText, label: "Analyzing job posting...", detail: "Extracting role, company, and requirements", delay: 0 },
+  { icon: Building2, label: "Identifying company...", detail: "Finding company domain and org details", delay: 3000 },
+  { icon: Search, label: "Mapping target departments...", detail: "Using AI to determine who owns this role", delay: 6000 },
+  { icon: Users, label: "Searching for contacts...", detail: "Finding recruiters and hiring managers", delay: 10000 },
+  { icon: Mail, label: "Verifying emails...", detail: "Validating email addresses in real-time", delay: 16000 },
+  { icon: MessageSquare, label: "Drafting outreach messages...", detail: "Creating personalized emails and LinkedIn notes", delay: 22000 },
+];
+
 export function SearchPage({ onNavigate }: SearchPageProps) {
   const [jobDescription, setJobDescription] = useState("");
   const [isInputLocked, setIsInputLocked] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const stepTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   const sampleJobDescription = `Senior Product Manager - TechCorp Inc.
 Location: San Francisco, CA (Hybrid)
@@ -30,10 +41,33 @@ Requirements:
 • Excellent communication
 • MBA or technical degree preferred`;
 
+  // Advance loading steps on timers
+  useEffect(() => {
+    if (!isInputLocked) {
+      // Clean up timers and reset
+      stepTimersRef.current.forEach(t => clearTimeout(t));
+      stepTimersRef.current = [];
+      setActiveStep(0);
+      return;
+    }
+
+    // Start step progression
+    LOADING_STEPS.forEach((step, i) => {
+      if (i === 0) return; // Step 0 is immediate
+      const timer = setTimeout(() => setActiveStep(i), step.delay);
+      stepTimersRef.current.push(timer);
+    });
+
+    return () => {
+      stepTimersRef.current.forEach(t => clearTimeout(t));
+      stepTimersRef.current = [];
+    };
+  }, [isInputLocked]);
+
   const submitJobMutation = useMutation({
     mutationFn: async (data: { input: string; runId: string }) => {
       const isUrl = data.input.trim().startsWith('http');
-      return await apiRequest("POST", "/api/submissions", { 
+      return await apiRequest("POST", "/api/submissions", {
         jobInput: data.input,
         inputType: isUrl ? "url" : "text",
         runId: data.runId
@@ -115,15 +149,52 @@ Requirements:
               </p>
             )}
 
-            {/* Processing Status */}
+            {/* Processing Status — step-by-step */}
             {submitJobMutation.isPending && (
-              <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-[#6B46C1] animate-spin" />
-                  <span className="font-medium text-[#6B46C1]">
-                    Processing job submission and finding contacts...
-                  </span>
-                </div>
+              <div className="mt-6 space-y-2">
+                {LOADING_STEPS.map((step, i) => {
+                  const StepIcon = step.icon;
+                  const isActive = i === activeStep;
+                  const isDone = i < activeStep;
+                  const isPending = i > activeStep;
+
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
+                        isActive
+                          ? "bg-purple-50 border border-purple-200"
+                          : isDone
+                          ? "bg-green-50 border border-green-100"
+                          : "bg-[#F9FAFB] border border-transparent opacity-40"
+                      }`}
+                    >
+                      <div className="flex-shrink-0">
+                        {isDone ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        ) : isActive ? (
+                          <Loader2 className="w-5 h-5 text-[#6B46C1] animate-spin" />
+                        ) : (
+                          <StepIcon className="w-5 h-5 text-[#A0AEC0]" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-medium ${
+                          isActive ? "text-[#6B46C1]" : isDone ? "text-green-700" : "text-[#A0AEC0]"
+                        }`}>
+                          {isDone ? step.label.replace("...", "") + " ✓" : step.label}
+                        </div>
+                        {isActive && (
+                          <div className="text-xs text-[#718096] mt-0.5">{step.detail}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <p className="text-xs text-center text-[#A0AEC0] mt-3">
+                  This usually takes 30–60 seconds
+                </p>
               </div>
             )}
 
