@@ -1119,10 +1119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate message for contact
   app.post("/api/contacts/:id/generate-message", requireAuth, async (req: any, res) => {
     try {
+      const userId = req.user.id;
       const contactId = parseInt(req.params.id);
-      const { messageType, tone = "professional" } = req.body;
-      
-      // Get contact details using Supabase
+      const { instructions, currentDraft, currentSubject, currentLinkedin } = req.body;
+
+      // Get contact details with job data
       const { data: contact, error: contactError } = await supabase
         .from('recruiter_contacts')
         .select(`
@@ -1130,70 +1131,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
           job_submissions!inner (
             job_title,
             company_name,
+            job_input,
             user_id
           )
         `)
         .eq('id', contactId)
         .single();
-        
+
       if (contactError || !contact) {
         return res.status(404).json({ message: "Contact not found" });
       }
 
-      // Generate message using Claude
-      const prompt = messageType === "email"
-        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
+      if (contact.job_submissions.user_id !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
 
-Keep it concise (under 150 words), personalized, and include:
-- Brief introduction
-- Specific interest in the role
-- Relevant qualifications
-- Request for discussion
+      // Fetch outreach profile for full personalization
+      const { data: outreachProfile } = await supabase
+        .from('user_outreach_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${contact.job_submissions.company_name || "Unknown Company"}
-Job: ${contact.job_submissions.job_title || "Unknown Position"}
+      const parseJsonArray = (val: any): string[] => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
+        return [];
+      };
 
-Email tone: ${tone}`
-        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
+      const hasProfile = !!(outreachProfile?.bio || parseJsonArray(outreachProfile?.achievements).length > 0);
 
-Keep it under 300 characters for LinkedIn limits, personalized and include:
-- Brief introduction
-- Interest in the role
-- Request to connect
+      // If instructions provided, refine existing draft with AI
+      if (instructions && (currentDraft || currentLinkedin)) {
+        const refinePrompt = `You are refining outreach messages for a job seeker. Apply the user's instructions to improve the existing drafts.
 
-Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${contact.job_submissions.company_name || "Unknown Company"}
-Job: ${contact.job_submissions.job_title || "Unknown Position"}
+USER INSTRUCTIONS: ${instructions}
 
-LinkedIn message tone: ${tone}`;
+TARGET:
+- Recruiter: ${contact.name || "Hiring Manager"} (${contact.title || "Recruiter"})
+- Company: ${contact.job_submissions.company_name || "the company"}
+- Job: ${contact.job_submissions.job_title || "this position"}
 
-      const response_text = await callClaude({
-        system: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages.",
-        user: prompt,
-        maxTokens: 300,
-        temperature: 0.7,
+${currentSubject ? `CURRENT EMAIL SUBJECT: ${currentSubject}` : ''}
+${currentDraft ? `CURRENT EMAIL DRAFT:\n${currentDraft}` : ''}
+${currentLinkedin ? `CURRENT LINKEDIN MESSAGE:\n${currentLinkedin}` : ''}
+
+Return JSON with the refined versions. Only include fields that had content:
+{
+  ${currentSubject !== undefined ? '"emailSubject": "refined subject",' : ''}
+  ${currentDraft ? '"emailContent": "refined email body",' : ''}
+  ${currentLinkedin ? '"linkedinContent": "refined linkedin message"' : ''}
+}
+
+RULES:
+- Apply the user's instructions faithfully
+- Keep email under 150 words, 3 paragraphs max
+- Keep LinkedIn under 200 characters
+- Subject line under 7 words
+- Maintain authentic, non-templated voice`;
+
+        const raw = await callClaude({
+          system: "You refine cold outreach to sound human and authentic. Apply user instructions precisely. Return valid JSON only.",
+          user: refinePrompt,
+          jsonMode: true,
+          maxTokens: 1500,
+          temperature: 0.6,
+        });
+
+        const refined = JSON.parse(raw);
+
+        const updateData: any = {};
+        if (refined.emailContent) {
+          updateData.email_draft = refined.emailContent;
+          updateData.generated_email_message = refined.emailContent;
+        }
+        if (refined.emailSubject) {
+          updateData.email_subject = refined.emailSubject;
+        }
+        if (refined.linkedinContent) {
+          updateData.linkedin_message = refined.linkedinContent;
+          updateData.generated_linkedin_message = refined.linkedinContent;
+        }
+
+        await supabase.from('recruiter_contacts').update(updateData).eq('id', contactId);
+
+        return res.json({
+          emailSubject: refined.emailSubject || currentSubject,
+          emailContent: refined.emailContent || currentDraft,
+          linkedinContent: refined.linkedinContent || currentLinkedin,
+          hasProfile,
+        });
+      }
+
+      // Full regeneration using personalized messaging
+      const { generatePersonalizedMessages } = await import("./personalizedMessaging.js");
+      const messages = await generatePersonalizedMessages({
+        recruiterName: contact.name || "Hiring Manager",
+        recruiterTitle: contact.title || "Recruiter",
+        companyName: contact.job_submissions.company_name || "the company",
+        jobTitle: contact.job_submissions.job_title || "this position",
+        jobDescription: contact.job_submissions.job_input,
+        recruiterEmail: contact.email,
+        userBio: outreachProfile?.bio || undefined,
+        userAchievements: parseJsonArray(outreachProfile?.achievements),
+        userStoryHooks: parseJsonArray(outreachProfile?.story_hooks),
+        userCareerGoals: outreachProfile?.career_goals || undefined,
+        voiceFormality: outreachProfile?.voice_formality,
+        voiceDirectness: outreachProfile?.voice_directness,
+        voiceLength: outreachProfile?.voice_length,
+        voiceNotes: outreachProfile?.voice_notes || undefined,
       });
 
-      const generatedMessage = response_text;
-
-      // Update contact with generated message using Supabase
-      const updateData: any = {};
-      
-      if (messageType === "email") {
-        updateData.generated_email_message = generatedMessage;
-        updateData.email_draft = generatedMessage;
-      } else {
-        updateData.generated_linkedin_message = generatedMessage;
-        updateData.linkedin_message = generatedMessage;
-      }
-      
+      // Save all fields to recruiter_contacts
       await supabase
         .from('recruiter_contacts')
-        .update(updateData)
+        .update({
+          email_draft: messages.emailContent,
+          generated_email_message: messages.emailContent,
+          email_subject: messages.emailSubject,
+          linkedin_message: messages.linkedinContent,
+          generated_linkedin_message: messages.linkedinContent,
+        })
         .eq('id', contactId);
 
-      res.json({ message: generatedMessage });
+      res.json({
+        emailSubject: messages.emailSubject,
+        emailContent: messages.emailContent,
+        linkedinContent: messages.linkedinContent,
+        hasProfile,
+      });
     } catch (error) {
       console.error("Error generating message:", error);
       res.status(500).json({ message: "Failed to generate message" });

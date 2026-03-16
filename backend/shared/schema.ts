@@ -84,6 +84,7 @@ export const recruiterContacts = pgTable("recruiter_contacts", {
   generatedEmailMessage: text("generated_email_message"), // AI-generated email content
   generatedLinkedInMessage: text("generated_linkedin_message"), // AI-generated LinkedIn content
   emailDraft: text("email_draft"), // Alternative email field name
+  emailSubject: varchar("email_subject"), // AI-generated email subject line
   linkedinMessage: text("linkedin_message"), // Alternative LinkedIn field name
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
