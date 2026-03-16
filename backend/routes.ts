@@ -265,6 +265,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Apollo + NeverBounce Enhanced Search
         console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);
         
+        // Fetch company employee count from Apollo for size-aware targeting
+        let employeeCount: number | undefined;
+        if (organizationId) {
+          try {
+            const { apolloService } = await import("./apolloService");
+            const orgs = await apolloService.searchOrganizations({
+              company_name: apolloParams.company_name || companyName
+            });
+            const matchedOrg = orgs.find(o => o.id === organizationId);
+            if (matchedOrg?.employees) {
+              employeeCount = matchedOrg.employees;
+              console.log(`Company size from Apollo: ${employeeCount} employees`);
+            }
+          } catch (e) {
+            console.warn("Could not fetch employee count:", e);
+          }
+        }
+
         const apolloSearchResult = await enhancedEnrichmentService.searchAndEnrichContacts({
           company_name: apolloParams.company_name || companyName,
           job_title: apolloParams.job_title || jobTitle,
@@ -275,7 +293,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           job_region: apolloParams.job_region,
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
-          organization_id: organizationId
+          organization_id: organizationId,
+          employee_count: employeeCount
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
@@ -858,7 +877,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Generate personalized messages using OpenAI
+      // Fetch user's outreach profile for personalization
+      const { data: outreachProfile } = await supabase
+        .from('user_outreach_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      const parseJsonArray = (val: any): string[] => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
+        return [];
+      };
+
+      // Generate personalized messages using Claude + outreach profile
       const { generatePersonalizedMessages } = await import("./personalizedMessaging.js");
       const messages = await generatePersonalizedMessages({
         recruiterName: recruiter.name || "Hiring Manager",
@@ -866,7 +898,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyName: recruiter.job_submissions.company_name || "the company",
         jobTitle: recruiter.job_submissions.job_title || "this position",
         jobDescription: recruiter.job_submissions.job_input,
-        recruiterEmail: recruiter.email
+        recruiterEmail: recruiter.email,
+        userBio: outreachProfile?.bio || undefined,
+        userAchievements: parseJsonArray(outreachProfile?.achievements),
+        userStoryHooks: parseJsonArray(outreachProfile?.story_hooks),
+        userCareerGoals: outreachProfile?.career_goals || undefined,
+        voiceFormality: outreachProfile?.voice_formality,
+        voiceDirectness: outreachProfile?.voice_directness,
+        voiceLength: outreachProfile?.voice_length,
+        voiceNotes: outreachProfile?.voice_notes || undefined,
       });
 
       // Save both messages to database using Supabase

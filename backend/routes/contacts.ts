@@ -291,39 +291,90 @@ export function registerContactRoutes(app: Express) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Generate message using Claude
+      // Fetch user's outreach profile for personalization
+      const { data: profile } = await supabase
+        .from('user_outreach_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      // Build personalization context from outreach profile
+      const bio = profile?.bio?.trim() || '';
+      const achievements = (() => {
+        try {
+          const arr = typeof profile?.achievements === 'string' ? JSON.parse(profile.achievements) : (profile?.achievements || []);
+          return Array.isArray(arr) ? arr : [];
+        } catch { return []; }
+      })();
+      const storyHooks = (() => {
+        try {
+          const arr = typeof profile?.story_hooks === 'string' ? JSON.parse(profile.story_hooks) : (profile?.story_hooks || []);
+          return Array.isArray(arr) ? arr : [];
+        } catch { return []; }
+      })();
+      const careerGoals = profile?.career_goals?.trim() || '';
+      const voiceFormality = profile?.voice_formality ?? 0.5;
+      const voiceDirectness = profile?.voice_directness ?? 0.5;
+      const voiceLength = profile?.voice_length ?? 0.3;
+      const voiceNotes = profile?.voice_notes?.trim() || '';
+
+      // Build voice instruction
+      const voiceInstruction = [
+        voiceFormality < 0.3 ? 'Use a casual, conversational tone.' : voiceFormality > 0.7 ? 'Use a formal, polished tone.' : '',
+        voiceDirectness > 0.7 ? 'Be direct and get to the point quickly.' : voiceDirectness < 0.3 ? 'Be warm and build rapport before the ask.' : '',
+        voiceLength > 0.6 ? 'Write at full length with detail.' : voiceLength < 0.2 ? 'Keep it extremely brief.' : 'Keep it concise.',
+        voiceNotes ? `Additional voice notes: ${voiceNotes}` : ''
+      ].filter(Boolean).join(' ');
+
+      // Build profile context block
+      const profileContext = [
+        bio ? `About me: ${bio}` : '',
+        achievements.length > 0 ? `Key achievements:\n${achievements.slice(0, 3).map((a: string) => `- ${a}`).join('\n')}` : '',
+        storyHooks.length > 0 ? `Personal hooks for rapport: ${storyHooks.slice(0, 2).join('; ')}` : '',
+        careerGoals ? `Career goals: ${careerGoals}` : ''
+      ].filter(Boolean).join('\n\n');
+
+      // Generate message using Claude with outreach profile context
+      const contactName = contact.name || "the recruiter";
+      const contactTitle = contact.title || "Unknown Title";
+      const companyName = contact.job_submissions.company_name || "the company";
+      const jobTitle = contact.job_submissions.job_title || "the position";
+
       const prompt = messageType === "email"
-        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
+        ? `Write an outreach email to ${contactName} (${contactTitle}) about the ${jobTitle} role at ${companyName}.
 
-Keep it concise (under 150 words), personalized, and include:
-- Brief introduction
-- Specific interest in the role
-- Relevant qualifications
-- Request for discussion
+STRUCTURE (exactly 3 short paragraphs, 75-125 words total):
+1. Personal hook — reference a shared connection, something specific about ${companyName}, or a story hook. Make it feel human, not templated.
+2. Value match — mention 1-2 specific experiences or achievements that directly map to this role. Don't list your resume, pick the most relevant wins.
+3. Soft CTA — express interest in chatting, don't ask them to "review your resume" or "consider your application."
 
-Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${contact.job_submissions.company_name || "Unknown Company"}
-Job: ${contact.job_submissions.job_title || "Unknown Position"}
+${profileContext ? `\nABOUT THE SENDER:\n${profileContext}` : ''}
 
-Email tone: ${tone}`
-        : `Generate a professional ${tone} LinkedIn message to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
+${voiceInstruction}
 
-Keep it under 300 characters for LinkedIn limits, personalized and include:
-- Brief introduction
-- Interest in the role
-- Request to connect
+RULES:
+- No subject line (will be generated separately)
+- Do NOT start with "I hope this email finds you well" or any cliche opener
+- Do NOT use "I am writing to express my interest..."
+- First name only for greeting (Hi ${contactName.split(' ')[0]},)
+- Sign off with just "Best," and the sender's name (leave as [Your Name])`
+        : `Write a LinkedIn connection request message to ${contactName} (${contactTitle}) about the ${jobTitle} role at ${companyName}.
 
-Contact: ${contact.name || "Unknown"} - ${contact.title || "Unknown Title"}
-Company: ${contact.job_submissions.company_name || "Unknown Company"}
-Job: ${contact.job_submissions.job_title || "Unknown Position"}
+RULES:
+- Under 200 characters (LinkedIn limit)
+- One sentence max, conversational
+- Reference something specific about the role or company
+- End with a question to invite response
+${storyHooks.length > 0 ? `- Try to use one of these hooks: ${storyHooks[0]}` : ''}
+${voiceInstruction}`;
 
-LinkedIn message tone: ${tone}`;
+      const systemPrompt = `You write authentic, high-converting outreach messages for job seekers. Your messages sound like a real person wrote them — not a template. You never use corporate jargon, cliches, or generic phrases. Every message includes something specific to the recipient, the company, or the role.`;
 
       const generatedMessage = await callClaude({
-        system: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages.",
+        system: systemPrompt,
         user: prompt,
         temperature: 0.7,
-        maxTokens: 300,
+        maxTokens: messageType === "email" ? 500 : 150,
       });
 
       // Update contact with generated message using Supabase

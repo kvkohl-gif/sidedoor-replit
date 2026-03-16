@@ -15,11 +15,95 @@ export interface ContactSearchRequest {
   departments?: string[];
   job_content?: string; // New: for extracting recruiter names from job descriptions
   job_country?: string; // New: country where job is located
-  job_region?: string; // New: state/region where job is located  
+  job_region?: string; // New: state/region where job is located
   company_hq_country?: string; // New: company headquarters country
   remote_hiring_countries?: string[]; // New: countries where company hires remotely
   organization_id?: string; // New: Apollo organization ID for precise matching
   website_url?: string; // New: company website URL for domain filtering
+  employee_count?: number; // Company size from Apollo org data
+}
+
+// Company size tiers for targeting strategy
+type CompanySizeTier = 'tiny' | 'small' | 'mid' | 'large' | 'enterprise';
+
+function getCompanySizeTier(employees?: number): CompanySizeTier {
+  if (!employees || employees <= 20) return 'tiny';
+  if (employees <= 100) return 'small';
+  if (employees <= 500) return 'mid';
+  if (employees <= 2000) return 'large';
+  return 'enterprise';
+}
+
+/**
+ * Adjust search strategy based on company size:
+ * - Tiny (1-20): Skip recruiter bucket, target founders/C-suite/dept heads directly
+ * - Small (20-100): Light recruiter search, heavy on hiring managers
+ * - Mid (100-500): Balanced two-bucket (current default)
+ * - Large (500-2000): Specialized recruiters, stricter department filtering
+ * - Enterprise (2000+): TA partners, tighter seniority, department-specific recruiters
+ */
+function getSearchStrategyForSize(tier: CompanySizeTier): {
+  skipRecruiterBucket: boolean;
+  recruiterPerPage: number;
+  deptLeadPerPage: number;
+  recruiterTitleOverrides?: string[];
+  deptLeadSeniorityOverrides?: string[];
+  maxTotalContacts: number;
+} {
+  switch (tier) {
+    case 'tiny':
+      return {
+        skipRecruiterBucket: true, // No recruiters at 20-person startups
+        recruiterPerPage: 0,
+        deptLeadPerPage: 5,
+        deptLeadSeniorityOverrides: ['c_suite', 'vp', 'head', 'director', 'founder'],
+        maxTotalContacts: 5
+      };
+    case 'small':
+      return {
+        skipRecruiterBucket: false,
+        recruiterPerPage: 3,
+        deptLeadPerPage: 5,
+        recruiterTitleOverrides: [
+          'Head of People', 'People Operations', 'HR Manager',
+          'Talent', 'Office Manager', 'Chief of Staff'
+        ],
+        deptLeadSeniorityOverrides: ['c_suite', 'vp', 'head', 'director', 'manager'],
+        maxTotalContacts: 8
+      };
+    case 'mid':
+      return {
+        skipRecruiterBucket: false,
+        recruiterPerPage: 5,
+        deptLeadPerPage: 5,
+        maxTotalContacts: 10
+      };
+    case 'large':
+      return {
+        skipRecruiterBucket: false,
+        recruiterPerPage: 5,
+        deptLeadPerPage: 5,
+        recruiterTitleOverrides: [
+          'Technical Recruiter', 'Senior Technical Recruiter',
+          'Talent Acquisition Partner', 'Recruiting Manager',
+          'Senior Recruiter', 'Lead Recruiter'
+        ],
+        maxTotalContacts: 10
+      };
+    case 'enterprise':
+      return {
+        skipRecruiterBucket: false,
+        recruiterPerPage: 5,
+        deptLeadPerPage: 3,
+        recruiterTitleOverrides: [
+          'Technical Recruiter', 'Senior Technical Recruiter',
+          'Talent Acquisition Partner', 'University Recruiter',
+          'Recruiting Lead', 'Sourcer', 'Senior Sourcer'
+        ],
+        deptLeadSeniorityOverrides: ['director', 'vp', 'c_suite'],
+        maxTotalContacts: 8
+      };
+  }
 }
 
 export interface EnrichedContact {
@@ -118,6 +202,18 @@ export class EnhancedEnrichmentService {
       twoBucketTargets = await generateTwoBucketTargets(request.job_title || "Unknown Position");
     }
     
+    // Determine company size tier for targeting adjustments
+    const sizeTier = getCompanySizeTier(request.employee_count);
+    const sizeStrategy = getSearchStrategyForSize(sizeTier);
+
+    if (request.employee_count) {
+      console.log(`=== COMPANY SIZE TARGETING ===`);
+      console.log(`Employees: ${request.employee_count} → Tier: ${sizeTier}`);
+      console.log(`Strategy: skipRecruiter=${sizeStrategy.skipRecruiterBucket}, recruiterPages=${sizeStrategy.recruiterPerPage}, deptLeadPages=${sizeStrategy.deptLeadPerPage}`);
+      if (sizeStrategy.recruiterTitleOverrides) console.log(`Recruiter title overrides: ${sizeStrategy.recruiterTitleOverrides.join(', ')}`);
+      if (sizeStrategy.deptLeadSeniorityOverrides) console.log(`Seniority overrides: ${sizeStrategy.deptLeadSeniorityOverrides.join(', ')}`);
+    }
+
     const searchMetadata = {
       query: `${request.company_name} recruiters and department leads`,
       results_found: 0,
@@ -253,23 +349,26 @@ export class EnhancedEnrichmentService {
             
             console.log(`Department lead search completed: Found ${departmentLeadContacts.length} contacts`);
             
-            // Also search for recruiters
-            console.log("Searching for recruiters using company name...");
-            recruiterContacts = await apolloService.searchRecruitingContacts({
-              company_name: request.company_name,
-              job_title: request.job_title,
-              location: request.location,
-              specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
-              job_country: request.job_country,
-              job_region: request.job_region,
-              company_hq_country: request.company_hq_country,
-              remote_hiring_countries: request.remote_hiring_countries,
-              per_page: 10,
-              organization_id: undefined,
-              website_url: request.website_url
-            });
-            
-            console.log(`Recruiter search completed: Found ${recruiterContacts.length} contacts`);
+            // Also search for recruiters (skip for tiny companies)
+            if (!sizeStrategy.skipRecruiterBucket) {
+              console.log(`Searching for recruiters using company name (tier: ${sizeTier})...`);
+              recruiterContacts = await apolloService.searchRecruitingContacts({
+                company_name: request.company_name,
+                job_title: request.job_title,
+                location: request.location,
+                specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
+                job_country: request.job_country,
+                job_region: request.job_region,
+                company_hq_country: request.company_hq_country,
+                remote_hiring_countries: request.remote_hiring_countries,
+                per_page: sizeStrategy.recruiterPerPage || 10,
+                organization_id: undefined,
+                website_url: request.website_url
+              });
+              console.log(`Recruiter search completed: Found ${recruiterContacts.length} contacts`);
+            } else {
+              console.log(`Skipping recruiter search for ${sizeTier} company (${request.employee_count} employees)`);
+            }
           }
           
           console.log(`Enhanced search complete: ${recruiterContacts.length} recruiters + ${departmentLeadContacts.length} department leads`);
@@ -279,20 +378,24 @@ export class EnhancedEnrichmentService {
           console.log("Department inference is NULL - falling back to traditional two-bucket search...");
           console.log(`Two bucket targets: ${twoBucketTargets ? 'Available' : 'NULL'}`);
           
-          // Search for recruiting contacts
-          recruiterContacts = await apolloService.searchRecruitingContacts({
-            company_name: request.company_name,
-            job_title: request.job_title,
-            location: request.location,
-            specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
-            job_country: request.job_country,
-            job_region: request.job_region,
-            company_hq_country: request.company_hq_country,
-            remote_hiring_countries: request.remote_hiring_countries,
-            per_page: 10,
-            organization_id: request.organization_id,
-            website_url: request.website_url
-          });
+          // Search for recruiting contacts (skip for tiny companies)
+          if (!sizeStrategy.skipRecruiterBucket) {
+            recruiterContacts = await apolloService.searchRecruitingContacts({
+              company_name: request.company_name,
+              job_title: request.job_title,
+              location: request.location,
+              specific_recruiter_name: recruiterFromJobDescription?.recruiter_name || undefined,
+              job_country: request.job_country,
+              job_region: request.job_region,
+              company_hq_country: request.company_hq_country,
+              remote_hiring_countries: request.remote_hiring_countries,
+              per_page: sizeStrategy.recruiterPerPage || 10,
+              organization_id: request.organization_id,
+              website_url: request.website_url
+            });
+          } else {
+            console.log(`Skipping recruiter search for ${sizeTier} company (${request.employee_count} employees)`);
+          }
           
           // Search for department lead contacts using fallback
           if (twoBucketTargets) {
