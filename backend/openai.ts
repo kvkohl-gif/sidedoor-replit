@@ -1,11 +1,6 @@
-import OpenAI from "openai";
+import { callClaude } from "./claude";
 import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
 import { classifyJobRole } from "./roleTaxonomyService";
-
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY
-});
 
 export interface JobDataExtraction {
   job_title: string;
@@ -75,8 +70,7 @@ export interface TwoBucketTargets {
  */
 export function mapJobTitleToDepartment(jobTitle: string): DepartmentTarget | null {
   const titleLower = jobTitle.toLowerCase();
-  
-  // Department mapping logic as specified in requirements
+
   const departmentMappings: Record<string, DepartmentTarget> = {
     "product": {
       department: "Product Management",
@@ -89,7 +83,7 @@ export function mapJobTitleToDepartment(jobTitle: string): DepartmentTarget | nu
       seniorities: ["manager", "director", "vp", "head", "c_suite"]
     },
     "design": {
-      department: "Design", 
+      department: "Design",
       titles: ["Head of Design", "VP of Design", "Director of Design", "Chief Design Officer", "Design Lead"],
       seniorities: ["director", "vp", "head", "c_suite"]
     },
@@ -130,47 +124,38 @@ export function mapJobTitleToDepartment(jobTitle: string): DepartmentTarget | nu
     }
   };
 
-  // Check for exact matches
   for (const [keyword, department] of Object.entries(departmentMappings)) {
     if (titleLower.includes(keyword)) {
       return department;
     }
   }
 
-  // Additional specific mappings
   if (titleLower.includes("software engineer") || titleLower.includes("developer") || titleLower.includes("tech")) {
     return departmentMappings["engineering"];
   }
-  
   if (titleLower.includes("ux") || titleLower.includes("ui")) {
     return departmentMappings["design"];
   }
-  
   if (titleLower.includes("ml") || titleLower.includes("machine learning") || titleLower.includes("data scientist")) {
     return departmentMappings["data"];
   }
-  
   if (titleLower.includes("account executive") || titleLower.includes("business development")) {
     return departmentMappings["sales"];
   }
-  
   if (titleLower.includes("customer support") || titleLower.includes("cx")) {
     return departmentMappings["customer"];
   }
-  
   if (titleLower.includes("chief of staff")) {
     return departmentMappings["operations"];
   }
-  
   if (titleLower.includes("hr") || titleLower.includes("people")) {
     return departmentMappings["people"];
   }
-  
   if (titleLower.includes("controller")) {
     return departmentMappings["finance"];
   }
 
-  return null; // No clear department match
+  return null;
 }
 
 /**
@@ -202,22 +187,17 @@ OUTPUT JSON SHAPE:
 }`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: content }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: content,
+      jsonMode: true,
       temperature: 0.1,
     });
 
-    const extraction = JSON.parse(response.choices[0].message.content || "{}");
-    
-    // Convert new format to old format for compatibility
+    const extraction = JSON.parse(raw);
     const contacts = Array.isArray(extraction.recruiter_contacts) ? extraction.recruiter_contacts : [];
     const firstContact = contacts[0];
-    
+
     return {
       recruiter_name: firstContact?.name || null,
       title: firstContact?.role || null,
@@ -259,9 +239,8 @@ export async function extractApolloSearchParams(content: string): Promise<{
   fallback_recruiter_titles: string[];
   fallback_departments: string[];
 }> {
-  // Pre-classify with taxonomy for context injection
   const taxonomyClassification = classifyJobRole(
-    content.substring(0, 200) // Use first 200 chars which typically contain the job title
+    content.substring(0, 200)
   );
   const taxonomyHint = taxonomyClassification.taxonomyMatch
     ? `\n\nTAXONOMY PRE-CLASSIFICATION (use as strong prior):\n${taxonomyClassification.taxonomyContext}`
@@ -286,9 +265,9 @@ Rules:
     * Design jobs: "Design Manager", "Senior Design Manager", "Director of Design", "VP Design", "Head of Design"
     * Data/Analytics jobs: "Data Manager", "Analytics Manager", "Director of Data", "Head of Analytics"
   - EXCLUDE: Customer Success, Sales, Marketing, Operations roles unless explicitly relevant to the job posting
-- Rank every target title with confidence 0–100 based on job context and department relevance.
+- Rank every target title with confidence 0-100 based on job context and department relevance.
 - Geography: extract city/region/country if present; infer cautiously from page/company if explicitly indicated (otherwise leave empty).
-- Seniority: "Intern/Entry", "Associate", "Mid", "Senior", "Lead/Staff/Principal", "Manager", "Director", "VP", "C‑level", or "Not specified".
+- Seniority: "Intern/Entry", "Associate", "Mid", "Senior", "Lead/Staff/Principal", "Manager", "Director", "VP", "C-level", or "Not specified".
 
 OUTPUT JSON SHAPE:
 {
@@ -332,18 +311,15 @@ ${content}
 Return the extracted data in the JSON format specified.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
       temperature: 0.1,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(raw);
+
     return {
       job_title: result.job_title || undefined,
       company_name: result.company_name || undefined,
@@ -367,7 +343,6 @@ Return the extracted data in the JSON format specified.`;
         { title: "Talent Partner", confidence: 80 }
       ],
       department_lead_title_targets: Array.isArray(result.department_lead_title_targets) ? result.department_lead_title_targets : [
-        // Smart defaults based on primary department
         ...(result.primary_department === "Product Management" ? [
           { title: "Product Manager", confidence: 95 },
           { title: "Senior Product Manager", confidence: 90 },
@@ -392,7 +367,7 @@ Return the extracted data in the JSON format specified.`;
       fallback_departments: Array.isArray(result.fallback_departments) ? result.fallback_departments : ["People", "Recruiting", "Talent"]
     };
   } catch (error) {
-    console.error("OpenAI Apollo params extraction error:", error);
+    console.error("Claude Apollo params extraction error:", error);
     return {
       job_title: undefined,
       company_name: undefined,
@@ -435,15 +410,15 @@ ${ROLE_TAXONOMY_CONTEXT}
 Return ONLY valid JSON (no prose). Be strict: if a field is unknown, use "Not specified" (or [] for lists). Never hallucinate company domains or emails.
 
 Be aggressive and resilient when finding the job title and company:
-- Scan: H1–H3 tags; near CTA buttons ("Apply", "Submit application"), breadcrumb text, page <title>, meta tags (og:title, og:site_name, name="title"), image alt/ARIA labels, and URL slugs.
+- Scan: H1-H3 tags; near CTA buttons ("Apply", "Submit application"), breadcrumb text, page <title>, meta tags (og:title, og:site_name, name="title"), image alt/ARIA labels, and URL slugs.
 - Prefer job-role context over blog/news headings.
 - If multiple candidates appear, choose the one most aligned with a job opening.
 
-For minimal, nav‑heavy, or JS‑heavy pages, extract what you can and infer cautiously from URL and visible fragments. Only use "Not specified" if truly absent.
+For minimal, nav-heavy, or JS-heavy pages, extract what you can and infer cautiously from URL and visible fragments. Only use "Not specified" if truly absent.
 
 Also:
-- Split responsibilities vs. requirements if the text separates them; otherwise best‑effort.
-- Map departments from title/description into a small set (Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other). Include up to two departments if cross‑functional.
+- Split responsibilities vs. requirements if the text separates them; otherwise best-effort.
+- Map departments from title/description into a small set (Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other). Include up to two departments if cross-functional.
 - Create LinkedIn keywords: role synonyms, core tech/tools, seniority tokens, and company name.
 
 OUTPUT JSON SHAPE:
@@ -477,26 +452,22 @@ IMPORTANT: If this appears to be from a Givebutter job posting URL and mentions 
 Return the extracted data in the JSON format specified.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
       temperature: 0.3,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
-    console.log(`OpenAI extractJobData raw response:`, response.choices[0].message.content);
-    
-    // Validate and ensure required fields with "Not specified" defaults
+    const result = JSON.parse(raw);
+
+    console.log(`Claude extractJobData raw response:`, raw);
+
     return {
       job_title: result.job_title || "Not specified",
-      company_name: result.company_name || "Not specified", 
+      company_name: result.company_name || "Not specified",
       job_url: originalJobUrl || "Not specified",
-      company_website: "Not specified", // Will be populated from Apollo params in routes.ts
+      company_website: "Not specified",
       location: result.location || "Not specified",
       job_description: result.description || "Not specified",
       key_responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities : ["Not specified"],
@@ -505,7 +476,7 @@ Return the extracted data in the JSON format specified.`;
       linkedin_keywords: Array.isArray(result.linkedin_keywords) ? result.linkedin_keywords : [],
     };
   } catch (error) {
-    console.error("OpenAI job data extraction error:", error);
+    console.error("Claude job data extraction error:", error);
     throw new Error("Failed to extract job data. Please try again.");
   }
 }
@@ -515,7 +486,7 @@ export async function extractRecruiterInfo(jobInput: string, inputType: "text" |
 
 Before templating, redact any person names or emails found in the input (ignore for output).
 
-Create two email tones (Formal, Conversational) and one short LinkedIn DM. Personalize with role, company, and 1–2 value props derived from requirements/responsibilities. Keep placeholders like {{FirstName}} and {{YourPortfolio}}. Max 140 words per email, 300 characters for the DM.
+Create two email tones (Formal, Conversational) and one short LinkedIn DM. Personalize with role, company, and 1-2 value props derived from requirements/responsibilities. Keep placeholders like {{FirstName}} and {{YourPortfolio}}. Max 140 words per email, 300 characters for the DM.
 
 Return ONLY valid JSON (no prose).
 
@@ -524,7 +495,7 @@ OUTPUT JSON SHAPE:
   "company_name": "string|Not specified",
   "job_title": "string|Not specified",
   "location": "string|Not specified",
-  "summary": "1–3 sentences describing the role focus",
+  "summary": "1-3 sentences describing the role focus",
   "value_props": ["string","string"],
   "subject_lines": ["string","string","string"],
   "email_template_formal": "string",
@@ -553,37 +524,32 @@ Instructions:
 - Messages should be templates that can work with any recruiter at the company`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
       temperature: 0.3,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
-    // Validate and ensure required fields
+    const result = JSON.parse(raw);
+
     if (!result.company_name || !result.job_title) {
       throw new Error("Failed to extract required company and job information");
     }
-    
-    // Always return empty array for recruiters - Apollo will provide real data
+
     result.recruiters = [];
-    
+
     if (!result.email_draft) {
       result.email_draft = "Please customize this message template for your specific outreach.";
     }
-    
+
     if (!result.linkedin_message) {
       result.linkedin_message = "Please customize this message template for your specific outreach.";
     }
 
     return result as RecruiterExtraction;
   } catch (error) {
-    console.error("OpenAI API error:", error);
+    console.error("Claude API error:", error);
     throw new Error("Failed to extract job information. Please try again.");
   }
 }
@@ -603,9 +569,9 @@ Return ONLY valid JSON (no prose). Be precise; do NOT guess domains.
 
 Rules & fallbacks:
 - If the page is clearly a company-owned job site, infer domain from known ATS subpaths:
-  - jobs.lever.co/{org} → canonical domain may be {org}.com or org's declared domain on page; first prefer explicit links/meta.
-  - greenhouse.io boards/{org} → check page header/footer links;
-  - workday/ashby/teamsense/etc. → use company links or meta og:site_name.
+  - jobs.lever.co/{org} -> canonical domain may be {org}.com or org's declared domain on page; first prefer explicit links/meta.
+  - greenhouse.io boards/{org} -> check page header/footer links;
+  - workday/ashby/teamsense/etc. -> use company links or meta og:site_name.
 - Prefer explicit company name in page body/header/footer. Use meta tags: og:site_name, og:title.
 - If only a brand name is visible, return that as company_name and leave domain "Not specified".
 - Provide a lowercase fallback_query for fuzzy org search.
@@ -626,18 +592,15 @@ ${content}
 Return the company data in the JSON format specified.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
+      temperature: 0.1,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(raw);
+
     return {
       company_name: result.company_name || null,
       company_domain: result.website_domain || null,
@@ -645,7 +608,7 @@ Return the company data in the JSON format specified.`;
       fallback_query: result.fallback_query || null
     };
   } catch (error) {
-    console.error("OpenAI company info extraction error:", error);
+    console.error("Claude company info extraction error:", error);
     return {
       company_name: null,
       company_domain: null,
@@ -677,9 +640,9 @@ Return ONLY valid JSON (no prose).
 Departments enum: Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other.
 
 Rules:
-- Choose a primary_department; include secondary if cross‑functional (e.g., "Product Data Analyst" ⇒ Product Management + Data Analysis).
+- Choose a primary_department; include secondary if cross-functional (e.g., "Product Data Analyst" => Product Management + Data Analysis).
 - Propose recruiter titles first (for pipeline access), then department leaders (decision-makers).
-- Tailor lead titles to the job family and level (e.g., Staff SWE → Eng Manager/Director/VP Eng; Product Designer → Design Manager/Head of Design).
+- Tailor lead titles to the job family and level (e.g., Staff SWE -> Eng Manager/Director/VP Eng; Product Designer -> Design Manager/Head of Design).
 - Include brief notes on why each bucket and how to pivot if zero results.
 
 OUTPUT JSON SHAPE:
@@ -708,18 +671,15 @@ ${jobDescription ? `Job Description: ${jobDescription}` : ''}
 Return the structured contact strategy in the exact JSON format specified.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
+      temperature: 0.1,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(raw);
+
     return {
       recruiter_contacts: {
         titles: Array.isArray(result.recruiter_contacts?.titles) ? result.recruiter_contacts.titles : [
@@ -739,7 +699,7 @@ Return the structured contact strategy in the exact JSON format specified.`;
       }
     };
   } catch (error) {
-    console.error("OpenAI Department Strategy Builder error:", error);
+    console.error("Claude Department Strategy Builder error:", error);
     return {
       recruiter_contacts: {
         titles: ["recruiter", "talent acquisition specialist", "recruiting manager", "technical recruiter", "senior recruiter"],
@@ -759,9 +719,8 @@ Return the structured contact strategy in the exact JSON format specified.`;
  * Generate two-bucket outreach targets based on job title (legacy function - now enhanced)
  */
 export async function generateTwoBucketTargets(jobTitle: string): Promise<TwoBucketTargets> {
-  // First try deterministic mapping
   const deterministicMapping = mapJobTitleToDepartment(jobTitle);
-  
+
   if (deterministicMapping) {
     return {
       recruiter_contacts: {
@@ -780,7 +739,6 @@ export async function generateTwoBucketTargets(jobTitle: string): Promise<TwoBuc
     };
   }
 
-  // If no deterministic mapping, use AI to generate targets
   try {
     const systemPrompt = `You are analyzing job titles to create a two-bucket outreach strategy for job seekers.
 
@@ -808,22 +766,19 @@ Choose primary_department from: Engineering, Product Management, Design, Data An
 
 Return the targeting strategy in the specified JSON format.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
       temperature: 0.2,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(raw);
+
     return {
       recruiter_contacts: {
-        titles: Array.isArray(result.recruiter_contacts?.titles) 
-          ? result.recruiter_contacts.titles 
+        titles: Array.isArray(result.recruiter_contacts?.titles)
+          ? result.recruiter_contacts.titles
           : ["recruiter", "talent acquisition specialist"],
         priority: result.recruiter_contacts?.priority ?? true
       },
@@ -840,9 +795,8 @@ Return the targeting strategy in the specified JSON format.`;
     };
 
   } catch (error) {
-    console.error("OpenAI two-bucket target generation error:", error);
-    
-    // Return safe defaults
+    console.error("Claude two-bucket target generation error:", error);
+
     return {
       recruiter_contacts: {
         titles: ["recruiter", "talent acquisition specialist", "recruiting manager"],

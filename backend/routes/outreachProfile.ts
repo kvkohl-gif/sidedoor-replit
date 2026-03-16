@@ -1,8 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { supabase } from "../lib/supabaseClient";
-import OpenAI from "openai";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { callClaude } from "../claude";
 
 function requireAuth(req: Request, res: Response, next: () => void) {
   if (!req.user) return res.status(401).json({ error: "Not authenticated" });
@@ -207,17 +205,13 @@ ${resumeText}`;
         return res.status(400).json({ error: "Invalid section" });
       }
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
+      const raw = await callClaude({
+        system: systemPrompt,
+        user: userPrompt,
+        jsonMode: section !== "bio", // bio returns prose, others return JSON
         temperature: 0.7,
-        max_tokens: 1000,
+        maxTokens: 1000,
       });
-
-      const raw = completion.choices[0]?.message?.content?.trim() || "";
 
       if (section === "bio") {
         res.json({ suggestion: raw });

@@ -5,7 +5,7 @@ import { registerContactRoutes } from "./routes/contacts";
 import { registerOutreachProfileRoutes } from "./routes/outreachProfile";
 import dbTestRouter from "./routes/dbTest";
 import { supabase } from "./lib/supabaseClient";
-import OpenAI from "openai";
+import { callClaude } from "./claude";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
@@ -962,9 +962,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           configured: serviceStatus.neverbounce_configured,
           status: serviceStatus.neverbounce_configured ? "ready" : "api_key_missing"
         },
-        openai: {
-          configured: !!process.env.OPENAI_API_KEY,
-          status: !!process.env.OPENAI_API_KEY ? "ready" : "api_key_missing"
+        claude: {
+          configured: !!process.env.ANTHROPIC_API_KEY,
+          status: !!process.env.ANTHROPIC_API_KEY ? "ready" : "api_key_missing"
         },
         timestamp: new Date().toISOString()
       });
@@ -983,10 +983,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message and tone are required" });
       }
 
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-
       const tonePrompts = {
         confident: "Rewrite the following message to sound more confident and assertive. Preserve the meaning, and keep it suitable for outreach.",
         concise: "Rewrite the following message to be more concise and direct while maintaining the key points. Preserve the meaning, and keep it suitable for outreach.",
@@ -997,23 +993,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const prompt = tonePrompts[tone as keyof typeof tonePrompts] || tonePrompts.professional;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [
-          {
-            role: "system",
-            content: prompt
-          },
-          {
-            role: "user",
-            content: `Message:\n${message}`
-          }
-        ],
-        max_tokens: 500,
+      const improvedMessage = await callClaude({
+        system: prompt,
+        user: `Message:\n${message}`,
         temperature: 0.7,
+        maxTokens: 500,
       });
-
-      const improvedMessage = response.choices[0].message.content;
       
       res.json({ improvedMessage });
     } catch (error) {
@@ -1115,11 +1100,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Contact not found" });
       }
 
-      // Generate message using OpenAI
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      
-      const prompt = messageType === "email" 
-        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}. 
+      // Generate message using Claude
+      const prompt = messageType === "email"
+        ? `Generate a professional ${tone} email to ${contact.name || "the recruiter"} (${contact.title || "Unknown Title"}) about the ${contact.job_submissions.job_title || "position"} at ${contact.job_submissions.company_name || "the company"}.
 
 Keep it concise (under 150 words), personalized, and include:
 - Brief introduction
@@ -1145,23 +1128,14 @@ Job: ${contact.job_submissions.job_title || "Unknown Position"}
 
 LinkedIn message tone: ${tone}`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [
-          {
-            role: "system", 
-            content: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages."
-          },
-          { 
-            role: "user", 
-            content: prompt 
-          }
-        ],
-        max_tokens: 300,
+      const response_text = await callClaude({
+        system: "You are an expert at writing professional outreach messages for job seekers. Write clear, personalized, and effective messages.",
+        user: prompt,
+        maxTokens: 300,
         temperature: 0.7,
       });
 
-      const generatedMessage = response.choices[0].message.content;
+      const generatedMessage = response_text;
 
       // Update contact with generated message using Supabase
       const updateData: any = {};

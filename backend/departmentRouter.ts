@@ -1,8 +1,6 @@
-import OpenAI from "openai";
+import { callClaude } from "./claude";
 import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
 import { classifyJobRole } from "./roleTaxonomyService";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export type DeptId = 'product' | 'engineering' | 'design' | 'data' | 'it' | 'marketing' | 'sales' | 'customer_success' | 'operations' | 'people' | 'finance' | 'legal';
 
@@ -66,28 +64,28 @@ ${taxonomyHint}
 
 TASKS:
 1) Infer the MOST LIKELY department(s) that own this role inside the company org chart.
-   Use this canonical taxonomy (id → label):
-   - product            → Product Management
-   - engineering        → Engineering / Software
-   - design             → Design / UX
-   - data               → Data / Analytics / Science
-   - it                 → IT / InfoSec
-   - marketing          → Marketing / Growth
-   - sales              → Sales
-   - customer_success   → Customer Success / Support
-   - operations         → Operations / BizOps
-   - people             → People / HR / Recruiting
-   - finance            → Finance
-   - legal              → Legal
+   Use this canonical taxonomy (id -> label):
+   - product            -> Product Management
+   - engineering        -> Engineering / Software
+   - design             -> Design / UX
+   - data               -> Data / Analytics / Science
+   - it                 -> IT / InfoSec
+   - marketing          -> Marketing / Growth
+   - sales              -> Sales
+   - customer_success   -> Customer Success / Support
+   - operations         -> Operations / BizOps
+   - people             -> People / HR / Recruiting
+   - finance            -> Finance
+   - legal              -> Legal
 
 2) Produce a DEPARTMENT-ALIGNED title target list for leadership/decision-maker contacts
    who would be relevant to the role. Mix IC/manager/leader titles but keep within the chosen
    department(s). Prefer modern, real-world titles used at tech companies.
 
 3) Also produce a small secondary list of CROSS-FUNCTION titles that commonly collaborate
-   with this role (e.g., Product ↔ Design/Eng, CS ↔ Sales/Support). Keep to 3–6 titles total.
+   with this role (e.g., Product <-> Design/Eng, CS <-> Sales/Support). Keep to 3-6 titles total.
 
-4) Return confidence scores (0–100) for each department and title.
+4) Return confidence scores (0-100) for each department and title.
 
 STRICT JSON OUTPUT:
 {
@@ -121,20 +119,17 @@ Job Description: ${job_description}
 Return department inference in the specified JSON format.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
+    const raw = await callClaude({
+      system: systemPrompt,
+      user: userPrompt,
+      jsonMode: true,
       temperature: 0.1,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(raw);
+
     console.log(`Department inference for ${job_title}:`, JSON.stringify(result, null, 2));
-    
+
     return {
       departments: Array.isArray(result.departments) ? result.departments : [
         { id: "product", label: "Product Management", confidence: 85 }
@@ -150,7 +145,6 @@ Return department inference in the specified JSON format.`;
     };
   } catch (error) {
     console.error("Department inference error:", error);
-    // Fallback for Product Management roles
     return {
       departments: [{ id: "product", label: "Product Management", confidence: 85 }],
       primary_titles: [
@@ -199,11 +193,9 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       .map(x => x.title)
   );
 
-  // Focus on senior decision-makers only - remove manager and principal
   const SENIORITIES = ['director', 'vp', 'c_suite', 'head', 'lead'];
 
   const plans: ApolloSearchPlan[] = [
-    // 1) Primary dept + primary titles (reduced to 3 contacts)
     {
       label: 'primary-dept+titles',
       payload: {
@@ -216,7 +208,6 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       },
       hardLimit: 3
     },
-    // 2) Primary dept + seniorities (reduced to 3 contacts)
     {
       label: 'primary-dept+seniorities',
       payload: {
@@ -230,7 +221,6 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
     }
   ];
 
-  // 3) Cross-function titles (reduced to 2 contacts, only if needed)
   if (crossTitles.length) {
     plans.push({
       label: 'cross-function+titles',
@@ -245,7 +235,6 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
     });
   }
 
-  // 4) Talent/Recruiting (reduced to 2 contacts as fallback)
   plans.push({
     label: 'recruiting-fallback',
     payload: {
@@ -273,25 +262,22 @@ export function isContactDeptAligned(
 ): boolean {
   const title = contactTitle.toLowerCase();
 
-  // If title matches any cross-function title, allow
   if (crossTitles.some(ct => title.includes(ct.toLowerCase()))) {
     return true;
   }
 
-  // Check department alignment if available
   if (contactDepartment) {
     const dept = contactDepartment.toLowerCase();
     const allowed = APOLLO_DEPT_MAP[topDept].some(d => dept.includes(d));
     if (allowed) return true;
   }
 
-  // Fall back to title heuristics
   return titleHeuristicMatchesTopDept(title, topDept);
 }
 
 function titleHeuristicMatchesTopDept(title: string, dept: DeptId): boolean {
   const t = title.toLowerCase();
-  
+
   if (dept === 'product') {
     return /(product\s(manager|lead|director|vp|head|owner)|pm\b)/.test(t);
   }
@@ -313,7 +299,6 @@ function titleHeuristicMatchesTopDept(title: string, dept: DeptId): boolean {
   if (dept === 'sales') {
     return /(sales|revenue|account|business development)/.test(t);
   }
-  
-  // Don't over-reject if uncertain
+
   return true;
 }
