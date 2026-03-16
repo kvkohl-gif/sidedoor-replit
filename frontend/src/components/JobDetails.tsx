@@ -23,16 +23,8 @@ import {
   Save,
   Users,
   Check,
-  Clock,
-  Shield,
-  TrendingUp,
-  Star,
-  UserCheck,
-  Tag,
-  MoreHorizontal,
   Send,
   Globe,
-  Zap,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -170,7 +162,6 @@ function formatSeniority(s: string | null): string | null {
   return map[s.toLowerCase()] || s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 }
 
-/** Get match quality based on bucket + seniority */
 function getMatchInfo(contact: Recruiter): { label: string; color: string; dotColor: string } {
   if (contact.outreachBucket === "department_lead") {
     if (contact.seniority && /director|vp|head|c_suite|chief/i.test(contact.seniority)) {
@@ -189,8 +180,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const [selectedContact, setSelectedContact] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showFullJD, setShowFullJD] = useState(false);
-  const [showCompanyDesc, setShowCompanyDesc] = useState(false);
-  const [showResponsibilities, setShowResponsibilities] = useState(true);
+  const [showJobInfo, setShowJobInfo] = useState(false);
   const [notesValue, setNotesValue] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
   const [logModalOpen, setLogModalOpen] = useState(false);
@@ -198,6 +188,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const [generatingMessageFor, setGeneratingMessageFor] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedContact, setExpandedContact] = useState<number | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
 
   const { data: submission, isLoading, error } = useQuery<JobSubmissionWithRecruiters>({
     queryKey: ["/api/submissions", submissionId],
@@ -269,26 +260,18 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
   const copyToClipboard = (text: string, id?: string) => {
     const doCopy = () => {
-      if (id) {
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-      }
+      if (id) { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(doCopy).catch(() => { fallbackCopy(text); doCopy(); });
-    } else {
-      fallbackCopy(text);
-      doCopy();
-    }
+    } else { fallbackCopy(text); doCopy(); }
   };
 
   const fallbackCopy = (text: string) => {
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
+    document.body.appendChild(ta); ta.focus(); ta.select();
     try { document.execCommand("copy"); } catch {}
     document.body.removeChild(ta);
   };
@@ -298,15 +281,17 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
     setOpenStatusDropdown(false);
   };
 
-  // Loading / error / empty states
+  // Loading / error / empty
+  const shellStyle = { maxWidth: 960, margin: "0 auto", padding: "32px 24px", fontFamily: "'DM Sans', -apple-system, sans-serif" as const };
+
   if (!submissionId) {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px", fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
-        <button onClick={() => onNavigate("job-history")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#7c3aed", cursor: "pointer", border: "none", background: "none", padding: 0, fontFamily: "inherit", marginBottom: 16 }}>
-          <ArrowLeft size={16} /> Back to Job History
+      <div style={shellStyle}>
+        <button onClick={() => onNavigate("job-history")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#6b7280", cursor: "pointer", border: "none", background: "none", padding: 0, fontFamily: "inherit", marginBottom: 16 }}>
+          <ArrowLeft size={15} /> Job History
         </button>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 48, textAlign: "center", color: "#9ca3af" }}>
-          No submission selected. Please choose a job from history.
+        <div style={{ background: "#f9fafb", borderRadius: 12, padding: 48, textAlign: "center", color: "#9ca3af" }}>
+          No submission selected.
         </div>
       </div>
     );
@@ -314,10 +299,10 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
   if (isLoading) {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px", fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
+      <div style={shellStyle}>
         <div style={{ textAlign: "center", padding: 80 }}>
-          <Loader2 size={28} style={{ color: "#7c3aed", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
-          <p style={{ color: "#9ca3af", fontSize: 14 }}>Loading job details...</p>
+          <Loader2 size={24} style={{ color: "#7c3aed", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
+          <p style={{ color: "#9ca3af", fontSize: 14 }}>Loading...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -326,18 +311,18 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
   if (error || !submission) {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px", fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
-        <button onClick={() => onNavigate("job-history")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#7c3aed", cursor: "pointer", border: "none", background: "none", padding: 0, fontFamily: "inherit", marginBottom: 16 }}>
-          <ArrowLeft size={16} /> Back to Job History
+      <div style={shellStyle}>
+        <button onClick={() => onNavigate("job-history")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#6b7280", cursor: "pointer", border: "none", background: "none", padding: 0, fontFamily: "inherit", marginBottom: 16 }}>
+          <ArrowLeft size={15} /> Job History
         </button>
-        <div style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 12, padding: 48, textAlign: "center", color: "#ef4444" }}>
+        <div style={{ background: "#fef2f2", borderRadius: 12, padding: 48, textAlign: "center", color: "#ef4444" }}>
           Failed to load submission details
         </div>
       </div>
     );
   }
 
-  // Data setup
+  // Data
   const parsed = parseOpenAIData(submission.openaiResponseRaw);
   const companyDesc = extractCompanyDescription(submission.jobInput, submission.companyName);
   const allContacts = submission.recruiters || [];
@@ -358,87 +343,73 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const selectedContactData = selectedContact ? allContacts.find(c => c.id === selectedContact) : null;
 
   const LEGACY_STATUS_MAP: Record<string, string> = {
-    "not_contacted": "saved",
-    "email_sent": "reaching_out",
-    "awaiting_reply": "reaching_out",
-    "follow_up_needed": "reaching_out",
-    "interview_scheduled": "interviewing",
-    "rejected": "closed",
+    "not_contacted": "saved", "email_sent": "reaching_out", "awaiting_reply": "reaching_out",
+    "follow_up_needed": "reaching_out", "interview_scheduled": "interviewing", "rejected": "closed",
   };
   const statusOptions = [
-    { display: "Saved", value: "saved", dot: "#94a3b8", bg: "#f8fafc", color: "#64748b" },
-    { display: "Applied", value: "applied", dot: "#3b82f6", bg: "#eff6ff", color: "#2563eb" },
-    { display: "Reaching Out", value: "reaching_out", dot: "#f59e0b", bg: "#fffbeb", color: "#d97706" },
-    { display: "In Conversation", value: "in_conversation", dot: "#8b5cf6", bg: "#f5f3ff", color: "#7c3aed" },
-    { display: "Interviewing", value: "interviewing", dot: "#10b981", bg: "#ecfdf5", color: "#059669" },
-    { display: "Closed", value: "closed", dot: "#94a3b8", bg: "#f8fafc", color: "#94a3b8" },
+    { display: "Saved", value: "saved", dot: "#94a3b8" },
+    { display: "Applied", value: "applied", dot: "#3b82f6" },
+    { display: "Reaching Out", value: "reaching_out", dot: "#f59e0b" },
+    { display: "In Conversation", value: "in_conversation", dot: "#8b5cf6" },
+    { display: "Interviewing", value: "interviewing", dot: "#10b981" },
+    { display: "Closed", value: "closed", dot: "#94a3b8" },
   ];
   const normalizedStatus = LEGACY_STATUS_MAP[submission.status] || (statusOptions.some(s => s.value === submission.status) ? submission.status : "saved");
   const currentStatusOpt = statusOptions.find(s => s.value === normalizedStatus) || statusOptions[0];
 
-  const companyWebsite = submission.companyDomain
-    ? `https://${submission.companyDomain.replace(/^https?:\/\//, "")}`
-    : null;
-
+  const companyWebsite = submission.companyDomain ? `https://${submission.companyDomain.replace(/^https?:\/\//, "")}` : null;
   const rawJD = submission.jobInput || "";
   const hasResponsibilities = parsed.responsibilities.length > 0;
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 24px 60px", fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: "#111827", minHeight: "100vh" }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 24px 80px", fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: "#111827" }}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .jd-card { transition: all 0.2s ease; border: 1px solid transparent; }
-        .jd-card:hover { border-color: #e0e0e6; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
-        .jd-action { transition: all 0.15s ease; }
-        .jd-action:hover { background: #f5f3ff !important; color: #7c3aed !important; }
-        .jd-contact-row { transition: background 0.15s ease; }
-        .jd-contact-row:hover { background: #fafafe; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .jd-hover:hover { background: #f9fafb; }
+        .jd-expand-row { transition: background 0.12s ease; cursor: pointer; }
+        .jd-expand-row:hover { background: #fafafe; }
       `}</style>
 
-      {/* Back nav */}
+      {/* ── BACK ── */}
       <button
         onClick={() => onNavigate("job-history")}
-        className="jd-action"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#6b7280", cursor: "pointer", border: "none", background: "none", padding: "4px 0", fontFamily: "inherit", marginBottom: 20 }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500, color: "#6b7280", cursor: "pointer", border: "none", background: "none", padding: "4px 0", fontFamily: "inherit", marginBottom: 24 }}
       >
         <ArrowLeft size={15} /> Job History
       </button>
 
-      {/* ═══ HEADER ═══ */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, marginBottom: 14 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827", lineHeight: 1.25, margin: 0, letterSpacing: "-0.03em" }}>
-              {submission.jobTitle || "Untitled Position"}
-            </h1>
-          </div>
+      {/* ════════════════════════════════════════════
+          SECTION 1: JOB HEADER
+         ════════════════════════════════════════════ */}
+      <div style={{ marginBottom: 24 }}>
+        {/* Title + status */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 12 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111827", lineHeight: 1.2, margin: 0, letterSpacing: "-0.03em", flex: 1 }}>
+            {submission.jobTitle || "Untitled Position"}
+          </h1>
 
-          {/* Status pill */}
+          {/* Status */}
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
               onClick={() => setOpenStatusDropdown(!openStatusDropdown)}
               disabled={statusMutation.isPending}
-              className="jd-action"
               style={{
-                display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 14px",
                 borderRadius: 20, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-                cursor: "pointer", border: `1.5px solid ${currentStatusOpt.dot}30`,
-                background: currentStatusOpt.bg, color: currentStatusOpt.color,
+                cursor: "pointer", border: "1.5px solid #e5e7eb", background: "#fff", color: "#374151",
               }}
             >
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: currentStatusOpt.dot }} />
               {statusMutation.isPending ? "..." : currentStatusOpt.display}
-              <ChevronDown size={13} />
+              <ChevronDown size={13} style={{ color: "#9ca3af" }} />
             </button>
             {openStatusDropdown && (
               <>
                 <div onClick={() => setOpenStatusDropdown(false)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)", zIndex: 20, minWidth: 180, padding: 4 }}>
                   {statusOptions.map(s => (
-                    <button
-                      key={s.value}
-                      onClick={() => handleStatusChange(s.value)}
+                    <button key={s.value} onClick={() => handleStatusChange(s.value)}
                       style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", fontSize: 13, fontFamily: "inherit", border: "none", background: normalizedStatus === s.value ? "#f5f3ff" : "transparent", cursor: "pointer", borderRadius: 8, color: normalizedStatus === s.value ? "#7c3aed" : "#374151", fontWeight: normalizedStatus === s.value ? 600 : 400, textAlign: "left" }}
                     >
                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />
@@ -451,444 +422,409 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
           </div>
         </div>
 
-        {/* Meta row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151", fontWeight: 600 }}>
+        {/* Meta */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 14, color: "#374151", fontWeight: 600 }}>
             <Building2 size={15} style={{ color: "#7c3aed" }} />
-            {submission.companyName || "Unknown Company"}
-          </div>
+            {submission.companyName || "Unknown"}
+          </span>
           {parsed.location && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#6b7280" }}>
-              <MapPin size={14} />
-              {parsed.location}
-            </div>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "#6b7280" }}>
+              <MapPin size={14} /> {parsed.location}
+            </span>
           )}
           {parsed.department && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#6b7280" }}>
-              <Briefcase size={14} />
-              {parsed.department}
-            </div>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "#6b7280" }}>
+              <Briefcase size={14} /> {parsed.department}
+            </span>
           )}
           {companyWebsite && (
-            <a href={companyWebsite} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#7c3aed", textDecoration: "none", fontWeight: 500 }}>
-              <Globe size={14} />
-              {submission.companyDomain}
+            <a href={companyWebsite} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "#7c3aed", textDecoration: "none", fontWeight: 500 }}>
+              <Globe size={14} /> {submission.companyDomain}
             </a>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#9ca3af" }}>
-            <Calendar size={14} />
-            {formatDate(submission.submittedAt)}
-          </div>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "#9ca3af" }}>
+            <Calendar size={14} /> {formatDate(submission.submittedAt)}
+          </span>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: "#f0f0f3", marginTop: 20 }} />
-      </div>
-
-      {/* ═══ STATS ROW ═══ */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
-        {[
-          { label: "Contacts", value: allContacts.length, color: "#7c3aed" },
-          { label: "Verified", value: validContacts, color: "#059669" },
-          { label: "Recruiters", value: recruiters, color: "#3b82f6" },
-          { label: "Hiring Mgrs", value: hiringManagers, color: "#0891b2" },
-          ...(contactedContacts.length > 0 ? [{ label: "Reached Out", value: contactedContacts.length, color: "#f59e0b" }] : []),
-        ].map((stat, i) => (
-          <div key={i} style={{ flex: 1, padding: "14px 16px", background: "#fafafe", borderRadius: 12, textAlign: "center" }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: stat.color, lineHeight: 1, letterSpacing: "-0.03em" }}>{stat.value}</div>
-            <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ═══ MAIN GRID ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 28, alignItems: "start" }}>
-
-        {/* ── LEFT: People ── */}
-        <div>
-          {/* Section header + filters */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111827", margin: 0 }}>
-              People
-            </h2>
-            <div style={{ display: "flex", gap: 2, background: "#f3f4f6", borderRadius: 8, padding: 2 }}>
-              {[
-                { key: "all", label: "All" },
-                { key: "recruiter", label: "Recruiters" },
-                { key: "hiring-manager", label: "Hiring Mgrs" },
-              ].map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setActiveFilter(f.key)}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: activeFilter === f.key ? 600 : 500,
-                    fontFamily: "inherit",
-                    border: "none",
-                    cursor: "pointer",
-                    background: activeFilter === f.key ? "#fff" : "transparent",
-                    color: activeFilter === f.key ? "#111827" : "#6b7280",
-                    boxShadow: activeFilter === f.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Contact list */}
-          {filteredContacts.length === 0 ? (
-            <div style={{ background: "#fafafe", borderRadius: 12, padding: "48px 20px", textAlign: "center" }}>
-              <Users size={24} style={{ color: "#d1d5db", marginBottom: 8 }} />
-              <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>No contacts found</p>
-            </div>
-          ) : (
-            <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb", overflow: "hidden" }}>
-              {filteredContacts.map((contact, idx) => {
-                const vs = contact.verificationStatus || "unknown";
-                const cfg = emailStatusConfig[vs] || emailStatusConfig.unknown;
-                const StatusIcon = cfg.icon;
-                const matchInfo = getMatchInfo(contact);
-                const hasMessages = contact.emailDraft || contact.linkedinMessage;
-                const isGenerating = generatingMessageFor === contact.id;
-                const isContacted = contact.contactStatus && contact.contactStatus !== "not_contacted";
-                const seniorityLabel = formatSeniority(contact.seniority);
-                const isExpanded = expandedContact === contact.id;
-                const isLast = idx === filteredContacts.length - 1;
-
-                const bucketLabel = contact.outreachBucket === "department_lead" ? "Hiring Mgr" : "Recruiter";
-
-                return (
-                  <div key={contact.id}>
-                    <div
-                      className="jd-contact-row"
-                      style={{
-                        padding: "16px 20px",
-                        cursor: "pointer",
-                        borderBottom: isLast && !isExpanded ? "none" : "1px solid #f3f4f6",
-                        animation: "fadeUp 0.3s ease both",
-                        animationDelay: `${idx * 40}ms`,
-                      }}
-                      onClick={() => setExpandedContact(isExpanded ? null : contact.id)}
-                    >
-                      {/* Main row */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        {/* Avatar */}
-                        <div style={{
-                          width: 42, height: 42, borderRadius: 21, flexShrink: 0,
-                          background: contact.outreachBucket === "department_lead"
-                            ? "linear-gradient(135deg, #06b6d4, #0891b2)"
-                            : "linear-gradient(135deg, #a78bfa, #7c3aed)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 14, fontWeight: 700, color: "#fff", letterSpacing: "0.02em",
-                        }}>
-                          {getInitials(contact.name)}
-                        </div>
-
-                        {/* Name + title */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 650, color: "#111827" }}>
-                              {contact.name || "Unknown"}
-                            </span>
-                            {contact.linkedinUrl && (
-                              <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="LinkedIn">
-                                <Linkedin size={14} style={{ color: "#0a66c2", opacity: 0.7 }} />
-                              </a>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 1 }}>
-                            {contact.title || "No title"}
-                          </div>
-                        </div>
-
-                        {/* Right side: type + match + verification */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                          {/* Bucket type */}
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 5,
-                            background: contact.outreachBucket === "department_lead" ? "#ecfeff" : "#f5f3ff",
-                            color: contact.outreachBucket === "department_lead" ? "#0891b2" : "#7c3aed",
-                            textTransform: "uppercase", letterSpacing: "0.03em",
-                          }}>
-                            {bucketLabel}
-                          </span>
-
-                          {/* Match quality dot */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }} title={matchInfo.label}>
-                            <span style={{ width: 6, height: 6, borderRadius: 3, background: matchInfo.dotColor }} />
-                            <span style={{ fontSize: 11, color: matchInfo.color, fontWeight: 500 }}>{matchInfo.label}</span>
-                          </div>
-
-                          {/* Email verification */}
-                          {contact.email && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 3 }} title={`Email: ${cfg.text}`}>
-                              <StatusIcon size={13} style={{ color: cfg.color }} />
-                            </div>
-                          )}
-
-                          {/* Contacted badge */}
-                          {isContacted && (
-                            <span style={{ fontSize: 11, fontWeight: 600, color: "#059669", background: "#ecfdf5", padding: "2px 7px", borderRadius: 4 }}>Sent</span>
-                          )}
-
-                          {/* Expand chevron */}
-                          <ChevronRight size={14} style={{ color: "#d1d5db", transition: "transform 0.15s", transform: isExpanded ? "rotate(90deg)" : "none" }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expanded section */}
-                    {isExpanded && (
-                      <div style={{ padding: "0 20px 18px", paddingLeft: 76, borderBottom: isLast ? "none" : "1px solid #f3f4f6", animation: "fadeUp 0.2s ease" }}>
-                        {/* Details row */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
-                          {seniorityLabel && (
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>
-                              <span style={{ color: "#9ca3af" }}>Seniority:</span> {seniorityLabel}
-                            </span>
-                          )}
-                          {contact.department && (
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>
-                              <span style={{ color: "#9ca3af" }}>Dept:</span> {contact.department}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Email */}
-                        {contact.email && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                            <div style={{
-                              display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "8px 12px",
-                              background: "#f9fafb", borderRadius: 8, border: "1px solid #f0f0f3",
-                            }}>
-                              <Mail size={13} style={{ color: "#9ca3af", flexShrink: 0 }} />
-                              <span style={{ fontSize: 13, color: "#374151", fontFamily: "'SF Mono', 'Fira Code', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {contact.email}
-                              </span>
-                              <span style={{ fontSize: 11, color: cfg.color, fontWeight: 500, marginLeft: "auto", flexShrink: 0 }}>
-                                {cfg.text}
-                              </span>
-                            </div>
-                            <button
-                              onClick={e => { e.stopPropagation(); copyToClipboard(contact.email!, `email-${contact.id}`); }}
-                              title="Copy email"
-                              style={{ padding: 7, borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", transition: "all 0.15s" }}
-                            >
-                              {copiedId === `email-${contact.id}` ? <Check size={13} style={{ color: "#059669" }} /> : <Copy size={13} style={{ color: "#9ca3af" }} />}
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {!hasMessages ? (
-                            <button
-                              disabled={isGenerating}
-                              onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
-                                borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-                                cursor: isGenerating ? "default" : "pointer", border: "none",
-                                background: "#111827", color: "#fff",
-                                opacity: isGenerating ? 0.7 : 1,
-                              }}
-                            >
-                              {isGenerating ? (
-                                <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Drafting...</>
-                              ) : (
-                                <><Sparkles size={13} /> Draft Messages</>
-                              )}
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={e => { e.stopPropagation(); setSelectedContact(contact.id); }}
-                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-                              >
-                                <Eye size={13} /> View
-                              </button>
-                              <button
-                                onClick={e => { e.stopPropagation(); copyToClipboard(contact.emailDraft || "", `draft-${contact.id}`); }}
-                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-                              >
-                                {copiedId === `draft-${contact.id}` ? <><Check size={13} style={{ color: "#059669" }} /> Copied</> : <><Copy size={13} /> Copy Email</>}
-                              </button>
-                            </>
-                          )}
-                          {contact.linkedinUrl && (
-                            <a
-                              href={contact.linkedinUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #dbeafe", background: "#fff", color: "#2563eb", textDecoration: "none" }}
-                            >
-                              <Linkedin size={13} /> Profile
-                            </a>
-                          )}
-                          <button
-                            onClick={e => { e.stopPropagation(); onNavigate("contact-detail", { contactId: contact.id }); }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", border: "none", background: "transparent", color: "#7c3aed", marginLeft: "auto" }}
-                          >
-                            Full Profile <ChevronRight size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* Inline stats */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {[
+            { label: "Contacts", val: allContacts.length },
+            { label: "Verified", val: validContacts },
+            { label: "Recruiters", val: recruiters },
+            { label: "Hiring Mgrs", val: hiringManagers },
+            ...(contactedContacts.length > 0 ? [{ label: "Reached Out", val: contactedContacts.length }] : []),
+          ].map((s, i) => (
+            <span key={i} style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", background: "#f3f4f6", padding: "4px 10px", borderRadius: 6 }}>
+              {s.val} {s.label}
+            </span>
+          ))}
         </div>
+      </div>
 
-        {/* ── RIGHT SIDEBAR ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 24 }}>
+      {/* ════════════════════════════════════════════
+          SECTION 2: COLLAPSIBLE JOB INFO + NOTES
+         ════════════════════════════════════════════ */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {/* Job Details toggle */}
+        <button
+          onClick={() => setShowJobInfo(!showJobInfo)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",
+            borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            cursor: "pointer", border: "1px solid #e5e7eb", background: showJobInfo ? "#f9fafb" : "#fff",
+            color: "#374151",
+          }}
+        >
+          <Briefcase size={14} style={{ color: "#7c3aed" }} />
+          Job Details
+          <ChevronDown size={13} style={{ color: "#9ca3af", transition: "transform 0.15s", transform: showJobInfo ? "rotate(180deg)" : "none" }} />
+        </button>
 
-          {/* Quick Actions */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Quick Actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {notContactedContacts.length > 0 && (
-                <button
-                  onClick={() => setLogModalOpen(true)}
-                  className="jd-action"
-                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 10px", borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", border: "none", background: "transparent", color: "#374151", textAlign: "left" }}
-                >
-                  <Send size={14} style={{ color: "#7c3aed" }} /> Log Outreach
-                </button>
+        {/* Notes toggle */}
+        <button
+          onClick={() => setShowNotes(!showNotes)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",
+            borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            cursor: "pointer", border: "1px solid #e5e7eb", background: showNotes ? "#f9fafb" : "#fff",
+            color: "#374151",
+          }}
+        >
+          <FileText size={14} style={{ color: "#7c3aed" }} />
+          Notes
+          {submission.notes && <span style={{ width: 6, height: 6, borderRadius: 3, background: "#7c3aed" }} />}
+          <ChevronDown size={13} style={{ color: "#9ca3af", transition: "transform 0.15s", transform: showNotes ? "rotate(180deg)" : "none" }} />
+        </button>
+
+        {/* Log outreach */}
+        {notContactedContacts.length > 0 && (
+          <button
+            onClick={() => setLogModalOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",
+              borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+              cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151",
+            }}
+          >
+            <Send size={14} style={{ color: "#7c3aed" }} />
+            Log Outreach
+          </button>
+        )}
+      </div>
+
+      {/* Collapsible Job Details panel */}
+      {showJobInfo && (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease" }}>
+          <div style={{ display: "grid", gridTemplateColumns: companyDesc ? "1fr 1fr" : "1fr", gap: 24 }}>
+            {/* Left: JD content */}
+            <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.65 }}>
+              {parsed.summary && (
+                <p style={{ margin: "0 0 14px", color: "#374151", fontSize: 14 }}>{parsed.summary}</p>
               )}
-              <button
-                className="jd-action"
-                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 10px", borderRadius: 8, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", border: "none", background: "transparent", color: "#374151", textAlign: "left" }}
-              >
-                <Plus size={14} style={{ color: "#7c3aed" }} /> Pull More Contacts
-              </button>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Notes</div>
-            <textarea
-              placeholder="Add notes..."
-              value={notesValue}
-              onChange={e => { setNotesValue(e.target.value); setNotesDirty(true); }}
-              style={{ width: "100%", minHeight: 72, padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none", lineHeight: 1.5, boxSizing: "border-box", transition: "border-color 0.15s" }}
-              onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
-              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
-            />
-            {notesDirty && (
-              <button
-                onClick={() => notesMutation.mutate(notesValue)}
-                disabled={notesMutation.isPending}
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none", background: "#111827", color: "#fff", marginTop: 8 }}
-              >
-                <Save size={12} />
-                {notesMutation.isPending ? "Saving..." : "Save"}
-              </button>
-            )}
-          </div>
-
-          {/* Outreach Activity */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Activity</div>
-            {contactedContacts.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {contactedContacts.map(c => (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#374151" }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: "#f0fdf4", flexShrink: 0,
-                    }}>
-                      <Check size={13} style={{ color: "#059669" }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Unknown"}</div>
-                    </div>
-                    <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
-                      {c.lastContactedAt ? timeAgo(c.lastContactedAt) : "Sent"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No outreach logged yet</p>
-            )}
-          </div>
-
-          {/* Job Description */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-            <div
-              onClick={() => setShowResponsibilities(!showResponsibilities)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer", userSelect: "none" }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Job Details</span>
-              <ChevronRight size={14} style={{ color: "#d1d5db", transition: "transform 0.15s", transform: showResponsibilities ? "rotate(90deg)" : "none" }} />
-            </div>
-
-            {showResponsibilities && (
-              <div style={{ padding: "0 16px 16px", fontSize: 13, color: "#4b5563", lineHeight: 1.65 }}>
-                {parsed.summary && (
-                  <p style={{ margin: "0 0 12px", color: "#374151" }}>{parsed.summary}</p>
-                )}
-                {hasResponsibilities && (
-                  <>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>Responsibilities</div>
-                    <ul style={{ paddingLeft: 16, margin: "0 0 12px" }}>
-                      {parsed.responsibilities.slice(0, showFullJD ? undefined : 3).map((r, i) => <li key={i} style={{ marginBottom: 4, fontSize: 12.5 }}>{r}</li>)}
-                    </ul>
-                  </>
-                )}
-                {parsed.requirements.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6, marginTop: 10 }}>Requirements</div>
-                    <ul style={{ paddingLeft: 16, margin: 0 }}>
-                      {parsed.requirements.slice(0, showFullJD ? undefined : 3).map((r, i) => <li key={i} style={{ marginBottom: 4, fontSize: 12.5 }}>{r}</li>)}
-                    </ul>
-                  </>
-                )}
-                {!hasResponsibilities && !parsed.summary && (
-                  <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5 }}>
-                    {showFullJD ? rawJD : (rawJD.length > 200 ? rawJD.slice(0, 200) + "..." : rawJD)}
-                  </div>
-                )}
-                {(hasResponsibilities || rawJD.length > 200) && (
-                  <button
-                    onClick={() => setShowFullJD(!showFullJD)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 12, fontWeight: 500, color: "#7c3aed", cursor: "pointer", background: "none", border: "none", padding: 0, fontFamily: "inherit" }}
-                  >
-                    {showFullJD ? "Show less" : "Show all"} <ChevronDown size={12} style={showFullJD ? { transform: "rotate(180deg)" } : {}} />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* About Company */}
-          {companyDesc && (
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-              <div
-                onClick={() => setShowCompanyDesc(!showCompanyDesc)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer", userSelect: "none" }}
-              >
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>About {submission.companyName || "Company"}</span>
-                <ChevronRight size={14} style={{ color: "#d1d5db", transition: "transform 0.15s", transform: showCompanyDesc ? "rotate(90deg)" : "none" }} />
-              </div>
-              {showCompanyDesc && (
-                <div style={{ padding: "0 16px 16px", fontSize: 13, color: "#4b5563", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
-                  {companyDesc}
+              {hasResponsibilities && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Responsibilities</div>
+                  <ul style={{ paddingLeft: 16, margin: "0 0 14px" }}>
+                    {parsed.responsibilities.slice(0, showFullJD ? undefined : 4).map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
+                  </ul>
+                </>
+              )}
+              {parsed.requirements.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Requirements</div>
+                  <ul style={{ paddingLeft: 16, margin: 0 }}>
+                    {parsed.requirements.slice(0, showFullJD ? undefined : 4).map((r, i) => <li key={i} style={{ marginBottom: 4 }}>{r}</li>)}
+                  </ul>
+                </>
+              )}
+              {!hasResponsibilities && !parsed.summary && (
+                <div style={{ whiteSpace: "pre-wrap" }}>
+                  {showFullJD ? rawJD : (rawJD.length > 400 ? rawJD.slice(0, 400) + "..." : rawJD)}
                 </div>
               )}
+              {(hasResponsibilities || rawJD.length > 400) && (
+                <button onClick={() => setShowFullJD(!showFullJD)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10, fontSize: 12, fontWeight: 500, color: "#7c3aed", cursor: "pointer", background: "none", border: "none", padding: 0, fontFamily: "inherit" }}
+                >
+                  {showFullJD ? "Show less" : "Show all"} <ChevronDown size={12} style={showFullJD ? { transform: "rotate(180deg)" } : {}} />
+                </button>
+              )}
             </div>
+
+            {/* Right: Company desc */}
+            {companyDesc && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>About {submission.companyName}</div>
+                <p style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.65, margin: 0 }}>{companyDesc.slice(0, 500)}{companyDesc.length > 500 ? "..." : ""}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Collapsible Notes panel */}
+      {showNotes && (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease" }}>
+          <textarea
+            placeholder="Add notes about this application..."
+            value={notesValue}
+            onChange={e => { setNotesValue(e.target.value); setNotesDirty(true); }}
+            style={{ width: "100%", minHeight: 80, padding: 12, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none", lineHeight: 1.5, boxSizing: "border-box" }}
+            onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
+            onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
+          />
+          {notesDirty && (
+            <button onClick={() => notesMutation.mutate(notesValue)} disabled={notesMutation.isPending}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none", background: "#111827", color: "#fff", marginTop: 8 }}
+            >
+              <Save size={12} /> {notesMutation.isPending ? "Saving..." : "Save"}
+            </button>
           )}
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════
+          SECTION 3: FULL-WIDTH CONTACTS
+         ════════════════════════════════════════════ */}
+
+      {/* Header + filter tabs */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 }}>
+          People
+          <span style={{ fontWeight: 400, color: "#9ca3af", fontSize: 14, marginLeft: 8 }}>{filteredContacts.length}</span>
+        </h2>
+        <div style={{ display: "flex", gap: 2, background: "#f3f4f6", borderRadius: 8, padding: 2 }}>
+          {[
+            { key: "all", label: "All" },
+            { key: "recruiter", label: "Recruiters" },
+            { key: "hiring-manager", label: "Hiring Mgrs" },
+          ].map(f => (
+            <button key={f.key} onClick={() => setActiveFilter(f.key)}
+              style={{
+                padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: activeFilter === f.key ? 600 : 500,
+                fontFamily: "inherit", border: "none", cursor: "pointer",
+                background: activeFilter === f.key ? "#fff" : "transparent",
+                color: activeFilter === f.key ? "#111827" : "#6b7280",
+                boxShadow: activeFilter === f.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.12s ease",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Contact table */}
+      {filteredContacts.length === 0 ? (
+        <div style={{ background: "#f9fafb", borderRadius: 12, padding: "48px 20px", textAlign: "center" }}>
+          <Users size={24} style={{ color: "#d1d5db", marginBottom: 8 }} />
+          <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>No contacts found</p>
+        </div>
+      ) : (
+        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+          {/* Table header */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0, padding: "10px 20px", borderBottom: "1px solid #f0f0f3", background: "#fafafe" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Contact</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Match</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Status</span>
+          </div>
+
+          {filteredContacts.map((contact, idx) => {
+            const vs = contact.verificationStatus || "unknown";
+            const cfg = emailStatusConfig[vs] || emailStatusConfig.unknown;
+            const StatusIcon = cfg.icon;
+            const matchInfo = getMatchInfo(contact);
+            const hasMessages = contact.emailDraft || contact.linkedinMessage;
+            const isGenerating = generatingMessageFor === contact.id;
+            const isContacted = contact.contactStatus && contact.contactStatus !== "not_contacted";
+            const isExpanded = expandedContact === contact.id;
+            const isLast = idx === filteredContacts.length - 1;
+            const bucketLabel = contact.outreachBucket === "department_lead" ? "Hiring Mgr" : "Recruiter";
+
+            return (
+              <div key={contact.id} style={{ animation: "fadeUp 0.3s ease both", animationDelay: `${idx * 30}ms` }}>
+                {/* Row */}
+                <div
+                  className="jd-expand-row"
+                  onClick={() => setExpandedContact(isExpanded ? null : contact.id)}
+                  style={{
+                    display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0,
+                    padding: "14px 20px", alignItems: "center",
+                    borderBottom: (isLast && !isExpanded) ? "none" : "1px solid #f3f4f6",
+                  }}
+                >
+                  {/* Contact */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+                      background: contact.outreachBucket === "department_lead"
+                        ? "linear-gradient(135deg, #06b6d4, #0891b2)"
+                        : "linear-gradient(135deg, #a78bfa, #7c3aed)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 700, color: "#fff",
+                    }}>
+                      {getInitials(contact.name)}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
+                        {contact.name || "Unknown"}
+                        {contact.linkedinUrl && (
+                          <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                            <Linkedin size={13} style={{ color: "#0a66c2", opacity: 0.6 }} />
+                          </a>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {contact.title || "No title"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                    {contact.email ? (
+                      <>
+                        <span style={{ fontSize: 12, color: "#6b7280", fontFamily: "'SF Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {contact.email}
+                        </span>
+                        <StatusIcon size={12} style={{ color: cfg.color, flexShrink: 0 }} />
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#d1d5db" }}>--</span>
+                    )}
+                  </div>
+
+                  {/* Type */}
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 5, width: "fit-content",
+                    background: contact.outreachBucket === "department_lead" ? "#ecfeff" : "#f5f3ff",
+                    color: contact.outreachBucket === "department_lead" ? "#0891b2" : "#7c3aed",
+                  }}>
+                    {bucketLabel}
+                  </span>
+
+                  {/* Match */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 3, background: matchInfo.dotColor }} />
+                    <span style={{ fontSize: 12, color: matchInfo.color, fontWeight: 500 }}>{matchInfo.label}</span>
+                  </div>
+
+                  {/* Status */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {isContacted ? (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#059669" }}>Sent</span>
+                    ) : hasMessages ? (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed" }}>Drafted</span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: "#d1d5db" }}>--</span>
+                    )}
+                    <ChevronRight size={13} style={{ color: "#d1d5db", marginLeft: "auto", transition: "transform 0.15s", transform: isExpanded ? "rotate(90deg)" : "none" }} />
+                  </div>
+                </div>
+
+                {/* Expanded panel */}
+                {isExpanded && (
+                  <div style={{
+                    padding: "16px 20px 20px 68px", borderBottom: isLast ? "none" : "1px solid #f3f4f6",
+                    background: "#fafafe", animation: "fadeUp 0.15s ease",
+                  }}>
+                    {/* Info chips */}
+                    <div style={{ display: "flex", gap: 16, marginBottom: 14, fontSize: 12, color: "#6b7280" }}>
+                      {formatSeniority(contact.seniority) && (
+                        <span><span style={{ color: "#9ca3af" }}>Seniority:</span> {formatSeniority(contact.seniority)}</span>
+                      )}
+                      {contact.department && (
+                        <span><span style={{ color: "#9ca3af" }}>Dept:</span> {contact.department}</span>
+                      )}
+                      {contact.email && (
+                        <span><span style={{ color: "#9ca3af" }}>Email:</span> <span style={{ color: cfg.color }}>{cfg.text}</span></span>
+                      )}
+                    </div>
+
+                    {/* Email copy row */}
+                    {contact.email && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                          <Mail size={13} style={{ color: "#9ca3af" }} />
+                          <span style={{ fontSize: 13, color: "#374151", fontFamily: "'SF Mono', monospace" }}>{contact.email}</span>
+                        </div>
+                        <button onClick={e => { e.stopPropagation(); copyToClipboard(contact.email!, `email-${contact.id}`); }}
+                          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontFamily: "inherit", fontWeight: 500, color: "#6b7280" }}
+                        >
+                          {copiedId === `email-${contact.id}` ? <><Check size={12} style={{ color: "#059669" }} /> Copied</> : <><Copy size={12} /> Copy</>}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {!hasMessages ? (
+                        <button disabled={isGenerating} onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px",
+                            borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                            cursor: isGenerating ? "default" : "pointer", border: "none",
+                            background: "#111827", color: "#fff", opacity: isGenerating ? 0.7 : 1,
+                          }}
+                        >
+                          {isGenerating ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Drafting...</> : <><Sparkles size={13} /> Draft Messages</>}
+                        </button>
+                      ) : (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); setSelectedContact(contact.id); }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
+                          >
+                            <Eye size={13} /> View Messages
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); copyToClipboard(contact.emailDraft || "", `draft-${contact.id}`); }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
+                          >
+                            {copiedId === `draft-${contact.id}` ? <><Check size={13} style={{ color: "#059669" }} /> Copied</> : <><Copy size={13} /> Copy Email</>}
+                          </button>
+                        </>
+                      )}
+                      {contact.linkedinUrl && (
+                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #dbeafe", background: "#fff", color: "#2563eb", textDecoration: "none" }}
+                        >
+                          <Linkedin size={13} /> LinkedIn
+                        </a>
+                      )}
+                      <button onClick={e => { e.stopPropagation(); onNavigate("contact-detail", { contactId: contact.id }); }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", border: "none", background: "transparent", color: "#7c3aed", marginLeft: "auto" }}
+                      >
+                        Full Profile <ChevronRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Activity footer */}
+      {contactedContacts.length > 0 && (
+        <div style={{ marginTop: 20, padding: 16, background: "#f9fafb", borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Recent Activity</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {contactedContacts.map(c => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151" }}>
+                <Check size={12} style={{ color: "#059669" }} />
+                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                <span style={{ color: "#9ca3af" }}>{c.lastContactedAt ? timeAgo(c.lastContactedAt) : "sent"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══ LOG OUTREACH MODAL ═══ */}
       {logModalOpen && (
@@ -898,9 +834,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
             <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Select contact to mark as emailed</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {notContactedContacts.map(c => (
-                <div
-                  key={c.id}
-                  onClick={() => setLogSelectedContact(c.id)}
+                <div key={c.id} onClick={() => setLogSelectedContact(c.id)}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
                     border: `1.5px solid ${logSelectedContact === c.id ? "#7c3aed" : "#e5e7eb"}`,
@@ -912,11 +846,8 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                   <div style={{
                     width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center",
                     background: logSelectedContact === c.id ? "#7c3aed" : "#f3f4f6",
-                    color: logSelectedContact === c.id ? "#fff" : "#9ca3af",
-                    fontSize: 12, fontWeight: 700,
-                  }}>
-                    {getInitials(c.name)}
-                  </div>
+                    color: logSelectedContact === c.id ? "#fff" : "#9ca3af", fontSize: 12, fontWeight: 700,
+                  }}>{getInitials(c.name)}</div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{c.name || "Unknown"}</div>
                     <div style={{ fontSize: 12, color: "#9ca3af" }}>{c.title || ""}</div>
@@ -925,19 +856,13 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
               ))}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button
-                onClick={() => setLogModalOpen(false)}
+              <button onClick={() => setLogModalOpen(false)}
                 style={{ flex: 1, padding: 10, borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!logSelectedContact || logOutreachMutation.isPending}
+              >Cancel</button>
+              <button disabled={!logSelectedContact || logOutreachMutation.isPending}
                 onClick={() => logSelectedContact && logOutreachMutation.mutate(logSelectedContact)}
                 style={{ flex: 1, padding: 10, borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none", background: "#111827", color: "#fff", opacity: !logSelectedContact ? 0.4 : 1 }}
-              >
-                {logOutreachMutation.isPending ? "Saving..." : "Mark Sent"}
-              </button>
+              >{logOutreachMutation.isPending ? "Saving..." : "Mark Sent"}</button>
             </div>
           </div>
         </div>
@@ -947,7 +872,6 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
       {selectedContact && selectedContactData && (
         <div onClick={() => setSelectedContact(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, backdropFilter: "blur(4px)" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.15)" }}>
-            {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid #f3f4f6" }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#111827" }}>{selectedContactData.name}</h3>
@@ -958,16 +882,14 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
               </button>
             </div>
 
-            {/* Content */}
-            <div style={{ overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
               {selectedContactData.emailDraft && (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <Mail size={13} style={{ color: "#7c3aed" }} /> Email
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <Mail size={13} style={{ color: "#7c3aed" }} /> Email Draft
                     </div>
-                    <button
-                      onClick={() => copyToClipboard(selectedContactData.emailDraft || "", `modal-email-${selectedContactData.id}`)}
+                    <button onClick={() => copyToClipboard(selectedContactData.emailDraft || "", `modal-email-${selectedContactData.id}`)}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
                     >
                       {copiedId === `modal-email-${selectedContactData.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
@@ -982,11 +904,10 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
               {selectedContactData.linkedinMessage && (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <Linkedin size={13} style={{ color: "#0a66c2" }} /> LinkedIn
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <Linkedin size={13} style={{ color: "#0a66c2" }} /> LinkedIn Message
                     </div>
-                    <button
-                      onClick={() => copyToClipboard(selectedContactData.linkedinMessage || "", `modal-li-${selectedContactData.id}`)}
+                    <button onClick={() => copyToClipboard(selectedContactData.linkedinMessage || "", `modal-li-${selectedContactData.id}`)}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
                     >
                       {copiedId === `modal-li-${selectedContactData.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
@@ -1002,29 +923,20 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                 <div style={{ textAlign: "center", padding: "40px 20px" }}>
                   <Sparkles size={24} style={{ color: "#d1d5db", marginBottom: 12 }} />
                   <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 16 }}>No messages generated yet</p>
-                  <button
-                    disabled={generatingMessageFor === selectedContactData.id}
+                  <button disabled={generatingMessageFor === selectedContactData.id}
                     onClick={() => generateMessageMutation.mutate(selectedContactData.id)}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none", background: "#111827", color: "#fff" }}
                   >
-                    {generatingMessageFor === selectedContactData.id ? (
-                      <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
-                    ) : (
-                      <><Sparkles size={13} /> Generate Messages</>
-                    )}
+                    {generatingMessageFor === selectedContactData.id ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</> : <><Sparkles size={13} /> Generate Messages</>}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
             <div style={{ padding: "14px 24px", borderTop: "1px solid #f3f4f6" }}>
-              <button
-                onClick={() => setSelectedContact(null)}
+              <button onClick={() => setSelectedContact(null)}
                 style={{ width: "100%", padding: 11, borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "1px solid #e5e7eb", background: "#fff", color: "#374151" }}
-              >
-                Close
-              </button>
+              >Close</button>
             </div>
           </div>
         </div>
