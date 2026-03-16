@@ -24,8 +24,7 @@ import {
   Send,
   Globe,
   Wand2,
-  MessageSquare,
-  UserCircle,
+  RotateCcw,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -190,9 +189,10 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedContact, setExpandedContact] = useState<number | null>(null);
   const [showNotes, setShowNotes] = useState(false);
-  const [editingDrafts, setEditingDrafts] = useState<Record<number, { email?: string; linkedin?: string; subject?: string }>>({});
+  const [editingDrafts, setEditingDrafts] = useState<Record<number, { email?: string; subject?: string }>>({});
   const [refineInput, setRefineInput] = useState<Record<number, string>>({});
   const [refiningFor, setRefiningFor] = useState<number | null>(null);
+  const [savingDraftFor, setSavingDraftFor] = useState<number | null>(null);
 
   const { data: submission, isLoading, error } = useQuery<JobSubmissionWithRecruiters>({
     queryKey: ["/api/submissions", submissionId],
@@ -262,12 +262,10 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
       setRefiningFor(contactId);
       const currentEmail = editingDrafts[contactId]?.email ?? contact.emailDraft;
       const currentSubject = editingDrafts[contactId]?.subject ?? contact.emailSubject;
-      const currentLinkedin = editingDrafts[contactId]?.linkedin ?? contact.linkedinMessage;
       return apiRequest("POST", `/api/contacts/${contactId}/generate-message`, {
         instructions,
         currentDraft: currentEmail,
         currentSubject,
-        currentLinkedin,
       });
     },
     onSuccess: () => {
@@ -280,6 +278,27 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
     },
     onError: () => {
       setRefiningFor(null);
+    },
+  });
+
+  const saveDraftMutation = useMutation({
+    mutationFn: async ({ contactId, subject, body }: { contactId: number; subject: string; body: string }) => {
+      setSavingDraftFor(contactId);
+      await apiRequest("PATCH", `/api/contacts/${contactId}`, {
+        emailDraft: body,
+        emailSubject: subject,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions", submissionId] });
+      setSavingDraftFor(null);
+      // Clear local edits since they're now saved
+      if (savingDraftFor) {
+        setEditingDrafts(prev => { const next = { ...prev }; delete next[savingDraftFor]; return next; });
+      }
+    },
+    onError: () => {
+      setSavingDraftFor(null);
     },
   });
 
@@ -806,209 +825,187 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                       </div>
                     )}
 
-                    {/* Draft / Message section */}
-                    {!hasMessages ? (
-                      <button disabled={isGenerating} onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px",
-                          borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-                          cursor: isGenerating ? "default" : "pointer", border: "none",
-                          background: "#111827", color: "#fff", opacity: isGenerating ? 0.7 : 1,
-                        }}
-                      >
-                        {isGenerating ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Drafting messages...</> : <><Sparkles size={13} /> Draft Messages</>}
-                      </button>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                        {/* ── EMAIL DRAFT ── */}
-                        {contact.emailDraft && (
-                          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    {/* ── Email Editor Workspace ── */}
+                    {(() => {
+                      const isBusy = isGenerating || refiningFor === contact.id;
+                      const localSubject = editingDrafts[contact.id]?.subject;
+                      const localBody = editingDrafts[contact.id]?.email;
+                      const currentSubject = localSubject ?? contact.emailSubject ?? "";
+                      const currentBody = localBody ?? contact.emailDraft ?? "";
+                      const hasLocalEdits = localSubject !== undefined || localBody !== undefined;
+
+                      return !hasMessages ? (
+                        <button disabled={isGenerating} onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px",
+                            borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                            cursor: isGenerating ? "default" : "pointer", border: "none",
+                            background: "#111827", color: "#fff", opacity: isGenerating ? 0.7 : 1,
+                          }}
+                        >
+                          {isGenerating ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating email...</> : <><Sparkles size={13} /> Generate Email</>}
+                        </button>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {/* Email card */}
+                          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                            {/* Toolbar */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #f3f4f6", background: "#fafafe" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 <Mail size={12} /> Email Draft
                               </div>
                               <div style={{ display: "flex", gap: 4 }}>
+                                {/* Revert — only show if there are local edits */}
+                                {hasLocalEdits && (
+                                  <button onClick={e => {
+                                    e.stopPropagation();
+                                    setEditingDrafts(prev => { const next = { ...prev }; delete next[contact.id]; return next; });
+                                  }}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
+                                  >
+                                    <RotateCcw size={11} /> Revert
+                                  </button>
+                                )}
+                                {/* Save — only show if there are local edits */}
+                                {hasLocalEdits && (
+                                  <button onClick={e => {
+                                    e.stopPropagation();
+                                    saveDraftMutation.mutate({ contactId: contact.id, subject: currentSubject, body: currentBody });
+                                  }}
+                                    disabled={savingDraftFor === contact.id}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "none", background: "#111827", cursor: "pointer", color: "#fff", fontFamily: "inherit", fontWeight: 600, opacity: savingDraftFor === contact.id ? 0.6 : 1 }}
+                                  >
+                                    {savingDraftFor === contact.id ? <><Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : <><Save size={11} /> Save</>}
+                                  </button>
+                                )}
+                                {/* Copy */}
                                 <button onClick={e => {
                                   e.stopPropagation();
-                                  const subj = editingDrafts[contact.id]?.subject ?? contact.emailSubject ?? "";
-                                  const body = editingDrafts[contact.id]?.email ?? contact.emailDraft ?? "";
-                                  copyToClipboard(subj ? `Subject: ${subj}\n\n${body}` : body, `draft-email-${contact.id}`);
+                                  copyToClipboard(currentSubject ? `Subject: ${currentSubject}\n\n${currentBody}` : currentBody, `draft-email-${contact.id}`);
                                 }}
                                   style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
                                 >
                                   {copiedId === `draft-email-${contact.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
                                 </button>
+                                {/* Regenerate */}
                                 <button onClick={e => { e.stopPropagation(); generateMessageMutation.mutate(contact.id); }}
-                                  disabled={isGenerating || refiningFor === contact.id}
-                                  style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500, opacity: (isGenerating || refiningFor === contact.id) ? 0.5 : 1 }}
+                                  disabled={isBusy}
+                                  style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500, opacity: isBusy ? 0.5 : 1 }}
                                 >
                                   {isGenerating ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={11} />} Regenerate
                                 </button>
                               </div>
                             </div>
 
-                            {/* Subject line */}
-                            <div style={{ marginBottom: 8 }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", marginBottom: 4 }}>Subject</div>
-                              <input
-                                type="text"
-                                value={editingDrafts[contact.id]?.subject ?? contact.emailSubject ?? ""}
+                            {/* Subject */}
+                            <div style={{ padding: "12px 16px 0" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", flexShrink: 0 }}>Subject:</span>
+                                <input
+                                  type="text"
+                                  value={currentSubject}
+                                  onChange={e => {
+                                    e.stopPropagation();
+                                    setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], subject: e.target.value } }));
+                                  }}
+                                  onClick={e => e.stopPropagation()}
+                                  placeholder="Email subject line..."
+                                  style={{
+                                    flex: 1, padding: "6px 0", border: "none", borderBottom: "1px solid #f3f4f6",
+                                    fontSize: 14, fontFamily: "inherit", color: "#111827", fontWeight: 600, outline: "none",
+                                    background: "transparent",
+                                  }}
+                                  onFocus={e => { e.target.style.borderBottomColor = "#c4b5fd"; }}
+                                  onBlur={e => { e.target.style.borderBottomColor = "#f3f4f6"; }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ padding: "8px 16px 16px" }}>
+                              <textarea
+                                value={currentBody}
                                 onChange={e => {
                                   e.stopPropagation();
-                                  setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], subject: e.target.value } }));
+                                  setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], email: e.target.value } }));
                                 }}
                                 onClick={e => e.stopPropagation()}
-                                placeholder="Email subject line..."
                                 style={{
-                                  width: "100%", padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8,
-                                  fontSize: 13, fontFamily: "inherit", color: "#111827", fontWeight: 600, outline: "none",
-                                  boxSizing: "border-box", background: "#fafafe",
+                                  width: "100%", minHeight: 180, padding: 0, border: "none",
+                                  fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none",
+                                  lineHeight: 1.75, boxSizing: "border-box", background: "transparent",
                                 }}
-                                onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
-                                onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
                               />
                             </div>
+                          </div>
 
-                            {/* Email body */}
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", marginBottom: 4 }}>Body</div>
-                            <textarea
-                              value={editingDrafts[contact.id]?.email ?? contact.emailDraft}
-                              onChange={e => {
-                                e.stopPropagation();
-                                setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], email: e.target.value } }));
-                              }}
-                              onClick={e => e.stopPropagation()}
-                              style={{
-                                width: "100%", minHeight: 140, padding: 12, border: "1px solid #e5e7eb", borderRadius: 8,
-                                fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none",
-                                lineHeight: 1.7, boxSizing: "border-box", background: "#fafafe",
-                              }}
-                              onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
-                              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
-                            />
-                          </div>
-                        )}
-
-                        {/* ── LINKEDIN MESSAGE ── */}
-                        {contact.linkedinMessage && (
-                          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#0a66c2", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                <Linkedin size={12} /> LinkedIn Message
-                              </div>
-                              <button onClick={e => { e.stopPropagation(); copyToClipboard(editingDrafts[contact.id]?.linkedin || contact.linkedinMessage || "", `draft-li-${contact.id}`); }}
-                                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, fontSize: 11, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#6b7280", fontFamily: "inherit", fontWeight: 500 }}
-                              >
-                                {copiedId === `draft-li-${contact.id}` ? <><Check size={11} style={{ color: "#059669" }} /> Copied</> : <><Copy size={11} /> Copy</>}
-                              </button>
-                            </div>
-                            <textarea
-                              value={editingDrafts[contact.id]?.linkedin ?? contact.linkedinMessage}
-                              onChange={e => {
-                                e.stopPropagation();
-                                setEditingDrafts(prev => ({ ...prev, [contact.id]: { ...prev[contact.id], linkedin: e.target.value } }));
-                              }}
-                              onClick={e => e.stopPropagation()}
-                              style={{
-                                width: "100%", minHeight: 56, padding: 12, border: "1px solid #e5e7eb", borderRadius: 8,
-                                fontSize: 13, fontFamily: "inherit", color: "#374151", resize: "vertical", outline: "none",
-                                lineHeight: 1.7, boxSizing: "border-box", background: "#fafafe",
-                              }}
-                              onFocus={e => { e.target.style.borderColor = "#c4b5fd"; }}
-                              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
-                            />
-                            <div style={{ fontSize: 11, color: (editingDrafts[contact.id]?.linkedin ?? contact.linkedinMessage ?? "").length > 200 ? "#ef4444" : "#9ca3af", marginTop: 4 }}>
-                              {(editingDrafts[contact.id]?.linkedin ?? contact.linkedinMessage ?? "").length} / 200 characters
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ── AI REFINE ── */}
-                        <div style={{ background: "#f5f3ff", border: "1px solid #e9e5f5", borderRadius: 12, padding: 14 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                            <Wand2 size={13} style={{ color: "#7c3aed" }} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: "#6d28d9" }}>Refine with AI</span>
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <input
-                              type="text"
-                              value={refineInput[contact.id] || ""}
-                              onChange={e => { e.stopPropagation(); setRefineInput(prev => ({ ...prev, [contact.id]: e.target.value })); }}
-                              onClick={e => e.stopPropagation()}
-                              onKeyDown={e => {
-                                if (e.key === "Enter" && refineInput[contact.id]?.trim()) {
-                                  e.stopPropagation();
-                                  refineMutation.mutate({ contactId: contact.id, instructions: refineInput[contact.id], contact });
-                                }
-                              }}
-                              placeholder="e.g. Make it shorter, more casual, mention my Python experience..."
-                              style={{
-                                flex: 1, padding: "8px 12px", border: "1px solid #ddd6fe", borderRadius: 8,
-                                fontSize: 12, fontFamily: "inherit", color: "#374151", outline: "none",
-                                background: "#fff", boxSizing: "border-box",
-                              }}
-                              onFocus={e => { e.target.style.borderColor = "#a78bfa"; }}
-                              onBlur={e => { e.target.style.borderColor = "#ddd6fe"; }}
-                            />
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                if (refineInput[contact.id]?.trim()) {
-                                  refineMutation.mutate({ contactId: contact.id, instructions: refineInput[contact.id], contact });
-                                }
-                              }}
-                              disabled={!refineInput[contact.id]?.trim() || refiningFor === contact.id}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px",
-                                borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                                cursor: (!refineInput[contact.id]?.trim() || refiningFor === contact.id) ? "default" : "pointer",
-                                border: "none", background: "#7c3aed", color: "#fff",
-                                opacity: (!refineInput[contact.id]?.trim() || refiningFor === contact.id) ? 0.5 : 1,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {refiningFor === contact.id ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Refining...</> : <><Wand2 size={12} /> Refine</>}
-                            </button>
-                          </div>
-                          {/* Quick suggestion chips */}
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                            {["Shorter", "More casual", "More formal", "Add urgency", "Softer CTA"].map(chip => (
-                              <button key={chip}
+                          {/* ── AI Refine ── */}
+                          <div style={{ background: "#f5f3ff", border: "1px solid #e9e5f5", borderRadius: 10, padding: 12 }}>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <Wand2 size={14} style={{ color: "#7c3aed", flexShrink: 0 }} />
+                              <input
+                                type="text"
+                                value={refineInput[contact.id] || ""}
+                                onChange={e => { e.stopPropagation(); setRefineInput(prev => ({ ...prev, [contact.id]: e.target.value })); }}
+                                onClick={e => e.stopPropagation()}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && refineInput[contact.id]?.trim()) {
+                                    e.stopPropagation();
+                                    refineMutation.mutate({ contactId: contact.id, instructions: refineInput[contact.id], contact });
+                                  }
+                                }}
+                                placeholder="Refine: make it shorter, more casual, mention my data experience..."
+                                style={{
+                                  flex: 1, padding: "7px 12px", border: "1px solid #ddd6fe", borderRadius: 8,
+                                  fontSize: 12, fontFamily: "inherit", color: "#374151", outline: "none",
+                                  background: "#fff", boxSizing: "border-box",
+                                }}
+                                onFocus={e => { e.target.style.borderColor = "#a78bfa"; }}
+                                onBlur={e => { e.target.style.borderColor = "#ddd6fe"; }}
+                              />
+                              <button
                                 onClick={e => {
                                   e.stopPropagation();
-                                  setRefineInput(prev => ({ ...prev, [contact.id]: chip.toLowerCase() }));
+                                  if (refineInput[contact.id]?.trim()) {
+                                    refineMutation.mutate({ contactId: contact.id, instructions: refineInput[contact.id], contact });
+                                  }
                                 }}
+                                disabled={!refineInput[contact.id]?.trim() || refiningFor === contact.id}
                                 style={{
-                                  padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500,
-                                  fontFamily: "inherit", border: "1px solid #ddd6fe", background: "#fff",
-                                  color: "#7c3aed", cursor: "pointer",
+                                  display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px",
+                                  borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                                  cursor: (!refineInput[contact.id]?.trim() || refiningFor === contact.id) ? "default" : "pointer",
+                                  border: "none", background: "#7c3aed", color: "#fff",
+                                  opacity: (!refineInput[contact.id]?.trim() || refiningFor === contact.id) ? 0.5 : 1,
+                                  whiteSpace: "nowrap", flexShrink: 0,
                                 }}
                               >
-                                {chip}
+                                {refiningFor === contact.id ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Refining...</> : "Refine"}
                               </button>
-                            ))}
+                            </div>
+                            {/* Quick chips */}
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6, paddingLeft: 22 }}>
+                              {["Shorter", "More casual", "More formal", "Add urgency", "Softer ask"].map(chip => (
+                                <button key={chip}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    const instruction = chip.toLowerCase();
+                                    setRefineInput(prev => ({ ...prev, [contact.id]: instruction }));
+                                  }}
+                                  style={{
+                                    padding: "2px 9px", borderRadius: 20, fontSize: 10, fontWeight: 500,
+                                    fontFamily: "inherit", border: "1px solid #ddd6fe", background: "#fff",
+                                    color: "#7c3aed", cursor: "pointer",
+                                  }}
+                                >
+                                  {chip}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
-
-                        {/* ── GENERATION CONTEXT ── */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: 11, color: "#9ca3af" }}>
-                          <MessageSquare size={11} />
-                          <span>Generated from:</span>
-                          <span style={{ padding: "2px 8px", background: "#f3f4f6", borderRadius: 4, fontWeight: 500 }}>
-                            <UserCircle size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />
-                            Your Profile
-                          </span>
-                          <span style={{ padding: "2px 8px", background: "#f3f4f6", borderRadius: 4, fontWeight: 500 }}>
-                            <Building2 size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />
-                            {submission?.companyName || "Company"}
-                          </span>
-                          <span style={{ padding: "2px 8px", background: "#f3f4f6", borderRadius: 4, fontWeight: 500 }}>
-                            <Briefcase size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />
-                            Job Description
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
               </div>
