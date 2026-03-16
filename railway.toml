@@ -1,6 +1,7 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && npm run build"
+installCommand = "npm install"
+buildCommand = "npm run build"
 
 [deploy]
 startCommand = "NODE_OPTIONS='--dns-result-order=ipv4first' npm run start"
