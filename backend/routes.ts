@@ -899,10 +899,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobTitle: recruiter.job_submissions.job_title || "this position",
         jobDescription: recruiter.job_submissions.job_input,
         recruiterEmail: recruiter.email,
+        outreachBucket: recruiter.outreach_bucket || undefined,
         userBio: outreachProfile?.bio || undefined,
+        userResume: outreachProfile?.resume_text || undefined,
         userAchievements: parseJsonArray(outreachProfile?.achievements),
         userStoryHooks: parseJsonArray(outreachProfile?.story_hooks),
         userCareerGoals: outreachProfile?.career_goals || undefined,
+        userHobbies: parseJsonArray(outreachProfile?.hobbies),
         voiceFormality: outreachProfile?.voice_formality,
         voiceDirectness: outreachProfile?.voice_directness,
         voiceLength: outreachProfile?.voice_length,
@@ -1163,6 +1166,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If instructions provided, refine existing draft with AI
       if (instructions && (currentDraft || currentLinkedin)) {
+        const jobDescExcerpt = (contact.job_submissions.job_input || "").slice(0, 800);
+
         const refinePrompt = `You are refining outreach messages for a job seeker. Apply the user's instructions to improve the existing drafts.
 
 USER INSTRUCTIONS: ${instructions}
@@ -1171,7 +1176,9 @@ TARGET:
 - Recruiter: ${contact.name || "Hiring Manager"} (${contact.title || "Recruiter"})
 - Company: ${contact.job_submissions.company_name || "the company"}
 - Job: ${contact.job_submissions.job_title || "this position"}
+${contact.outreach_bucket === 'department_lead' ? '- This is a HIRING MANAGER — use peer-to-peer tone, not applicant-to-gatekeeper.' : '- This is a RECRUITER — use Connect > Prove > Bridge > Easy Ask structure.'}
 
+${jobDescExcerpt ? `JOB DESCRIPTION CONTEXT (use for specificity):\n${jobDescExcerpt}\n` : ''}
 ${currentSubject ? `CURRENT EMAIL SUBJECT: ${currentSubject}` : ''}
 ${currentDraft ? `CURRENT EMAIL DRAFT:\n${currentDraft}` : ''}
 ${currentLinkedin ? `CURRENT LINKEDIN MESSAGE:\n${currentLinkedin}` : ''}
@@ -1186,9 +1193,10 @@ Return JSON with the refined versions. Only include fields that had content:
 RULES:
 - Apply the user's instructions faithfully
 - Keep email under 150 words, 3 paragraphs max
-- Keep LinkedIn under 200 characters
-- Subject line under 7 words
-- Maintain authentic, non-templated voice`;
+- Keep LinkedIn under 300 characters
+- Subject line under 45 characters
+- Maintain authentic, non-templated voice
+- Never use cliches: "I hope this finds you well", "passionate about", "exciting opportunity", etc.`;
 
         const raw = await callClaude({
           system: "You refine cold outreach to sound human and authentic. Apply user instructions precisely. Return valid JSON only.",
@@ -1223,19 +1231,22 @@ RULES:
         });
       }
 
-      // Full regeneration using personalized messaging
+      // Full regeneration using personalized messaging (research-backed frameworks)
       const { generatePersonalizedMessages } = await import("./personalizedMessaging.js");
       const messages = await generatePersonalizedMessages({
         recruiterName: contact.name || "Hiring Manager",
         recruiterTitle: contact.title || "Recruiter",
         companyName: contact.job_submissions.company_name || "the company",
         jobTitle: contact.job_submissions.job_title || "this position",
-        jobDescription: contact.job_submissions.job_input,
+        jobDescription: contact.job_submissions.job_input || "",
         recruiterEmail: contact.email,
+        outreachBucket: contact.outreach_bucket || undefined,
         userBio: outreachProfile?.bio || undefined,
+        userResume: outreachProfile?.resume_text || undefined,
         userAchievements: parseJsonArray(outreachProfile?.achievements),
         userStoryHooks: parseJsonArray(outreachProfile?.story_hooks),
         userCareerGoals: outreachProfile?.career_goals || undefined,
+        userHobbies: parseJsonArray(outreachProfile?.hobbies),
         voiceFormality: outreachProfile?.voice_formality,
         voiceDirectness: outreachProfile?.voice_directness,
         voiceLength: outreachProfile?.voice_length,
