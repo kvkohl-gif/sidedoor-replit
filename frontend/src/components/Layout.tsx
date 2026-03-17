@@ -1,5 +1,6 @@
 import { Home, Search, Clock, Users, Settings, CreditCard, User, Menu, X, ChevronRight, Plus, UserCircle, Key, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,6 +13,10 @@ interface LayoutProps {
 export function Layout({ children, currentPage, onNavigate, onLogout, userName }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutMenu, setShowLogoutMenu] = useState(false);
+
+  const { data: allContacts = [] } = useQuery<any[]>({
+    queryKey: ["/api/contacts/all"],
+  });
 
   const navItems = [
     { icon: Home, label: "Dashboard", id: "dashboard" },
@@ -105,8 +110,9 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
           {/* Credits Display */}
           <div className="px-3 pb-4">
             {(() => {
-              const creditsRemaining = 50;
-              const creditsTotal = 250;
+              const creditsTotal = 50;
+              const creditsUsed = allContacts.length;
+              const creditsRemaining = Math.max(0, creditsTotal - creditsUsed);
               const pct = creditsTotal > 0 ? (creditsRemaining / creditsTotal) * 100 : 0;
               const barGradient = pct > 50
                 ? "from-[#059669] to-[#10b981]"
@@ -181,7 +187,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <div className="font-medium text-[#1A202C] text-[13px] truncate">{userName || "User"}</div>
-                  <div className="text-[12px] text-[#94A3B8]">Free Plan</div>
+                  <div className="text-[12px] text-[#94A3B8]">Beta</div>
                 </div>
               </button>
               {onLogout && (

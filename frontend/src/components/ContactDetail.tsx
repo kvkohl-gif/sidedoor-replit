@@ -540,15 +540,12 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
   const generateMutation = useMutation({
     mutationFn: async (type: "email" | "linkedin") => {
       if (!contactId) throw new Error("No contact");
-      const res = await apiRequest("POST", `/api/contacts/${contactId}/generate-message`, {
-        messageType: type,
-        tone: "professional",
-      });
+      const res = await apiRequest("POST", `/api/contacts/${contactId}/generate-message`, {});
       return res.json();
     },
-    onSuccess: (data, type) => {
-      if (type === "email") setEmailDraft(data.message || "");
-      else setLinkedinDraft(data.message || "");
+    onSuccess: (data) => {
+      if (data.emailContent) setEmailDraft(data.emailContent);
+      if (data.linkedinContent) setLinkedinDraft(data.linkedinContent);
       queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
     },
   });

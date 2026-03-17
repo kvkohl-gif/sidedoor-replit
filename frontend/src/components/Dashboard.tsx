@@ -159,7 +159,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </div>
           </div>
           <div className="space-y-1 mb-4">
-            <div className="text-3xl font-bold text-[#0F172A]">-</div>
+            <div className="text-3xl font-bold text-[#0F172A]" data-testid="stat-messages-generated">
+              {(allContacts as any[]).filter((c: any) => c.generatedEmailMessage).length}
+            </div>
             <div className="text-[13px] text-[#64748B]">AI messages generated</div>
           </div>
           <div className="pt-4 border-t border-[#F1F5F9]">

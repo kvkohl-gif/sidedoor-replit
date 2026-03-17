@@ -1,70 +1,20 @@
-import { Mail, FileSignature, Bell, Shield, ChevronRight } from "lucide-react";
+import { Bell, Shield, Lock } from "lucide-react";
 import { useState } from "react";
 
 export function Settings() {
   const [autoProfileEmails, setAutoProfileEmails] = useState(true);
   const [emailStrictMode, setEmailStrictMode] = useState(true);
 
-  const settingsSections = [
-    {
-      icon: Mail,
-      title: "Connected Mailbox",
-      description:
-        "Configure your email sending settings, including sender name and daily email limits.",
-      link: "Learn more about connecting mailboxes →",
-      buttonText: "Edit Mailbox Settings",
-    },
-    {
-      icon: FileSignature,
-      title: "Email Signatures",
-      description: "Add a professional signature to default from when sending email sequences.",
-      link: "Learn more about email signatures →",
-      buttonText: "Edit Signatures",
-      note: "These settings have moved to the Integrations tab.",
-    },
-  ];
-
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-[#1A202C] mb-2">Settings</h1>
-        <p className="text-[#718096]">Mailbox and Emails</p>
+        <p className="text-[#718096]">Configure your email preferences</p>
       </div>
 
       {/* Settings Sections */}
       <div className="space-y-6">
-        {/* Connected Mailbox & Email Signatures */}
-        {settingsSections.map((section, index) => {
-          const Icon = section.icon;
-          return (
-            <div
-              key={index}
-              className="bg-white rounded-lg shadow-sm border border-[#E2E8F0] p-6"
-            >
-              <div className="flex items-start gap-4 mb-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-6 h-6 text-[#6B46C1]" />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-[#1A202C] mb-2">{section.title}</h2>
-                  <p className="text-[#718096] mb-2">{section.description}</p>
-                  {section.note && (
-                    <p className="text-[#A0AEC0] text-sm mb-2">{section.note}</p>
-                  )}
-                  <a href="#" className="text-[#6B46C1] hover:underline text-sm">
-                    {section.link}
-                  </a>
-                </div>
-              </div>
-              <button className="px-6 py-3 border border-[#E2E8F0] bg-white text-[#718096] rounded-lg hover:bg-[#F9FAFB] transition-colors flex items-center gap-2">
-                {section.buttonText}
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          );
-        })}
-
         {/* Automated Profile Info Emails */}
         <div className="bg-white rounded-lg shadow-sm border border-[#E2E8F0] p-6">
           <div className="flex items-start gap-4 mb-4">
@@ -154,28 +104,21 @@ export function Settings() {
             </label>
           </div>
         </div>
-      </div>
 
-      {/* Additional Settings Navigation */}
-      <div className="mt-8 bg-purple-50 border border-purple-200 rounded-lg p-6">
-        <h3 className="text-[#1A202C] mb-4">More Settings</h3>
-        <div className="grid md:grid-cols-2 gap-3">
-          <button className="px-4 py-3 bg-white border border-[#E2E8F0] text-[#718096] rounded-lg hover:bg-[#F9FAFB] transition-colors flex items-center justify-between">
-            <span>Team Members</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button className="px-4 py-3 bg-white border border-[#E2E8F0] text-[#718096] rounded-lg hover:bg-[#F9FAFB] transition-colors flex items-center justify-between">
-            <span>CRM Connections</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button className="px-4 py-3 bg-white border border-[#E2E8F0] text-[#718096] rounded-lg hover:bg-[#F9FAFB] transition-colors flex items-center justify-between">
-            <span>Export Preferences</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button className="px-4 py-3 bg-white border border-[#E2E8F0] text-[#718096] rounded-lg hover:bg-[#F9FAFB] transition-colors flex items-center justify-between">
-            <span>Export History</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
+        {/* Coming Soon Features */}
+        <div className="bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Lock className="w-5 h-5 text-[#94A3B8]" />
+            <h3 className="text-[#64748B] font-medium">Coming Soon</h3>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {["Mailbox Integration", "Email Signatures", "CRM Connections", "Export & Reports"].map((feature) => (
+              <div key={feature} className="px-4 py-3 bg-white border border-[#E2E8F0] text-[#94A3B8] rounded-lg flex items-center justify-between">
+                <span>{feature}</span>
+                <span className="text-[11px] font-medium bg-[#F1F5F9] text-[#94A3B8] px-2 py-0.5 rounded-full">Soon</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

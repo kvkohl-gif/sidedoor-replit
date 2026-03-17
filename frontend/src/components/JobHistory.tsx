@@ -15,7 +15,7 @@ interface JobSubmissionWithRecruiters {
   jobInput: string;
   status: string;
   notes: string | null;
-  isArchived: string;
+  isArchived: boolean;
   submittedAt: string;
   recruiters: Array<{
     id: number;
@@ -73,6 +73,15 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      return await apiRequest("PATCH", `/api/submissions/${id}`, { isArchived: archived });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+    },
+  });
+
   const jobs = submissions.map((sub) => {
     const validContacts = sub.recruiters.filter(
       (r) => r.verificationStatus === "valid"
@@ -92,7 +101,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
       id: sub.id,
       title: sub.jobTitle || "Unknown Position",
       company: sub.companyName || "Unknown Company",
-      location: "Remote",
+      location: "",
       status: normalizedStatus,
       contactsFound: sub.recruiters.length,
       contactsValid: validContacts,
@@ -111,7 +120,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
         } catch { return "Unknown"; }
       })(),
       notes: sub.notes || "",
-      archived: sub.isArchived === "true",
+      archived: !!sub.isArchived,
     };
   });
 
@@ -277,8 +286,8 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                           <Building2 className="w-3.5 h-3.5" />
                           {job.company}
                         </span>
-                        <span>·</span>
-                        <span>{job.location}</span>
+                        {job.location && <><span>·</span>
+                        <span>{job.location}</span></>}
                       </div>
                     </div>
                   </div>
@@ -354,12 +363,16 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                       <Clock className="w-3.5 h-3.5" />
                       {job.daysAgo}
                     </span>
-                    <button 
+                    <button
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-[#A0AEC0] hover:text-[#718096] p-1"
-                      title="Archive"
+                      title={job.archived ? "Unarchive" : "Archive"}
                       data-testid={`button-archive-${job.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        archiveMutation.mutate({ id: job.id, archived: !job.archived });
+                      }}
                     >
-                      <Archive className="w-4 h-4" />
+                      <Archive className={`w-4 h-4 ${job.archived ? "text-[#6B46C1]" : ""}`} />
                     </button>
                     <button
                       onClick={() => onNavigate("job-details", { submissionId: job.id })}

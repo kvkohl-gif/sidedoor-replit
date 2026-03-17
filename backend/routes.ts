@@ -40,6 +40,7 @@ function mapSubmissionToFrontend(row: any) {
     companyDomain: row.company_domain,
     status: row.status,
     notes: row.notes,
+    isArchived: row.is_archived || false,
     submittedAt: row.submitted_at,
     recruiters: row.recruiters?.map((r: any) => ({
       id: r.id,
@@ -582,6 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.jobTitle !== undefined) updateData.job_title = req.body.jobTitle;
       if (req.body.jobUrl !== undefined) updateData.job_url = req.body.jobUrl;
       if (req.body.jobDescription !== undefined) updateData.job_description = req.body.jobDescription;
+      if (req.body.isArchived !== undefined) updateData.is_archived = req.body.isArchived === true || req.body.isArchived === "true";
 
       // Guard against empty updates
       if (Object.keys(updateData).length === 0) {
@@ -1281,8 +1283,11 @@ RULES:
   registerContactRoutes(app);
   registerOutreachProfileRoutes(app);
 
-  // Debug endpoint for department targeting (no auth for testing)
+  // Debug endpoint for department targeting (dev only)
   app.post('/api/debug/department-test', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
       const { company_name, job_title, job_content } = req.body;
       
@@ -1316,8 +1321,11 @@ RULES:
     }
   });
 
-  // Debug endpoint for testing Apollo API
+  // Debug endpoint for testing Apollo API (dev only)
   app.post('/api/debug/apollo-test', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
       const { company_name = "Replicant" } = req.body;
       
