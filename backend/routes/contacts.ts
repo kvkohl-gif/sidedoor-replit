@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { supabase } from "../lib/supabaseClient";
-import { callClaude } from "../claude";
+import { generatePersonalizedMessages } from "../personalizedMessaging";
 
 // Session-based authentication middleware
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -261,14 +261,13 @@ export function registerContactRoutes(app: Express) {
     }
   });
 
-  // Generate message for contact
+  // Generate message for contact — uses consolidated personalizedMessaging service
   app.post("/api/contacts/:id/generate-message", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
-      const { messageType, tone = "professional" } = req.body;
 
-      // Fetch contact and verify user ownership via job submission using Supabase
+      // Fetch contact WITH job_input (job description) for full context
       const { data: contact, error: fetchError } = await supabase
         .from('recruiter_contacts')
         .select(`
@@ -276,6 +275,7 @@ export function registerContactRoutes(app: Express) {
           job_submissions!inner (
             job_title,
             company_name,
+            job_input,
             user_id
           )
         `)
@@ -298,102 +298,51 @@ export function registerContactRoutes(app: Express) {
         .eq('user_id', userId)
         .single();
 
-      // Build personalization context from outreach profile
-      const bio = profile?.bio?.trim() || '';
-      const achievements = (() => {
-        try {
-          const arr = typeof profile?.achievements === 'string' ? JSON.parse(profile.achievements) : (profile?.achievements || []);
-          return Array.isArray(arr) ? arr : [];
-        } catch { return []; }
-      })();
-      const storyHooks = (() => {
-        try {
-          const arr = typeof profile?.story_hooks === 'string' ? JSON.parse(profile.story_hooks) : (profile?.story_hooks || []);
-          return Array.isArray(arr) ? arr : [];
-        } catch { return []; }
-      })();
-      const careerGoals = profile?.career_goals?.trim() || '';
-      const voiceFormality = profile?.voice_formality ?? 0.5;
-      const voiceDirectness = profile?.voice_directness ?? 0.5;
-      const voiceLength = profile?.voice_length ?? 0.3;
-      const voiceNotes = profile?.voice_notes?.trim() || '';
+      const parseJsonArray = (val: any): string[] => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
+        return [];
+      };
 
-      // Build voice instruction
-      const voiceInstruction = [
-        voiceFormality < 0.3 ? 'Use a casual, conversational tone.' : voiceFormality > 0.7 ? 'Use a formal, polished tone.' : '',
-        voiceDirectness > 0.7 ? 'Be direct and get to the point quickly.' : voiceDirectness < 0.3 ? 'Be warm and build rapport before the ask.' : '',
-        voiceLength > 0.6 ? 'Write at full length with detail.' : voiceLength < 0.2 ? 'Keep it extremely brief.' : 'Keep it concise.',
-        voiceNotes ? `Additional voice notes: ${voiceNotes}` : ''
-      ].filter(Boolean).join(' ');
-
-      // Build profile context block
-      const profileContext = [
-        bio ? `About me: ${bio}` : '',
-        achievements.length > 0 ? `Key achievements:\n${achievements.slice(0, 3).map((a: string) => `- ${a}`).join('\n')}` : '',
-        storyHooks.length > 0 ? `Personal hooks for rapport: ${storyHooks.slice(0, 2).join('; ')}` : '',
-        careerGoals ? `Career goals: ${careerGoals}` : ''
-      ].filter(Boolean).join('\n\n');
-
-      // Generate message using Claude with outreach profile context
-      const contactName = contact.name || "the recruiter";
-      const contactTitle = contact.title || "Unknown Title";
-      const companyName = contact.job_submissions.company_name || "the company";
-      const jobTitle = contact.job_submissions.job_title || "the position";
-
-      const prompt = messageType === "email"
-        ? `Write an outreach email to ${contactName} (${contactTitle}) about the ${jobTitle} role at ${companyName}.
-
-STRUCTURE (exactly 3 short paragraphs, 75-125 words total):
-1. Personal hook — reference a shared connection, something specific about ${companyName}, or a story hook. Make it feel human, not templated.
-2. Value match — mention 1-2 specific experiences or achievements that directly map to this role. Don't list your resume, pick the most relevant wins.
-3. Soft CTA — express interest in chatting, don't ask them to "review your resume" or "consider your application."
-
-${profileContext ? `\nABOUT THE SENDER:\n${profileContext}` : ''}
-
-${voiceInstruction}
-
-RULES:
-- No subject line (will be generated separately)
-- Do NOT start with "I hope this email finds you well" or any cliche opener
-- Do NOT use "I am writing to express my interest..."
-- First name only for greeting (Hi ${contactName.split(' ')[0]},)
-- Sign off with just "Best," and the sender's name (leave as [Your Name])`
-        : `Write a LinkedIn connection request message to ${contactName} (${contactTitle}) about the ${jobTitle} role at ${companyName}.
-
-RULES:
-- Under 200 characters (LinkedIn limit)
-- One sentence max, conversational
-- Reference something specific about the role or company
-- End with a question to invite response
-${storyHooks.length > 0 ? `- Try to use one of these hooks: ${storyHooks[0]}` : ''}
-${voiceInstruction}`;
-
-      const systemPrompt = `You write authentic, high-converting outreach messages for job seekers. Your messages sound like a real person wrote them — not a template. You never use corporate jargon, cliches, or generic phrases. Every message includes something specific to the recipient, the company, or the role.`;
-
-      const generatedMessage = await callClaude({
-        system: systemPrompt,
-        user: prompt,
-        temperature: 0.7,
-        maxTokens: messageType === "email" ? 500 : 150,
+      // Use consolidated service — includes job description, resume, story hooks,
+      // outreach bucket differentiation, and research-backed frameworks
+      const messages = await generatePersonalizedMessages({
+        recruiterName: contact.name || "Hiring Manager",
+        recruiterTitle: contact.title || "Recruiter",
+        companyName: contact.job_submissions.company_name || "the company",
+        jobTitle: contact.job_submissions.job_title || "this position",
+        jobDescription: contact.job_submissions.job_input || "",
+        recruiterEmail: contact.email,
+        outreachBucket: contact.outreach_bucket || undefined,
+        userBio: profile?.bio || undefined,
+        userResume: profile?.resume_text || undefined,
+        userAchievements: parseJsonArray(profile?.achievements),
+        userStoryHooks: parseJsonArray(profile?.story_hooks),
+        userCareerGoals: profile?.career_goals || undefined,
+        userHobbies: parseJsonArray(profile?.hobbies),
+        voiceFormality: profile?.voice_formality,
+        voiceDirectness: profile?.voice_directness,
+        voiceLength: profile?.voice_length,
+        voiceNotes: profile?.voice_notes || undefined,
       });
 
-      // Update contact with generated message using Supabase
-      const updateData: any = {};
-      
-      if (messageType === "email") {
-        updateData.generated_email_message = generatedMessage;
-        updateData.email_draft = generatedMessage;
-      } else {
-        updateData.generated_linkedin_message = generatedMessage;
-        updateData.linkedin_message = generatedMessage;
-      }
-      
+      // Save all generated fields to the contact
       await supabase
         .from('recruiter_contacts')
-        .update(updateData)
+        .update({
+          email_draft: messages.emailContent,
+          generated_email_message: messages.emailContent,
+          email_subject: messages.emailSubject,
+          linkedin_message: messages.linkedinContent,
+          generated_linkedin_message: messages.linkedinContent,
+        })
         .eq('id', contactId);
 
-      res.json({ message: generatedMessage });
+      res.json({
+        emailSubject: messages.emailSubject,
+        emailContent: messages.emailContent,
+        linkedinContent: messages.linkedinContent,
+      });
     } catch (error) {
       console.error("Error generating message:", error);
       res.status(500).json({ message: "Failed to generate message" });
