@@ -94,17 +94,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       
-      // Get user from Supabase
+      // Get user from Supabase — never return password_hash
       const { data: user, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, first_name, last_name, email, created_at, updated_at')
         .eq('id', userId)
         .single();
-      
+
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
         throw error;
       }
-      
+
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -1283,8 +1287,8 @@ RULES:
   registerContactRoutes(app);
   registerOutreachProfileRoutes(app);
 
-  // Debug endpoint for department targeting (dev only)
-  app.post('/api/debug/department-test', async (req, res) => {
+  // Debug endpoint for department targeting (dev only, auth required)
+  app.post('/api/debug/department-test', requireAuth, async (req, res) => {
     if (process.env.NODE_ENV === 'production') {
       return res.status(404).json({ message: "Not found" });
     }
@@ -1321,8 +1325,8 @@ RULES:
     }
   });
 
-  // Debug endpoint for testing Apollo API (dev only)
-  app.post('/api/debug/apollo-test', async (req, res) => {
+  // Debug endpoint for testing Apollo API (dev only, auth required)
+  app.post('/api/debug/apollo-test', requireAuth, async (req, res) => {
     if (process.env.NODE_ENV === 'production') {
       return res.status(404).json({ message: "Not found" });
     }

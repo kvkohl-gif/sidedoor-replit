@@ -87,7 +87,7 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
                 </label>
                 <button
                   type="button"
-                  onClick={() => alert("Please contact support to reset your password.")}
+                  onClick={() => onNavigate("forgot-password")}
                   className="text-[13px] text-[#6B46C1] hover:text-[#5a3ba1] transition-colors"
                 >
                   Forgot password?
@@ -154,13 +154,13 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
         <div className="text-center mt-6">
           <p className="text-[13px] text-[#A0AEC0]">
             By continuing, you agree to our{" "}
-            <a href="#" className="text-[#718096] hover:text-[#6B46C1] transition-colors">
+            <button type="button" onClick={() => onNavigate("terms")} className="text-[#718096] hover:text-[#6B46C1] transition-colors">
               Terms
-            </a>{" "}
+            </button>{" "}
             and{" "}
-            <a href="#" className="text-[#718096] hover:text-[#6B46C1] transition-colors">
+            <button type="button" onClick={() => onNavigate("privacy")} className="text-[#718096] hover:text-[#6B46C1] transition-colors">
               Privacy Policy
-            </a>
+            </button>
           </p>
         </div>
       </div>

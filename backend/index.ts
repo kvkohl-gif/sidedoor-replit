@@ -70,8 +70,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: true,        // required with SameSite=None on HTTPS
-    sameSite: 'none',    // supports Replit iframe/cross-site
+    secure: process.env.NODE_ENV === "production",
+    sameSite: 'lax',
     path: '/',
     maxAge: 1000 * 60 * 60 * 24 * 7
     // DO NOT set "domain"

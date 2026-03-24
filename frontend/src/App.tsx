@@ -10,8 +10,12 @@ import { ContactDetail } from "./components/ContactDetail";
 import { Subscription } from "./components/Subscription";
 import { Settings } from "./components/Settings";
 import { OutreachProfile } from "./components/OutreachProfile";
+import { TermsOfService } from "./components/TermsOfService";
+import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { LoginScreen } from "../components/Login";
 import { SignupScreen } from "../components/Signup";
+import { ForgotPasswordScreen } from "../components/ForgotPassword";
+import { ResetPasswordScreen } from "../components/ResetPassword";
 
 // Map page names (used by child components) to URL paths
 const pageToPath: Record<string, string> = {
@@ -25,6 +29,10 @@ const pageToPath: Record<string, string> = {
   "outreach-profile": "/outreach-profile",
   billing: "/billing",
   settings: "/settings",
+  terms: "/terms",
+  privacy: "/privacy",
+  "forgot-password": "/forgot-password",
+  "reset-password": "/reset-password",
   login: "/login",
   signup: "/signup",
 };
@@ -38,6 +46,10 @@ const pathToPage: Record<string, string> = {
   "/outreach-profile": "outreach-profile",
   "/billing": "billing",
   "/settings": "settings",
+  "/terms": "terms",
+  "/privacy": "privacy",
+  "/forgot-password": "forgot-password",
+  "/reset-password": "reset-password",
   "/login": "login",
   "/signup": "signup",
 };
@@ -86,8 +98,9 @@ export default function App() {
           }
         } else {
           setIsAuthenticated(false);
-          // If not authenticated and not on auth pages, redirect to login
-          if (location !== "/login" && location !== "/signup") {
+          // If not authenticated and not on public pages, redirect to login
+          const publicPaths = ["/login", "/signup", "/terms", "/privacy", "/forgot-password", "/reset-password"];
+          if (!publicPaths.some(p => location === p || location.startsWith(p + "?"))) {
             setLocation("/login");
           }
         }
@@ -143,10 +156,11 @@ export default function App() {
     );
   }
 
-  // Auth pages — no Layout wrapper
-  if (location === "/login" || location === "/signup") {
+  // Public pages — no Layout wrapper, no auth required
+  const publicPages = ["/login", "/signup", "/terms", "/privacy", "/forgot-password", "/reset-password"];
+  if (publicPages.some(p => location === p || location.startsWith(p + "?"))) {
     return (
-      <><StagingBanner /><Switch>
+      <><StagingBanner /><div className={stagingOffset}><Switch>
         <Route path="/login">
           <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
             <LoginScreen
@@ -163,7 +177,22 @@ export default function App() {
             />
           </div>
         </Route>
-      </Switch></>
+        <Route path="/terms">
+          <TermsOfService onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/privacy">
+          <PrivacyPolicy onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/forgot-password">
+          <ForgotPasswordScreen onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/reset-password">
+          {() => {
+            const token = new URLSearchParams(window.location.search).get("token") || "";
+            return <ResetPasswordScreen onNavigate={handleNavigate} token={token} />;
+          }}
+        </Route>
+      </Switch></div></>
     );
   }
 
@@ -210,6 +239,12 @@ export default function App() {
         </Route>
         <Route path="/settings">
           <Settings />
+        </Route>
+        <Route path="/terms">
+          <TermsOfService onNavigate={handleNavigate} />
+        </Route>
+        <Route path="/privacy">
+          <PrivacyPolicy onNavigate={handleNavigate} />
         </Route>
         <Route path="/">
           <Redirect to="/dashboard" />
