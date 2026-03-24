@@ -1,5 +1,4 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -61,23 +60,8 @@ app.set('trust proxy', 1); // required behind Railway/Replit proxy
 // Cookie parser for session_id cookie
 app.use(cookieParser());
 
-// Session authentication middleware (attaches req.user)
+// Session authentication middleware (attaches req.user via session_id cookie -> Supabase)
 app.use(sessionAuth);
-
-app.use(session({
-  name: 'connect.sid',
-  secret: process.env.SESSION_SECRET!,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 1000 * 60 * 60 * 24 * 7
-    // DO NOT set "domain"
-  }
-}));
 
 
 app.use((req, res, next) => {

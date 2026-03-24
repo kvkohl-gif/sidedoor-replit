@@ -5,6 +5,18 @@ import { supabaseAdmin } from "../lib/supabaseClient";
 
 const router = Router();
 
+// Consistent cookie options for Railway + custom domains
+function getSessionCookieOptions() {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  };
+}
+
 router.post("/register", async (req: Request, res: Response) => {
   try {
     const { firstName, lastName, email, password } = req.body;
@@ -64,12 +76,7 @@ router.post("/register", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Failed to create session" });
     }
 
-    res.cookie("session_id", sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("session_id", sessionId, getSessionCookieOptions());
 
     return res.json({ success: true });
   } catch (error) {
@@ -128,12 +135,7 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Failed to create session" });
     }
 
-    res.cookie("session_id", sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("session_id", sessionId, getSessionCookieOptions());
 
     return res.json({ success: true });
   } catch (error) {
@@ -278,7 +280,12 @@ router.post("/logout", async (req: Request, res: Response) => {
         .eq("sid", sessionId);
     }
 
-    res.clearCookie("session_id");
+    res.clearCookie("session_id", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      path: "/",
+    });
 
     return res.json({ success: true });
   } catch (error) {
