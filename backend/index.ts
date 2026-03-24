@@ -1,16 +1,61 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionAuth } from "./middleware/sessionAuth";
 import authRouter from "./routes/auth";
 
 const app = express();
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Vite injects inline scripts; CSP would break the frontend
+}));
+
+// CORS — lock to known origins in production
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim())
+  : [];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, health checks, same-origin)
+    if (!origin) return callback(null, true);
+    // In dev, allow everything
+    if (process.env.NODE_ENV === "development") return callback(null, true);
+    // In production/staging, check allowlist
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
+
+// Rate limiting — auth endpoints get stricter limits
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 attempts per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts, please try again later" },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200, // 200 requests per 15 min for general API
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-app.set('trust proxy', 1); // required behind Replit proxy
+app.set('trust proxy', 1); // required behind Railway/Replit proxy
 
 // Cookie parser for session_id cookie
 app.use(cookieParser());
@@ -65,9 +110,21 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Register auth routes
-  app.use("/api/auth", authRouter);
-  
+  // Health check endpoint (no auth required, used by uptime monitors + Railway health checks)
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const { pool } = await import("./lib/neonClient");
+      await pool.query("SELECT 1");
+      res.json({ status: "ok", env: process.env.APP_ENV || "unknown" });
+    } catch (e) {
+      res.status(500).json({ status: "error", env: process.env.APP_ENV || "unknown" });
+    }
+  });
+
+  // Apply rate limiters
+  app.use("/api/auth", authLimiter, authRouter);
+  app.use("/api", apiLimiter);
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

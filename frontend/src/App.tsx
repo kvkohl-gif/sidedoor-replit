@@ -52,6 +52,19 @@ function getCurrentPage(location: string): string {
   return "dashboard";
 }
 
+const APP_ENV = import.meta.env.VITE_APP_ENV || "production";
+
+function StagingBanner() {
+  if (APP_ENV !== "staging") return null;
+  return (
+    <div
+      className="bg-amber-500 text-black text-center py-1 px-4 text-xs font-bold tracking-wide fixed top-0 left-0 right-0 z-[9999]"
+    >
+      STAGING ENVIRONMENT
+    </div>
+  );
+}
+
 export default function App() {
   const [location, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -118,10 +131,13 @@ export default function App() {
     }
   };
 
+  const stagingOffset = APP_ENV === "staging" ? "pt-7" : "";
+
   // Show loading state while checking auth
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F7F5FF] to-[#FAFBFC]">
+      <div className={`min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F7F5FF] to-[#FAFBFC] ${stagingOffset}`}>
+        <StagingBanner />
         <div className="text-lg text-[#718096]">Loading...</div>
       </div>
     );
@@ -130,7 +146,7 @@ export default function App() {
   // Auth pages — no Layout wrapper
   if (location === "/login" || location === "/signup") {
     return (
-      <Switch>
+      <><StagingBanner /><Switch>
         <Route path="/login">
           <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
             <LoginScreen
@@ -147,7 +163,7 @@ export default function App() {
             />
           </div>
         </Route>
-      </Switch>
+      </Switch></>
     );
   }
 
@@ -159,6 +175,9 @@ export default function App() {
   const currentPage = getCurrentPage(location);
 
   return (
+    <>
+    <StagingBanner />
+    <div className={stagingOffset}>
     <Layout
       currentPage={currentPage}
       onNavigate={handleNavigate}
@@ -200,5 +219,7 @@ export default function App() {
         </Route>
       </Switch>
     </Layout>
+    </div>
+    </>
   );
 }

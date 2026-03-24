@@ -4,5 +4,7 @@ installCommand = "npm install"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "NODE_OPTIONS='--dns-result-order=ipv4first' npm run start"
+startCommand = "NODE_OPTIONS='--dns-result-order=ipv4first' npm run start:prod"
 restartPolicyType = "on_failure"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
