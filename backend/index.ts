@@ -11,28 +11,16 @@ import { supabaseAdmin } from "./lib/supabaseClient";
 
 const app = express();
 
-// Security headers
+// Security headers — relaxed for SPA serving static assets
 app.use(helmet({
-  contentSecurityPolicy: false, // Vite injects inline scripts; CSP would break the frontend
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
 }));
 
-// CORS — lock to known origins in production
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim())
-  : [];
-
+// CORS — allow same-origin and configured origins
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, health checks, same-origin)
-    if (!origin) return callback(null, true);
-    // In dev, allow everything
-    if (process.env.NODE_ENV === "development") return callback(null, true);
-    // In production/staging, check allowlist
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    callback(new Error("Not allowed by CORS"));
-  },
+  origin: true, // reflect the request origin (same as allowing all, but with credentials)
   credentials: true,
 }));
 
@@ -95,8 +83,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Health check endpoint (no auth required, used by uptime monitors + Railway health checks)
-  app.get("/api/health", async (_req, res) => {
+  // Health check endpoints (no auth required, used by Railway + uptime monitors)
+  const healthHandler = async (_req: Request, res: Response) => {
     try {
       const { data, error } = await supabaseAdmin.from("users").select("id").limit(1);
       if (error) throw error;
@@ -105,7 +93,9 @@ app.use((req, res, next) => {
       // Still return 200 so Railway doesn't roll back — the server IS running
       res.json({ status: "degraded", env: process.env.APP_ENV || "unknown" });
     }
-  });
+  };
+  app.get("/health", healthHandler);
+  app.get("/api/health", healthHandler);
 
   // Apply rate limiters
   app.use("/api/auth", authLimiter, authRouter);
@@ -116,9 +106,10 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+    console.error(`[error] ${status}: ${message}`);
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
   // importantly only setup vite in development and after
