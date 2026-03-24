@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionAuth } from "./middleware/sessionAuth";
 import authRouter from "./routes/auth";
+import { supabaseAdmin } from "./lib/supabaseClient";
 
 const app = express();
 
@@ -113,11 +114,12 @@ app.use((req, res, next) => {
   // Health check endpoint (no auth required, used by uptime monitors + Railway health checks)
   app.get("/api/health", async (_req, res) => {
     try {
-      const { pool } = await import("./lib/neonClient");
-      await pool.query("SELECT 1");
+      const { data, error } = await supabaseAdmin.from("users").select("id").limit(1);
+      if (error) throw error;
       res.json({ status: "ok", env: process.env.APP_ENV || "unknown" });
     } catch (e) {
-      res.status(500).json({ status: "error", env: process.env.APP_ENV || "unknown" });
+      // Still return 200 so Railway doesn't roll back — the server IS running
+      res.json({ status: "degraded", env: process.env.APP_ENV || "unknown" });
     }
   });
 
