@@ -165,7 +165,7 @@ export default function App() {
           <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
             <LoginScreen
               onNavigate={handleNavigate}
-              onLogin={() => {}}
+              onLogin={() => setIsAuthenticated(true)}
             />
           </div>
         </Route>
@@ -173,7 +173,7 @@ export default function App() {
           <div style={{ maxWidth: '28rem', margin: '0 auto' }}>
             <SignupScreen
               onNavigate={handleNavigate}
-              onSignup={() => {}}
+              onSignup={() => setIsAuthenticated(true)}
             />
           </div>
         </Route>
