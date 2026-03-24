@@ -81,6 +81,7 @@ export default function App() {
   const [location, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [userName, setUserName] = useState<string>("");
 
   // Check authentication status on mount
   useEffect(() => {
@@ -91,7 +92,11 @@ export default function App() {
         });
 
         if (response.ok) {
+          const userData = await response.json();
           setIsAuthenticated(true);
+          if (userData.first_name) {
+            setUserName(`${userData.first_name} ${userData.last_name || ''}`.trim());
+          }
           // If authenticated and on login/signup page, redirect to dashboard
           if (location === "/login" || location === "/signup" || location === "/") {
             setLocation("/dashboard");
@@ -211,6 +216,7 @@ export default function App() {
       currentPage={currentPage}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
+      userName={userName}
     >
       <Switch>
         <Route path="/dashboard">
