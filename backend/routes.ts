@@ -4,7 +4,10 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerContactRoutes } from "./routes/contacts";
 import { registerOutreachProfileRoutes } from "./routes/outreachProfile";
 import dbTestRouter from "./routes/dbTest";
-import { supabase } from "./lib/supabaseClient";
+import { supabaseAdmin } from "./lib/supabaseClient";
+// Use supabaseAdmin for all queries — the app handles auth via sessionAuth middleware
+// (supabase anon key is blocked by RLS since we don't use Supabase Auth)
+const supabase = supabaseAdmin;
 import { callClaude } from "./claude";
 import { extractRecruiterInfo, extractJobData, extractApolloSearchParams } from "./openai";
 import { enrichmentService, ContactEnrichmentService } from "./enrichmentService";

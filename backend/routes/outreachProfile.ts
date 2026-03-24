@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { supabase } from "../lib/supabaseClient";
+import { supabaseAdmin as supabase } from "../lib/supabaseClient";
 import { callClaude } from "../claude";
 
 function requireAuth(req: Request, res: Response, next: () => void) {
