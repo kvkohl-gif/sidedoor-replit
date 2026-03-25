@@ -18,6 +18,8 @@ import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
+import { requireCredits } from "./middleware/creditGuard";
+import { deductCredits } from "./services/creditService";
 
 // Session-based authentication middleware
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -118,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const activeRuns = new Map<string, { userId: string; startTime: number }>();
 
   // Job submission routes
-  app.post("/api/submissions", requireAuth, async (req: any, res) => {
+  app.post("/api/submissions", requireAuth, requireCredits("JOB_SEARCH"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const { runId } = req.body;
@@ -428,6 +430,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (fetchError || !completeSubmission) {
           throw new Error(`Failed to fetch complete submission: ${fetchError?.message}`);
+        }
+
+        // Deduct credits AFTER successful pipeline completion
+        if (req.creditCost && req.user?.id) {
+          await deductCredits(
+            req.user.id,
+            req.creditCost,
+            "search_spend",
+            `Job search: ${completeSubmission.company_name || "Unknown"} — ${completeSubmission.job_title || "Unknown"}`,
+            jobSubmission.id
+          );
         }
 
         res.json({ id: jobSubmission.id, submission: mapSubmissionToFrontend(completeSubmission), runId });

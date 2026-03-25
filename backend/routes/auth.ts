@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { supabaseAdmin } from "../lib/supabaseClient";
+import { createFreeSubscription } from "../services/creditService";
 
 const router = Router();
 
@@ -77,6 +78,9 @@ router.post("/register", async (req: Request, res: Response) => {
     }
 
     res.cookie("session_id", sessionId, getSessionCookieOptions());
+
+    // Create free-tier subscription with 50 credits (21-day trial)
+    await createFreeSubscription(userId);
 
     return res.json({ success: true });
   } catch (error) {
