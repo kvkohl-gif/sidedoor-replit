@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionAuth } from "./middleware/sessionAuth";
 import authRouter from "./routes/auth";
+import billingRouter, { handleStripeWebhook } from "./routes/billing";
 import { supabaseAdmin } from "./lib/supabaseClient";
 
 const app = express();
@@ -52,6 +53,9 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// CRITICAL: Stripe webhook needs raw body BEFORE express.json() parses it
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -125,6 +129,7 @@ app.use((req, res, next) => {
 
   // Apply rate limiters
   app.use("/api/auth", authLimiter, authRouter);
+  app.use("/api/billing", billingRouter);
   app.use("/api", apiLimiter);
 
   const server = await registerRoutes(app);

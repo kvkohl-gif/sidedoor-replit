@@ -14,8 +14,14 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutMenu, setShowLogoutMenu] = useState(false);
 
-  const { data: allContacts = [] } = useQuery<any[]>({
-    queryKey: ["/api/contacts/all"],
+  const { data: subscription } = useQuery<{
+    plan_type: string;
+    status: string;
+    credits_remaining: number;
+    credits_total: number;
+    free_tier_expires_at: string | null;
+  }>({
+    queryKey: ["/api/billing/subscription"],
   });
 
   const navItems = [
@@ -110,9 +116,8 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
           {/* Credits Display */}
           <div className="px-3 pb-4">
             {(() => {
-              const creditsTotal = 50;
-              const creditsUsed = allContacts.length;
-              const creditsRemaining = Math.max(0, creditsTotal - creditsUsed);
+              const creditsRemaining = subscription?.credits_remaining ?? 0;
+              const creditsTotal = subscription?.credits_total ?? 50;
               const pct = creditsTotal > 0 ? (creditsRemaining / creditsTotal) * 100 : 0;
               const barGradient = pct > 50
                 ? "from-[#059669] to-[#10b981]"
@@ -120,6 +125,12 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
                   ? "from-[#d97706] to-[#f59e0b]"
                   : "from-[#dc2626] to-[#ef4444]";
               const borderColor = pct > 50 ? "#a7f3d0" : pct >= 20 ? "#fde68a" : "#fecaca";
+              const planLabel = subscription?.plan_type === "free" ? "Free Trial" : (subscription?.plan_type || "free").charAt(0).toUpperCase() + (subscription?.plan_type || "free").slice(1);
+
+              // Calculate trial days remaining
+              const trialDaysLeft = subscription?.plan_type === "free" && subscription?.free_tier_expires_at
+                ? Math.max(0, Math.ceil((new Date(subscription.free_tier_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                : null;
 
               return (
                 <button
@@ -132,7 +143,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[#64748B] text-[13px] font-medium">Credits remaining</span>
-                    <ChevronRight className="w-4 h-4 text-[#94A3B8] group-hover:text-[#6B46C1] transition-colors" />
+                    <span className="text-[11px] font-medium text-[#6B46C1] bg-purple-100 px-2 py-0.5 rounded-full">{planLabel}</span>
                   </div>
                   <div className="flex items-baseline gap-2 mb-3">
                     <div className="text-2xl font-bold text-[#1A202C]">{creditsRemaining}</div>
@@ -141,6 +152,11 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
                   <div className="w-full bg-white rounded-full h-1.5 overflow-hidden">
                     <div className={`bg-gradient-to-r ${barGradient} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }}></div>
                   </div>
+                  {trialDaysLeft !== null && (
+                    <div className="mt-2 text-[11px] text-[#94A3B8]">
+                      {trialDaysLeft > 0 ? `Trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""}` : "Trial expired"}
+                    </div>
+                  )}
                 </button>
               );
             })()}
