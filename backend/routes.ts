@@ -14,12 +14,137 @@ import { enrichmentService, ContactEnrichmentService } from "./enrichmentService
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
 import { supplementalEmailService } from "./supplementalEmailService";
 import { urlScrapingService } from "./urlScrapingService";
+import { apolloService } from "./apolloService";
 import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { requireCredits } from "./middleware/creditGuard";
 import { deductCredits } from "./services/creditService";
+
+/**
+ * Extract company slug/domain from common job board URLs.
+ * Returns possible domains to try against Apollo's org search.
+ */
+function extractCompanySlugFromJobUrl(url: string): string[] {
+  const domains: string[] = [];
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    // Lever: jobs.lever.co/{company}/...
+    if (host === 'jobs.lever.co' || host === 'jobs.eu.lever.co') {
+      const slug = path.split('/')[1];
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // Greenhouse: boards.greenhouse.io/{company}/... or job-boards.greenhouse.io/{company}/...
+    else if (host.includes('greenhouse.io')) {
+      const slug = path.split('/')[1];
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // Workable: {company}.workable.com
+    else if (host.endsWith('.workable.com')) {
+      const slug = host.replace('.workable.com', '');
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // Ashby: jobs.ashbyhq.com/{company}/...
+    else if (host === 'jobs.ashbyhq.com') {
+      const slug = path.split('/')[1];
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // BambooHR: {company}.bamboohr.com
+    else if (host.endsWith('.bamboohr.com')) {
+      const slug = host.replace('.bamboohr.com', '');
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // Jobvite: jobs.jobvite.com/.../{company}/...
+    else if (host === 'jobs.jobvite.com') {
+      const slug = path.split('/')[1];
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // SmartRecruiters: jobs.smartrecruiters.com/{company}/...
+    else if (host === 'jobs.smartrecruiters.com') {
+      const slug = path.split('/')[1];
+      if (slug) domains.push(`${slug}.com`, slug);
+    }
+    // Company careers page: careers.{company}.com or {company}.com/careers
+    else if (host.startsWith('careers.')) {
+      const companyDomain = host.replace('careers.', '');
+      domains.push(companyDomain);
+    }
+    // Generic: try the host itself (e.g. company.com/jobs/...)
+    else if (!host.includes('linkedin.com') && !host.includes('indeed.com') && !host.includes('glassdoor.com')) {
+      domains.push(host);
+    }
+  } catch {
+    // Invalid URL, skip
+  }
+  return domains;
+}
+
+/**
+ * Resolve a company via Apollo using job URL domain extraction + company name.
+ * Returns organization_id, company name, domain, and employee count.
+ */
+async function resolveCompanyViaApollo(
+  jobUrl: string | null,
+  extractedCompanyName: string
+): Promise<{
+  organizationId: string | null;
+  companyName: string;
+  companyDomain: string | null;
+  employeeCount: number | undefined;
+}> {
+  let resolvedOrgId: string | null = null;
+  let resolvedName = extractedCompanyName;
+  let resolvedDomain: string | null = null;
+  let employeeCount: number | undefined;
+
+  // Step 1: Try domain-based search from job URL (most precise)
+  if (jobUrl) {
+    const candidateDomains = extractCompanySlugFromJobUrl(jobUrl);
+    console.log(`Company resolution: extracted candidate domains from URL: ${candidateDomains.join(', ') || 'none'}`);
+
+    for (const domain of candidateDomains) {
+      try {
+        const orgs = await apolloService.searchOrganizations({ domain });
+        if (orgs.length > 0) {
+          const org = orgs[0]; // Domain match is precise — first result is correct
+          resolvedOrgId = org.id;
+          resolvedName = org.name;
+          resolvedDomain = org.primary_domain || domain;
+          employeeCount = org.employees;
+          console.log(`✅ Company resolved via domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees, domain: ${resolvedDomain})`);
+          break;
+        }
+      } catch (e) {
+        console.warn(`Domain search failed for "${domain}":`, e);
+      }
+    }
+  }
+
+  // Step 2: If domain search didn't work, try name-based search with validation
+  if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified") {
+    try {
+      const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
+      const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName);
+      if (matchedOrg) {
+        resolvedOrgId = matchedOrg.id;
+        resolvedName = matchedOrg.name;
+        resolvedDomain = matchedOrg.primary_domain || null;
+        employeeCount = matchedOrg.employees;
+        console.log(`✅ Company resolved via name "${extractedCompanyName}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
+      } else {
+        console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via Apollo name search`);
+      }
+    } catch (e) {
+      console.warn(`Name-based company resolution failed:`, e);
+    }
+  }
+
+  return { organizationId: resolvedOrgId, companyName: resolvedName, companyDomain: resolvedDomain, employeeCount };
+}
 
 // Session-based authentication middleware
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -237,7 +362,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? jobDataExtraction.job_title 
           : extraction.job_title;
 
-        // Update job submission with extracted data and organization info using Supabase
+        // Resolve company via Apollo (domain-first, then name-based)
+        const jobUrl = submissionData.inputType === "url" ? submissionData.jobInput : null;
+        console.log(`Resolving company via Apollo for: "${companyName}" (URL: ${jobUrl || 'none'})`);
+        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName);
+
+        // Use Apollo-resolved data when available (more authoritative than AI extraction)
+        const resolvedCompanyName = companyResolution.companyName || companyName;
+        const resolvedOrgId = companyResolution.organizationId || organizationId;
+        const resolvedDomain = companyResolution.companyDomain || companyDomain;
+        const employeeCount = companyResolution.employeeCount;
+
+        if (resolvedCompanyName !== companyName) {
+          console.log(`Company name corrected: "${companyName}" → "${resolvedCompanyName}" (from Apollo)`);
+        }
+
+        // Update job submission with extracted data and resolved organization info
         const { data: updatedSubmission, error: updateError } = await supabase
           .from('job_submissions')
           .update({
@@ -245,10 +385,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               basic_extraction: extraction,
               enhanced_data: jobDataExtraction
             }),
-            company_name: companyName,
+            company_name: resolvedCompanyName,
             job_title: jobTitle,
-            organization_id: organizationId,
-            company_domain: companyDomain,
+            organization_id: resolvedOrgId,
+            company_domain: resolvedDomain,
             email_draft: extraction.email_draft,
             linkedin_message: extraction.linkedin_message,
           })
@@ -261,44 +401,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Extract optimized Apollo search parameters
-        console.log(`Extracting Apollo search parameters for ${companyName}`);
+        console.log(`Extracting Apollo search parameters for ${resolvedCompanyName}`);
         const apolloParams = await extractApolloSearchParams(jobContent);
         console.log(`Apollo search params:`, apolloParams);
 
-        // Apollo params provide search terms for contact lookup
-
         // Apollo + NeverBounce Enhanced Search
-        console.log(`Starting Apollo + NeverBounce enrichment for ${companyName}`);
-        
-        // Fetch company employee count from Apollo for size-aware targeting
-        let employeeCount: number | undefined;
-        if (organizationId) {
-          try {
-            const { apolloService } = await import("./apolloService");
-            const orgs = await apolloService.searchOrganizations({
-              company_name: apolloParams.company_name || companyName
-            });
-            const matchedOrg = orgs.find(o => o.id === organizationId);
-            if (matchedOrg?.employees) {
-              employeeCount = matchedOrg.employees;
-              console.log(`Company size from Apollo: ${employeeCount} employees`);
-            }
-          } catch (e) {
-            console.warn("Could not fetch employee count:", e);
-          }
-        }
+        console.log(`Starting Apollo + NeverBounce enrichment for ${resolvedCompanyName} (org: ${resolvedOrgId || 'none'})`);
 
         const apolloSearchResult = await enhancedEnrichmentService.searchAndEnrichContacts({
-          company_name: apolloParams.company_name || companyName,
+          company_name: resolvedCompanyName,
           job_title: apolloParams.job_title || jobTitle,
           location: apolloParams.location || jobDataExtraction?.location,
           departments: apolloParams.fallback_departments || jobDataExtraction?.likely_departments,
-          job_content: jobContent, // Pass job content for recruiter name extraction
+          job_content: jobContent,
           job_country: apolloParams.job_country,
           job_region: apolloParams.job_region,
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
-          organization_id: organizationId,
+          organization_id: resolvedOrgId,
           employee_count: employeeCount
         });
 
