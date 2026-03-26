@@ -14,6 +14,7 @@ import {
   Save,
   FileText,
   Users,
+  Wand2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -483,6 +484,8 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
   const [notesValue, setNotesValue] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refineInput, setRefineInput] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
 
   const { data: contact, isLoading, error } = useQuery<Contact>({
@@ -575,6 +578,28 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
+    },
+  });
+
+  const refineMutation = useMutation({
+    mutationFn: async (instructions: string) => {
+      if (!contactId) throw new Error("No contact");
+      setIsRefining(true);
+      return apiRequest("POST", `/api/contacts/${contactId}/generate-message`, {
+        instructions,
+        currentDraft: emailDraft,
+        currentLinkedin: linkedinDraft,
+      }).then(r => r.json());
+    },
+    onSuccess: (data) => {
+      if (data.emailContent) setEmailDraft(data.emailContent);
+      if (data.linkedinContent) setLinkedinDraft(data.linkedinContent);
+      setRefineInput("");
+      setIsRefining(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
+    },
+    onError: () => {
+      setIsRefining(false);
     },
   });
 
@@ -902,6 +927,45 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
                 </div>
               )}
             </>
+          )}
+
+          {/* AI Refine */}
+          {(hasEmail || hasLinkedin) && (
+            <div style={{ background: "#f5f3ff", border: "1px solid #e9e5f5", borderRadius: 10, padding: 12, marginTop: 12 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Wand2 size={14} style={{ color: "#7c3aed", flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={refineInput}
+                  onChange={e => setRefineInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && refineInput.trim()) {
+                      refineMutation.mutate(refineInput.trim());
+                    }
+                  }}
+                  placeholder="Refine with AI — e.g. 'make it shorter', 'add a question about their team'..."
+                  style={{
+                    flex: 1, padding: "7px 10px", border: "1px solid #ddd6fe", borderRadius: 7,
+                    fontSize: 13, fontFamily: "inherit", color: "#374151", outline: "none",
+                    background: "#fff",
+                  }}
+                  disabled={isRefining}
+                />
+                <button
+                  onClick={() => { if (refineInput.trim()) refineMutation.mutate(refineInput.trim()); }}
+                  disabled={!refineInput.trim() || isRefining}
+                  style={{
+                    padding: "7px 14px", borderRadius: 7, border: "none", background: "#7c3aed",
+                    color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    cursor: !refineInput.trim() || isRefining ? "default" : "pointer",
+                    opacity: !refineInput.trim() || isRefining ? 0.5 : 1, flexShrink: 0,
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}
+                >
+                  {isRefining ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Refining...</> : "Refine"}
+                </button>
+              </div>
+            </div>
           )}
 
           {generateMutation.isError && (
