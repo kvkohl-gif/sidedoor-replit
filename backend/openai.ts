@@ -2,6 +2,72 @@ import { callClaude } from "./claude";
 import { ROLE_TAXONOMY_CONTEXT } from "./systemPromptTaxonomy";
 import { classifyJobRole } from "./roleTaxonomyService";
 
+/**
+ * Expand a potentially truncated company name by searching the original content
+ * for longer versions. E.g. "Hone" → "Hone Health", "Cohere" → "Cohere Health"
+ */
+function expandCompanyName(extracted: string, content: string): string {
+  const normalized = extracted.trim();
+  if (!normalized || normalized === "Not specified") return normalized;
+
+  // Search for the extracted name followed by additional words in the content
+  // This catches "Hone Health", "dbt Labs", "Human Interest", etc.
+  const escapedName = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Look for the name followed by 1-3 additional capitalized words (company name pattern)
+  const expandedPattern = new RegExp(
+    `${escapedName}(?:\\s+[A-Z][a-zA-Z]*){1,3}`,
+    'g'
+  );
+
+  const matches = content.match(expandedPattern);
+  if (matches && matches.length > 0) {
+    // Find the most common expanded form (the real company name will appear most often)
+    const counts = new Map<string, number>();
+    for (const match of matches) {
+      const trimmed = match.trim();
+      counts.set(trimmed, (counts.get(trimmed) || 0) + 1);
+    }
+
+    // Pick the most frequent expanded form
+    let bestMatch = normalized;
+    let bestCount = 0;
+    for (const [name, count] of counts) {
+      // Only accept expansions that appear at least twice or are the only match
+      if (count > bestCount && name.length > normalized.length) {
+        bestCount = count;
+        bestMatch = name;
+      }
+    }
+
+    if (bestMatch !== normalized) {
+      console.log(`Company name expanded: "${normalized}" → "${bestMatch}" (found ${bestCount}x in content)`);
+      return bestMatch;
+    }
+  }
+
+  // Also check case-insensitive for the full content — maybe the AI just dropped a word
+  const lowerContent = content.toLowerCase();
+  const lowerName = normalized.toLowerCase();
+  const nameIndex = lowerContent.indexOf(lowerName);
+  if (nameIndex !== -1) {
+    // Extract surrounding context from original (preserving case)
+    const after = content.substring(nameIndex + normalized.length, nameIndex + normalized.length + 30);
+    const extraWords = after.match(/^(\s+[A-Z][a-zA-Z]*)+/);
+    if (extraWords) {
+      const expanded = content.substring(nameIndex, nameIndex + normalized.length + extraWords[0].length).trim();
+      // Validate: the expanded name should also appear multiple times
+      const expandedLower = expanded.toLowerCase();
+      const occurrences = lowerContent.split(expandedLower).length - 1;
+      if (occurrences >= 2) {
+        console.log(`Company name expanded (context): "${normalized}" → "${expanded}" (found ${occurrences}x)`);
+        return expanded;
+      }
+    }
+  }
+
+  return normalized;
+}
+
 export interface JobDataExtraction {
   job_title: string;
   company_name: string;
@@ -409,6 +475,13 @@ ${ROLE_TAXONOMY_CONTEXT}
 
 Return ONLY valid JSON (no prose). Be strict: if a field is unknown, use "Not specified" (or [] for lists). Never hallucinate company domains or emails.
 
+CRITICAL for company_name: Always extract the FULL legal/brand company name, not a shortened version. For example:
+- "Hone Health" NOT "Hone"
+- "Cohere Health" NOT "Cohere"
+- "Human Interest" NOT "Human"
+- "dbt Labs" NOT "dbt"
+Look for the full name in the page title, header, footer, "About" section, or URL domain. If the company name has multiple words, include ALL of them.
+
 Be aggressive and resilient when finding the job title and company:
 - Scan: H1-H3 tags; near CTA buttons ("Apply", "Submit application"), breadcrumb text, page <title>, meta tags (og:title, og:site_name, name="title"), image alt/ARIA labels, and URL slugs.
 - Prefer job-role context over blog/news headings.
@@ -463,9 +536,15 @@ Return the extracted data in the JSON format specified.`;
 
     console.log(`Claude extractJobData raw response:`, raw);
 
+    // Post-process: expand truncated company names by checking the original content
+    let companyName = result.company_name || "Not specified";
+    if (companyName !== "Not specified") {
+      companyName = expandCompanyName(companyName, content);
+    }
+
     return {
       job_title: result.job_title || "Not specified",
-      company_name: result.company_name || "Not specified",
+      company_name: companyName,
       job_url: originalJobUrl || "Not specified",
       company_website: "Not specified",
       location: result.location || "Not specified",
