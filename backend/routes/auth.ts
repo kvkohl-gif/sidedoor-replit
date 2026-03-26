@@ -82,6 +82,9 @@ router.post("/register", async (req: Request, res: Response) => {
     // Create free-tier subscription with 50 credits (21-day trial)
     await createFreeSubscription(userId);
 
+    // Create free-tier subscription with 50 credits (21-day trial)
+    await createFreeSubscription(userId);
+
     return res.json({ success: true });
   } catch (error) {
     console.error("Registration error:", error);
