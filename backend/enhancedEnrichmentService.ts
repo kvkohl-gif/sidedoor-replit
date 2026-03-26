@@ -286,7 +286,7 @@ export class EnhancedEnrichmentService {
 
           if (request.organization_id) {
             // Use organization-specific search plans
-            const searchPlans = buildApolloPlans(request.organization_id, departmentInference);
+            const searchPlans = buildApolloPlans(request.organization_id, departmentInference, request.employee_count);
             const topDept = departmentInference.departments[0];
             const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
             
@@ -317,7 +317,7 @@ export class EnhancedEnrichmentService {
                 console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} contacts department-aligned`);
                 
                 // Classify contacts into buckets
-                if (plan.label === 'recruiting-fallback') {
+                if (plan.label === 'recruiter-primary') {
                   recruiterContacts.push(...alignedContacts.slice(0, plan.hardLimit));
                 } else {
                   departmentLeadContacts.push(...alignedContacts.slice(0, plan.hardLimit));

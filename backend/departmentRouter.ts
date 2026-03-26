@@ -177,7 +177,7 @@ export interface ApolloSearchPlan {
 /**
  * Build a prioritized search plan based on department inference
  */
-export function buildApolloPlans(orgId: string, inference: DepartmentInference): ApolloSearchPlan[] {
+export function buildApolloPlans(orgId: string, inference: DepartmentInference, employeeCount?: number): ApolloSearchPlan[] {
   const topDept = inference.departments.sort((a, b) => b.confidence - a.confidence)[0];
   const deptFilters = topDept ? APOLLO_DEPT_MAP[topDept.id] : [];
 
@@ -193,71 +193,108 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       .map(x => x.title)
   );
 
-  // Include manager and senior — most hiring managers and recruiters at mid-size companies
-  // have these seniority levels, not just director/VP/C-suite
-  const LEADERSHIP_SENIORITIES = ['manager', 'director', 'vp', 'c_suite', 'head', 'lead'];
-  const BROAD_SENIORITIES = ['senior', 'manager', 'director', 'vp', 'c_suite', 'head', 'lead'];
+  // Tiered seniority levels for waterfall search
+  const TIER_1 = ['director', 'vp', 'c_suite', 'head'];        // Skip-level / senior decision-makers
+  const TIER_2 = ['manager', 'lead'];                            // Direct hiring managers
+  const TIER_3 = ['senior'];                                     // Senior ICs / team leads (advocates)
 
-  const plans: ApolloSearchPlan[] = [
-    // Plan 1: Department-aligned leadership with specific titles
-    {
-      label: 'primary-dept+titles',
-      payload: {
-        organization_ids: [orgId],
-        person_titles: primaryTitles,
-        person_seniorities: LEADERSHIP_SENIORITIES,
-        person_departments: deptFilters,
-        per_page: 5,
-        reveal_personal_emails: true
-      },
-      hardLimit: 5
-    },
-    // Plan 2: Broader seniority with department filter (catches senior ICs who are hiring managers)
-    {
-      label: 'primary-dept+broad-seniority',
-      payload: {
-        organization_ids: [orgId],
-        person_seniorities: BROAD_SENIORITIES,
-        person_departments: deptFilters,
-        per_page: 5,
-        reveal_personal_emails: true
-      },
-      hardLimit: 5
-    },
-    // Plan 3: Title match WITHOUT department filter (catches misclassified contacts)
-    {
-      label: 'titles-only-no-dept-filter',
-      payload: {
-        organization_ids: [orgId],
-        person_titles: primaryTitles,
-        per_page: 5,
-        reveal_personal_emails: true
-      },
-      hardLimit: 5
-    }
-  ];
+  // Adapt strategy to company size
+  const isSmall = (employeeCount || 0) <= 200;
+  const isEnterprise = (employeeCount || 0) > 2000;
 
-  if (crossTitles.length) {
+  const plans: ApolloSearchPlan[] = [];
+
+  // ── HIRING MANAGER BUCKET ──────────────────────────────────
+
+  // Tier 1: Director/VP/Head in the department (skip-level decision-makers)
+  // For small companies, combine Tier 1+2 since fewer people exist
+  plans.push({
+    label: 'hm-tier1-dept-leadership',
+    payload: {
+      organization_ids: [orgId],
+      person_titles: primaryTitles,
+      person_seniorities: isSmall ? [...TIER_1, ...TIER_2] : TIER_1,
+      ...(deptFilters.length > 0 && !isSmall ? { person_departments: deptFilters } : {}),
+      per_page: 5,
+      reveal_personal_emails: true
+    },
+    hardLimit: isSmall ? 5 : 3
+  });
+
+  // Tier 2: Manager-level in department (direct hiring managers — the person you'd report to)
+  if (!isSmall) {
     plans.push({
-      label: 'cross-function+titles',
+      label: 'hm-tier2-dept-managers',
       payload: {
         organization_ids: [orgId],
-        person_titles: crossTitles,
-        person_seniorities: BROAD_SENIORITIES,
-        per_page: 3,
+        person_titles: primaryTitles,
+        person_seniorities: TIER_2,
+        ...(deptFilters.length > 0 ? { person_departments: deptFilters } : {}),
+        per_page: 5,
         reveal_personal_emails: true
       },
       hardLimit: 3
     });
   }
 
-  // Recruiting contacts — broad search without department filter
-  // Many recruiters at smaller companies aren't tagged with "people" department
+  // Tier 3: Senior ICs with relevant titles (internal advocates, especially for tech roles)
   plans.push({
-    label: 'recruiting-fallback',
+    label: 'hm-tier3-senior-ics',
     payload: {
       organization_ids: [orgId],
-      person_titles: ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent Acquisition', 'Talent Acquisition Manager', 'Head of Talent', 'Director of Talent', 'HR Manager', 'People Operations'],
+      person_titles: primaryTitles,
+      person_seniorities: TIER_3,
+      per_page: 3,
+      reveal_personal_emails: true
+    },
+    hardLimit: 2
+  });
+
+  // Safety net: Title match WITHOUT department filter (Apollo dept tags are often wrong/missing)
+  plans.push({
+    label: 'hm-safety-titles-no-dept',
+    payload: {
+      organization_ids: [orgId],
+      person_titles: primaryTitles,
+      person_seniorities: [...TIER_1, ...TIER_2],
+      per_page: 5,
+      reveal_personal_emails: true
+    },
+    hardLimit: 3
+  });
+
+  // Cross-functional contacts (e.g. Engineering Manager for a PM role)
+  if (crossTitles.length) {
+    plans.push({
+      label: 'hm-cross-function',
+      payload: {
+        organization_ids: [orgId],
+        person_titles: crossTitles,
+        person_seniorities: [...TIER_1, ...TIER_2],
+        per_page: 3,
+        reveal_personal_emails: true
+      },
+      hardLimit: 2
+    });
+  }
+
+  // ── RECRUITER/GATEKEEPER BUCKET ────────────────────────────
+
+  // For small companies, recruiters might have generalist titles
+  const recruiterTitles = isSmall
+    ? ['Recruiter', 'Talent Acquisition', 'HR Manager', 'Head of People',
+       'People Operations', 'Chief of Staff', 'Office Manager']
+    : isEnterprise
+    ? ['Technical Recruiter', 'Senior Technical Recruiter', 'Talent Acquisition Partner',
+       'Talent Acquisition Manager', 'Recruiting Manager', 'Lead Recruiter', 'Senior Recruiter']
+    : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent Acquisition',
+       'Talent Acquisition Manager', 'Head of Talent', 'HR Manager', 'People Operations'];
+
+  plans.push({
+    label: 'recruiter-primary',
+    payload: {
+      organization_ids: [orgId],
+      person_titles: recruiterTitles,
       per_page: 5,
       reveal_personal_emails: true
     },
