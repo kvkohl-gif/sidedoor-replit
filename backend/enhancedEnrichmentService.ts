@@ -292,20 +292,21 @@ export class EnhancedEnrichmentService {
             
             console.log(`Search plans: ${searchPlans.map(p => p.label).join(' → ')}`);
             
-            // Execute search plans in priority order
+            // Execute search plans in priority order (with dedup across tiers)
             let totalContacts: ProcessedContact[] = [];
+            const seenContactKeys = new Set<string>();
             for (const plan of searchPlans) {
               if (totalContacts.length >= 12) break; // Stop when we have enough contacts
-              
+
               console.log(`Executing search plan: ${plan.label}`);
               console.log(`Search payload:`, JSON.stringify(plan.payload, null, 2));
-              
+
               try {
                 const planResults = await apolloService.executeApolloSearch(plan.payload);
                 console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
-                
+
                 // Filter contacts for department alignment
-                const alignedContacts = planResults.contacts.filter(contact => 
+                const alignedContacts = planResults.contacts.filter(contact =>
                   isContactDeptAligned(
                     contact.title || '',
                     (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
@@ -313,17 +314,25 @@ export class EnhancedEnrichmentService {
                     crossTitles
                   )
                 );
-                
-                console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} contacts department-aligned`);
-                
+
+                // Dedup across search tiers
+                const uniqueAligned = alignedContacts.filter(contact => {
+                  const key = `${contact.full_name.toLowerCase()}|${contact.email?.toLowerCase() || ''}`;
+                  if (seenContactKeys.has(key)) return false;
+                  seenContactKeys.add(key);
+                  return true;
+                });
+
+                console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} dept-aligned, ${uniqueAligned.length} unique`);
+
                 // Classify contacts into buckets
                 if (plan.label === 'recruiter-primary') {
-                  recruiterContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+                  recruiterContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
                 } else {
-                  departmentLeadContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+                  departmentLeadContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
                 }
-                
-                totalContacts.push(...alignedContacts.slice(0, plan.hardLimit));
+
+                totalContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
               } catch (planError) {
                 console.error(`Search plan ${plan.label} failed:`, planError);
               }
@@ -480,30 +489,48 @@ export class EnhancedEnrichmentService {
     const enrichedContacts: EnrichedContact[] = [];
     
     if (apolloContacts.length > 0) {
-      // Get emails for verification (Domain-filtered Apollo contacts now only have company emails)
-      const emailsToVerify = apolloContacts
-        .filter(contact => contact.email) // Has email
-        .map(contact => contact.email!);
+      // Separate Apollo-verified emails from those needing NeverBounce
+      const apolloVerifiedEmails = new Set<string>();
+      const emailsNeedingVerification: string[] = [];
 
-      console.log(`Found ${apolloContacts.length} total contacts, ${emailsToVerify.length} with company domain emails`);
+      for (const contact of apolloContacts) {
+        if (!contact.email) continue;
+        if (contact.email_status === 'verified') {
+          apolloVerifiedEmails.add(contact.email);
+        } else {
+          emailsNeedingVerification.push(contact.email);
+        }
+      }
 
+      console.log(`Found ${apolloContacts.length} total contacts: ${apolloVerifiedEmails.size} Apollo-verified, ${emailsNeedingVerification.length} need NeverBounce`);
+
+      // Only send non-Apollo-verified emails to NeverBounce
       let verificationResults = new Map<string, EmailVerificationResult | null>();
-      
-      if (verifierService.isConfigured() && emailsToVerify.length > 0) {
+
+      if (verifierService.isConfigured() && emailsNeedingVerification.length > 0) {
         try {
-          verificationResults = await verifierService.verifyMultipleEmails(emailsToVerify);
-          console.log(`Verified ${emailsToVerify.length} emails with NeverBounce`);
+          verificationResults = await verifierService.verifyMultipleEmails(emailsNeedingVerification);
+          console.log(`Verified ${emailsNeedingVerification.length} emails with NeverBounce`);
         } catch (error) {
           console.error("NeverBounce verification failed:", error);
         }
-      } else if (emailsToVerify.length > 0) {
+      } else if (emailsNeedingVerification.length > 0) {
         console.warn("NeverBounce API not configured - using basic email validation");
       }
 
-      // Step 3: Process contacts (include all with NeverBounce status annotation)
+      // Step 3: Process contacts with Apollo-first verification
       for (const contact of apolloContacts) {
-        const verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
-        const verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
+        // Apollo-first: if Apollo verified the email, trust it and skip NeverBounce
+        let verificationResult: EmailVerificationResult | null;
+        let verificationStatus: VerificationStatus;
+
+        if (contact.email && apolloVerifiedEmails.has(contact.email)) {
+          verificationResult = { email: contact.email, result: 'valid', flags: ['apollo_verified'], suggested_correction: '', execution_time: 0 };
+          verificationStatus = { is_valid: true, status_label: 'Valid', status_icon: '✅', should_include: true };
+        } else {
+          verificationResult = contact.email ? verificationResults.get(contact.email) ?? null : null;
+          verificationStatus = verifierService.getVerificationStatus(verificationResult, contact.email);
+        }
         
         // Apply email validation guardrails
         const emailValidation = contact.email ? 
@@ -572,18 +599,27 @@ export class EnhancedEnrichmentService {
         }
       }
 
+      // Dedup enriched contacts by email or name+title
+      const seenEnrichedKeys = new Set<string>();
+      const dedupedContacts = enrichedContacts.filter(c => {
+        const key = c.email?.toLowerCase() || `${c.name.toLowerCase()}|${c.title.toLowerCase()}`;
+        if (seenEnrichedKeys.has(key)) return false;
+        seenEnrichedKeys.add(key);
+        return true;
+      });
+
       // Sort by recruiter confidence and email verification status
-      enrichedContacts.sort((a, b) => {
+      dedupedContacts.sort((a, b) => {
         // Prioritize verified emails
         if (a.emailVerified && !b.emailVerified) return -1;
         if (!a.emailVerified && b.emailVerified) return 1;
-        
+
         // Then by recruiter confidence
         return b.recruiterConfidence - a.recruiterConfidence;
       });
 
       // Return all contacts instead of limiting to 3
-      const topContacts = enrichedContacts;
+      const topContacts = dedupedContacts;
       
       searchMetadata.results_found = topContacts.length;
       

@@ -13,6 +13,7 @@ export interface ApolloContact {
   email?: string;
   work_email?: string;
   primary_email?: string;
+  email_status?: string;
   linkedin_url?: string;
   organization_name?: string;
   employment_history?: Array<{
@@ -79,6 +80,7 @@ export interface ProcessedContact {
   full_name: string;
   title: string;
   email?: string;
+  email_status?: string;
   linkedin_url?: string;
   company_name: string;
   is_recruiter_likely: boolean;
@@ -1133,6 +1135,7 @@ class ApolloService {
           full_name: contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
           title: title || "",
           email: contact.email || contact.work_email,
+          email_status: contact.email_status,
           linkedin_url: contact.linkedin_url,
           company_name: contact.organization_name || 'Unknown',
           is_recruiter_likely: isRecruiter,
