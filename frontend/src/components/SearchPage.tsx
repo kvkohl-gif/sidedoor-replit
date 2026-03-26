@@ -1,6 +1,6 @@
 import { Search, Sparkles, Loader2, Zap, CheckCircle2, FileText, Building2, Users, Mail, MessageSquare } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { nanoid } from "nanoid";
 
@@ -22,6 +22,7 @@ export function SearchPage({ onNavigate }: SearchPageProps) {
   const [isInputLocked, setIsInputLocked] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const stepTimersRef = useRef<NodeJS.Timeout[]>([]);
+  const queryClient = useQueryClient();
 
   const sampleJobDescription = `Senior Product Manager - TechCorp Inc.
 Location: San Francisco, CA (Hybrid)
@@ -76,11 +77,33 @@ Requirements:
     onSuccess: async (response) => {
       const data = await response.json();
       setIsInputLocked(false);
+      // Refresh credits in sidebar after successful search
+      queryClient.invalidateQueries({ queryKey: ["/api/billing/subscription"] });
       onNavigate("job-details", { submissionId: data.submission.id });
     },
     onError: (error: any) => {
       setIsInputLocked(false);
-      alert(error.message || "Failed to submit job. Please try again.");
+      // Parse credit-related errors for user-friendly messages
+      const msg = error.message || "";
+      try {
+        const statusMatch = msg.match(/^(\d+):\s*(.*)/s);
+        if (statusMatch) {
+          const status = parseInt(statusMatch[1]);
+          const body = JSON.parse(statusMatch[2]);
+          if (status === 402 || status === 403) {
+            if (body.error === "trial_expired") {
+              alert("Your free trial has expired. Upgrade your plan to continue searching.");
+            } else if (body.error === "insufficient_credits") {
+              alert(`You don't have enough credits. This action requires ${body.creditsNeeded} credits but you have ${body.creditsRemaining}.`);
+            } else {
+              alert(body.message || "Unable to process this search.");
+            }
+            onNavigate("billing");
+            return;
+          }
+        }
+      } catch {}
+      alert(msg || "Failed to submit job. Please try again.");
     },
   });
 

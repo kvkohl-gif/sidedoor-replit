@@ -1,13 +1,11 @@
 import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { supabaseAdmin } from "../lib/supabaseClient";
-import { STRIPE_PRICE_IDS, PLAN_CREDITS, PLAN_PRICES, type PlanType } from "../constants/credits";
+import { STRIPE_PRICE_IDS, PLAN_CREDITS, type PlanType } from "../constants/credits";
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
 import { nanoid } from "nanoid";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-03-31.basil" as any,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 const router = Router();
 
