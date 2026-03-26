@@ -147,7 +147,8 @@ function extractDomainsFromJobText(text: string): string[] {
 async function resolveCompanyViaApollo(
   jobUrl: string | null,
   extractedCompanyName: string,
-  jobContent?: string
+  jobContent?: string,
+  aiInferredDomain?: string
 ): Promise<{
   organizationId: string | null;
   companyName: string;
@@ -159,15 +160,20 @@ async function resolveCompanyViaApollo(
   let resolvedDomain: string | null = null;
   let employeeCount: number | undefined;
 
-  // Collect all candidate domains from all sources
+  // Collect all candidate domains from all sources, ordered by reliability
   const candidateDomains: string[] = [];
 
-  // Source 1: Extract domains from job description text (most common — works for pasted text)
+  // Source 1: Extract domains from job description text (email addresses, website mentions)
   if (jobContent) {
     candidateDomains.push(...extractDomainsFromJobText(jobContent));
   }
 
-  // Source 2: Extract from job URL (for URL-based submissions)
+  // Source 2: AI-inferred domain (Claude knows most companies' domains)
+  if (aiInferredDomain) {
+    candidateDomains.push(aiInferredDomain);
+  }
+
+  // Source 3: Extract from job URL (for URL-based submissions)
   if (jobUrl) {
     candidateDomains.push(...extractCompanySlugFromJobUrl(jobUrl));
   }
@@ -437,10 +443,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? jobDataExtraction.job_title 
           : extraction.job_title;
 
-        // Resolve company via Apollo (text domains → URL domains → name search)
+        // Resolve company via Apollo (text domains → AI-inferred domain → URL domains → name search)
         const jobUrl = submissionData.inputType === "url" ? submissionData.jobInput : null;
-        console.log(`Resolving company via Apollo for: "${companyName}" (URL: ${jobUrl || 'none'}, content: ${jobContent.length} chars)`);
-        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName, jobContent);
+        const aiInferredDomain = jobDataExtraction?.company_domain || undefined;
+        console.log(`Resolving company via Apollo for: "${companyName}" (AI domain: ${aiInferredDomain || 'none'}, URL: ${jobUrl || 'none'}, content: ${jobContent.length} chars)`);
+        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName, jobContent, aiInferredDomain);
 
         // Use Apollo-resolved data when available (more authoritative than AI extraction)
         const resolvedCompanyName = companyResolution.companyName || companyName;

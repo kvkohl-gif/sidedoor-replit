@@ -71,6 +71,7 @@ function expandCompanyName(extracted: string, content: string): string {
 export interface JobDataExtraction {
   job_title: string;
   company_name: string;
+  company_domain?: string; // AI-extracted or inferred domain (e.g. "getsquire.com")
   job_url: string;
   company_website: string;
   location: string;
@@ -493,11 +494,17 @@ Also:
 - Split responsibilities vs. requirements if the text separates them; otherwise best-effort.
 - Map departments from title/description into a small set (Engineering, Product Management, Design, Data Analysis, Marketing, Sales, Customer Success, Leadership, Operations, Compliance, Other). Include up to two departments if cross-functional.
 - Create LinkedIn keywords: role synonyms, core tech/tools, seniority tokens, and company name.
+- CRITICAL: Extract or infer the company_domain (e.g. "getsquire.com", "coherehealth.com"). Look for:
+  1. Email addresses in the text (recruiting@getsquire.com → getsquire.com)
+  2. Website URLs mentioned (visit getsquire.com)
+  3. Apply links or career page URLs
+  4. If none found in text, INFER the likely domain from your knowledge of the company. Most companies use companyname.com, getcompanyname.com, or similar patterns. Only use "Not specified" if you truly cannot determine or infer the domain.
 
 OUTPUT JSON SHAPE:
 {
   "job_title": "string",
   "company_name": "string",
+  "company_domain": "string (e.g. getsquire.com, coherehealth.com — NOT a full URL, just the domain)",
   "location": "string",
   "description": "string",
   "responsibilities": ["string", "..."],
@@ -542,11 +549,20 @@ Return the extracted data in the JSON format specified.`;
       companyName = expandCompanyName(companyName, content);
     }
 
+    // Extract and clean company domain from AI response
+    const aiDomain = result.company_domain && result.company_domain !== "Not specified"
+      ? result.company_domain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '').trim()
+      : undefined;
+    if (aiDomain) {
+      console.log(`AI-inferred company domain: ${aiDomain}`);
+    }
+
     return {
       job_title: result.job_title || "Not specified",
       company_name: companyName,
+      company_domain: aiDomain,
       job_url: originalJobUrl || "Not specified",
-      company_website: "Not specified",
+      company_website: aiDomain || "Not specified",
       location: result.location || "Not specified",
       job_description: result.description || "Not specified",
       key_responsibilities: Array.isArray(result.responsibilities) ? result.responsibilities : ["Not specified"],
