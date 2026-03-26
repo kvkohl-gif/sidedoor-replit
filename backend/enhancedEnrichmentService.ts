@@ -495,13 +495,19 @@ export class EnhancedEnrichmentService {
 
       for (const contact of apolloContacts) {
         if (!contact.email) continue;
-        if (contact.email_status === 'verified') {
+        if (contact.email_status === 'verified' || contact.email_status === 'likely to engage') {
           apolloVerifiedEmails.add(contact.email);
         } else {
           emailsNeedingVerification.push(contact.email);
         }
       }
 
+      // Log Apollo email_status values for debugging
+      for (const contact of apolloContacts) {
+        if (contact.email) {
+          console.log(`Apollo email_status for ${contact.full_name}: ${contact.email_status ?? 'NOT RETURNED'} (email: ${contact.email})`);
+        }
+      }
       console.log(`Found ${apolloContacts.length} total contacts: ${apolloVerifiedEmails.size} Apollo-verified, ${emailsNeedingVerification.length} need NeverBounce`);
 
       // Only send non-Apollo-verified emails to NeverBounce
