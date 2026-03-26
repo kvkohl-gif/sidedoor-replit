@@ -127,7 +127,7 @@ const RECRUITER_TITLES = [
  * Score how well an Apollo organization name matches the expected company name.
  * Returns 0-1 where 1 is a perfect match.
  */
-function scoreOrgMatch(orgName: string, expectedName: string): number {
+export function scoreOrgMatch(orgName: string, expectedName: string): number {
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
   const orgNorm = normalize(orgName);
   const expNorm = normalize(expectedName);
@@ -458,6 +458,67 @@ class ApolloService {
     } catch (error) {
       console.error("Apollo API connection test failed:", error);
       return false;
+    }
+  }
+
+  /**
+   * Enrich an organization using Apollo's dedicated enrich endpoint.
+   * More precise than search — designed for point lookups with name + domain.
+   * Returns null if no match found.
+   */
+  async enrichOrganization(params: {
+    domain?: string;
+    name?: string;
+  }): Promise<ApolloOrganization | null> {
+    if (!this.apiKey) return null;
+    if (!params.domain && !params.name) return null;
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.domain) queryParams.set('domain', params.domain);
+      if (params.name) queryParams.set('name', params.name);
+
+      console.log(`Apollo org enrich: domain=${params.domain || 'none'}, name=${params.name || 'none'}`);
+
+      const response = await fetch(
+        `${this.baseUrl}/organizations/enrich?${queryParams.toString()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "x-api-key": this.apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.log(`Apollo org enrich returned ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      const org = data.organization;
+
+      if (org && org.id) {
+        console.log(`Apollo org enrich matched: "${org.name}" (id: ${org.id}, domain: ${org.primary_domain}, employees: ${org.estimated_num_employees || org.employees || 'unknown'})`);
+        return {
+          id: org.id,
+          name: org.name,
+          website_url: org.website_url,
+          primary_domain: org.primary_domain,
+          logo_url: org.logo_url,
+          description: org.short_description || org.description,
+          industry: org.industry,
+          employees: org.estimated_num_employees || org.employees,
+        };
+      }
+
+      console.log(`Apollo org enrich: no match found`);
+      return null;
+    } catch (error) {
+      console.error("Apollo org enrich error:", error);
+      return null;
     }
   }
 
