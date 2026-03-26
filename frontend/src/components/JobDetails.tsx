@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import { apiRequest, queryClient } from "../lib/queryClient";
 
 interface Recruiter {
@@ -302,11 +303,11 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
     },
   });
 
-  const emailStatusConfig: Record<string, { icon: typeof CheckCircle; text: string; color: string; bg: string }> = {
-    valid: { icon: CheckCircle, text: "Verified", color: "#059669", bg: "#ecfdf5" },
-    risky: { icon: AlertTriangle, text: "Risky", color: "#d97706", bg: "#fffbeb" },
-    invalid: { icon: XCircle, text: "Invalid", color: "#ef4444", bg: "#fef2f2" },
-    unknown: { icon: HelpCircle, text: "Unverified", color: "#9ca3af", bg: "#f9fafb" },
+  const emailStatusConfig: Record<string, { icon: typeof CheckCircle; text: string; color: string; bg: string; tooltip: string }> = {
+    valid: { icon: CheckCircle, text: "Verified", color: "#059669", bg: "#ecfdf5", tooltip: "This email has been confirmed as a real, active inbox." },
+    risky: { icon: CheckCircle, text: "Likely Valid", color: "#2563eb", bg: "#eff6ff", tooltip: "This email follows the company's pattern and the domain accepts mail. It's worth sending — most corporate emails show this status." },
+    invalid: { icon: XCircle, text: "Not Deliverable", color: "#ef4444", bg: "#fef2f2", tooltip: "This email bounced during verification. Try reaching out via LinkedIn instead." },
+    unknown: { icon: HelpCircle, text: "Unconfirmed", color: "#9ca3af", bg: "#f9fafb", tooltip: "We haven't been able to verify this email yet. Use with caution or try LinkedIn." },
   };
 
   const copyToClipboard = (text: string, id?: string) => {
@@ -749,7 +750,14 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                         <span style={{ fontSize: 12, color: "#6b7280", fontFamily: "'SF Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {contact.email}
                         </span>
-                        <StatusIcon size={12} style={{ color: cfg.color, flexShrink: 0 }} />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default"><StatusIcon size={12} style={{ color: cfg.color, flexShrink: 0 }} /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                            {cfg.tooltip}
+                          </TooltipContent>
+                        </Tooltip>
                       </>
                     ) : (
                       <span style={{ fontSize: 12, color: "#d1d5db" }}>--</span>
@@ -799,7 +807,14 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                         <span><span style={{ color: "#9ca3af" }}>Dept:</span> {contact.department}</span>
                       )}
                       {contact.email && (
-                        <span><span style={{ color: "#9ca3af" }}>Email:</span> <span style={{ color: cfg.color }}>{cfg.text}</span></span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default"><span style={{ color: "#9ca3af" }}>Email:</span> <span style={{ color: cfg.color }}>{cfg.text}</span></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                            {cfg.tooltip}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {contact.linkedinUrl && (
                         <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}

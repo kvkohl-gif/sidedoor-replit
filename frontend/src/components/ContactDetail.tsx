@@ -18,6 +18,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "../lib/queryClient";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 
 interface ContactDetailProps {
   onNavigate: (page: string, data?: any) => void;
@@ -47,11 +48,11 @@ interface Contact {
   createdAt: string | null;
 }
 
-const VERIFICATION: Record<string, { label: string; dot: string }> = {
-  valid:   { label: "Verified",   dot: "#10b981" },
-  risky:   { label: "Risky",      dot: "#f59e0b" },
-  invalid: { label: "Invalid",    dot: "#ef4444" },
-  unknown: { label: "Unverified", dot: "#9ca3af" },
+const VERIFICATION: Record<string, { label: string; dot: string; tooltip: string }> = {
+  valid:   { label: "Verified",        dot: "#10b981", tooltip: "This email has been confirmed as a real, active inbox." },
+  risky:   { label: "Likely Valid",    dot: "#3b82f6", tooltip: "This email follows the company's pattern and the domain accepts mail. It's worth sending — most corporate emails show this status." },
+  invalid: { label: "Not Deliverable", dot: "#ef4444", tooltip: "This email bounced during verification. Try reaching out via LinkedIn instead." },
+  unknown: { label: "Unconfirmed",     dot: "#9ca3af", tooltip: "We haven't been able to verify this email yet. Use with caution or try LinkedIn." },
 };
 
 const STATUSES = [
@@ -694,10 +695,20 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
             <div className="cd-contact-row">
               <Mail size={15} />
               <span className="cd-email-text">{contact.email || "No email"}</span>
-              <span className="cd-verification">
-                <span className="vdot" style={{ backgroundColor: v.dot }} />
-                <span style={{ color: v.dot }}>{v.label}</span>
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cd-verification cursor-default">
+                    <span className="vdot" style={{ backgroundColor: v.dot }} />
+                    <span style={{ color: v.dot }}>{v.label}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg"
+                >
+                  {v.tooltip}
+                </TooltipContent>
+              </Tooltip>
             </div>
             {contact.linkedinUrl && (
               <div className="cd-contact-row">

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Search, Plus } from "lucide-react";
 import { STATUS_COLORS, VERIFICATION_COLORS, getContactStatusStyle, getVerificationStyle } from "../lib/statusColors";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 
 interface AllContactsProps {
   onNavigate: (page: string, data?: any) => void;
@@ -558,10 +559,17 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                   <td>
                     <div className="email-cell">
                       <span className="email-text">{c.email || "—"}</span>
-                      <span className="dot-badge">
-                        <span className="dot" style={{ backgroundColor: v.dot }} />
-                        <span style={{ color: v.dot }}>{v.label}</span>
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="dot-badge cursor-default">
+                            <span className="dot" style={{ backgroundColor: v.dot }} />
+                            <span style={{ color: v.color }}>{v.label}</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                          {v.tooltip}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </td>
 
