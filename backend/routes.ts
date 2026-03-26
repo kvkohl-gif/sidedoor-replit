@@ -84,12 +84,73 @@ function extractCompanySlugFromJobUrl(url: string): string[] {
 }
 
 /**
- * Resolve a company via Apollo using job URL domain extraction + company name.
- * Returns organization_id, company name, domain, and employee count.
+ * Extract company domains from job description text.
+ * Looks for email addresses, website mentions, and URL patterns.
+ * Filters out generic domains (gmail, outlook, job boards, etc.)
+ */
+function extractDomainsFromJobText(text: string): string[] {
+  const domains = new Set<string>();
+
+  // Blocklist: generic email providers, job boards, and non-company domains
+  const blocklist = new Set([
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+    'icloud.com', 'protonmail.com', 'mail.com', 'live.com',
+    'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com',
+    'greenhouse.io', 'lever.co', 'workable.com', 'ashbyhq.com',
+    'bamboohr.com', 'jobvite.com', 'smartrecruiters.com', 'icims.com',
+    'workday.com', 'taleo.net', 'myworkdayjobs.com', 'ultipro.com',
+    'google.com', 'facebook.com', 'twitter.com', 'instagram.com',
+    'youtube.com', 'tiktok.com', 'reddit.com', 'wikipedia.org',
+    'github.com', 'medium.com', 'substack.com',
+    'e-verify.gov', 'uscis.gov', 'dol.gov',
+  ]);
+
+  // Pattern 1: Email addresses (recruiting@getsquire.com → getsquire.com)
+  const emailPattern = /[\w.+-]+@([\w.-]+\.\w{2,})/g;
+  let match;
+  while ((match = emailPattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase();
+    if (!blocklist.has(domain)) {
+      domains.add(domain);
+    }
+  }
+
+  // Pattern 2: Website mentions (visit getsquire.com, www.company.com)
+  const websitePattern = /(?:visit|website|web|at|see|check out|go to|www\.)\s*([\w-]+\.(?:com|io|co|org|net|ai|app|dev|tech|health|xyz))/gi;
+  while ((match = websitePattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase().replace(/^www\./, '');
+    if (!blocklist.has(domain)) {
+      domains.add(domain);
+    }
+  }
+
+  // Pattern 3: Standalone domain mentions (company.com in text)
+  // Look for domain-like strings near company context clues
+  const domainMentionPattern = /\b([\w-]+\.(?:com|io|co|org|net|ai|app|dev|tech|health))\b/gi;
+  while ((match = domainMentionPattern.exec(text)) !== null) {
+    const domain = match[1].toLowerCase();
+    if (!blocklist.has(domain) && domain.length > 4) {
+      domains.add(domain);
+    }
+  }
+
+  const result = Array.from(domains);
+  if (result.length > 0) {
+    console.log(`Extracted domains from job text: ${result.join(', ')}`);
+  }
+  return result;
+}
+
+/**
+ * Resolve a company via Apollo using multiple strategies:
+ * 1. Domain extraction from job text (email addresses, website mentions)
+ * 2. Domain extraction from job URL (job board slugs)
+ * 3. Validated name-based search (last resort)
  */
 async function resolveCompanyViaApollo(
   jobUrl: string | null,
-  extractedCompanyName: string
+  extractedCompanyName: string,
+  jobContent?: string
 ): Promise<{
   organizationId: string | null;
   companyName: string;
@@ -101,30 +162,42 @@ async function resolveCompanyViaApollo(
   let resolvedDomain: string | null = null;
   let employeeCount: number | undefined;
 
-  // Step 1: Try domain-based search from job URL (most precise)
-  if (jobUrl) {
-    const candidateDomains = extractCompanySlugFromJobUrl(jobUrl);
-    console.log(`Company resolution: extracted candidate domains from URL: ${candidateDomains.join(', ') || 'none'}`);
+  // Collect all candidate domains from all sources
+  const candidateDomains: string[] = [];
 
-    for (const domain of candidateDomains) {
-      try {
-        const orgs = await apolloService.searchOrganizations({ domain });
-        if (orgs.length > 0) {
-          const org = orgs[0]; // Domain match is precise — first result is correct
-          resolvedOrgId = org.id;
-          resolvedName = org.name;
-          resolvedDomain = org.primary_domain || domain;
-          employeeCount = org.employees;
-          console.log(`✅ Company resolved via domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees, domain: ${resolvedDomain})`);
-          break;
-        }
-      } catch (e) {
-        console.warn(`Domain search failed for "${domain}":`, e);
+  // Source 1: Extract domains from job description text (most common — works for pasted text)
+  if (jobContent) {
+    candidateDomains.push(...extractDomainsFromJobText(jobContent));
+  }
+
+  // Source 2: Extract from job URL (for URL-based submissions)
+  if (jobUrl) {
+    candidateDomains.push(...extractCompanySlugFromJobUrl(jobUrl));
+  }
+
+  // Deduplicate
+  const uniqueDomains = [...new Set(candidateDomains)];
+  console.log(`Company resolution: ${uniqueDomains.length} candidate domains: ${uniqueDomains.join(', ') || 'none'}`);
+
+  // Try each domain against Apollo (domain search is precise)
+  for (const domain of uniqueDomains) {
+    if (resolvedOrgId) break;
+    try {
+      const orgs = await apolloService.searchOrganizations({ domain });
+      if (orgs.length > 0) {
+        const org = orgs[0]; // Domain match is precise — first result is correct
+        resolvedOrgId = org.id;
+        resolvedName = org.name;
+        resolvedDomain = org.primary_domain || domain;
+        employeeCount = org.employees;
+        console.log(`✅ Company resolved via domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees, domain: ${resolvedDomain})`);
       }
+    } catch (e) {
+      console.warn(`Domain search failed for "${domain}":`, e);
     }
   }
 
-  // Step 2: If domain search didn't work, try name-based search with validation
+  // Fallback: validated name-based search
   if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified") {
     try {
       const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
@@ -362,10 +435,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? jobDataExtraction.job_title 
           : extraction.job_title;
 
-        // Resolve company via Apollo (domain-first, then name-based)
+        // Resolve company via Apollo (text domains → URL domains → name search)
         const jobUrl = submissionData.inputType === "url" ? submissionData.jobInput : null;
-        console.log(`Resolving company via Apollo for: "${companyName}" (URL: ${jobUrl || 'none'})`);
-        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName);
+        console.log(`Resolving company via Apollo for: "${companyName}" (URL: ${jobUrl || 'none'}, content: ${jobContent.length} chars)`);
+        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName, jobContent);
 
         // Use Apollo-resolved data when available (more authoritative than AI extraction)
         const resolvedCompanyName = companyResolution.companyName || companyName;
