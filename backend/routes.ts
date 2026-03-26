@@ -11,7 +11,7 @@ import { enrichmentService, ContactEnrichmentService } from "./enrichmentService
 import { enhancedEnrichmentService } from "./enhancedEnrichmentService";
 import { supplementalEmailService } from "./supplementalEmailService";
 import { urlScrapingService } from "./urlScrapingService";
-import { apolloService } from "./apolloService";
+import { apolloService, scoreOrgMatch } from "./apolloService";
 import { insertJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -160,59 +160,123 @@ async function resolveCompanyViaApollo(
   let resolvedDomain: string | null = null;
   let employeeCount: number | undefined;
 
-  // Collect all candidate domains from all sources, ordered by reliability
-  const candidateDomains: string[] = [];
+  // Separate domains by trust level
+  const trustedDomains: string[] = []; // From text (email addresses, explicit URLs)
+  const inferredDomains: string[] = []; // From AI or URL slugs (need validation)
 
-  // Source 1: Extract domains from job description text (email addresses, website mentions)
+  // Source 1: Extract domains from job description text — TRUSTED (emails don't lie)
   if (jobContent) {
-    candidateDomains.push(...extractDomainsFromJobText(jobContent));
+    trustedDomains.push(...extractDomainsFromJobText(jobContent));
   }
 
-  // Source 2: AI-inferred domain (Claude knows most companies' domains)
-  if (aiInferredDomain) {
-    candidateDomains.push(aiInferredDomain);
-  }
-
-  // Source 3: Extract from job URL (for URL-based submissions)
+  // Source 2: Extract from job URL — TRUSTED (URL slug is explicit)
   if (jobUrl) {
-    candidateDomains.push(...extractCompanySlugFromJobUrl(jobUrl));
+    trustedDomains.push(...extractCompanySlugFromJobUrl(jobUrl));
   }
 
-  // Deduplicate
-  const uniqueDomains = [...new Set(candidateDomains)];
-  console.log(`Company resolution: ${uniqueDomains.length} candidate domains: ${uniqueDomains.join(', ') || 'none'}`);
+  // Source 3: AI-inferred domain — UNTRUSTED (needs cross-validation)
+  if (aiInferredDomain) {
+    inferredDomains.push(aiInferredDomain);
+  }
 
-  // Try each domain against Apollo (domain search is precise)
-  for (const domain of uniqueDomains) {
+  const uniqueTrusted = [...new Set(trustedDomains)];
+  const uniqueInferred = [...new Set(inferredDomains.filter(d => !trustedDomains.includes(d)))];
+  console.log(`Company resolution: ${uniqueTrusted.length} trusted domains: [${uniqueTrusted.join(', ')}], ${uniqueInferred.length} inferred: [${uniqueInferred.join(', ')}]`);
+
+  // Step 1: Try trusted domains via Apollo enrich (precise point lookup)
+  for (const domain of uniqueTrusted) {
     if (resolvedOrgId) break;
     try {
-      const orgs = await apolloService.searchOrganizations({ domain });
-      if (orgs.length > 0) {
-        const org = orgs[0]; // Domain match is precise — first result is correct
+      // Use enrich endpoint — designed for precise domain lookups
+      const org = await apolloService.enrichOrganization({ domain });
+      if (org) {
         resolvedOrgId = org.id;
         resolvedName = org.name;
         resolvedDomain = org.primary_domain || domain;
         employeeCount = org.employees;
-        console.log(`✅ Company resolved via domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees, domain: ${resolvedDomain})`);
+        console.log(`✅ Company resolved via trusted domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees)`);
       }
     } catch (e) {
-      console.warn(`Domain search failed for "${domain}":`, e);
+      console.warn(`Enrich failed for trusted domain "${domain}":`, e);
+    }
+
+    // Fallback to search if enrich didn't work
+    if (!resolvedOrgId) {
+      try {
+        const orgs = await apolloService.searchOrganizations({ domain });
+        if (orgs.length > 0) {
+          const org = orgs[0];
+          resolvedOrgId = org.id;
+          resolvedName = org.name;
+          resolvedDomain = org.primary_domain || domain;
+          employeeCount = org.employees;
+          console.log(`✅ Company resolved via trusted domain search "${domain}": ${org.name} (id: ${org.id})`);
+        }
+      } catch (e) {
+        console.warn(`Domain search failed for "${domain}":`, e);
+      }
     }
   }
 
-  // Fallback: validated name-based search
+  // Step 2: Try AI-inferred domains — validate with enrich using BOTH domain + name
+  if (!resolvedOrgId) {
+    for (const domain of uniqueInferred) {
+      if (resolvedOrgId) break;
+      try {
+        // Use enrich with BOTH domain and name for cross-validation
+        const org = await apolloService.enrichOrganization({
+          domain,
+          name: extractedCompanyName,
+        });
+
+        if (org) {
+          // Cross-validate: does the returned org name reasonably match what we expect?
+          const matchScore = scoreOrgMatch(org.name, extractedCompanyName);
+          if (matchScore >= 0.5) {
+            resolvedOrgId = org.id;
+            resolvedName = org.name;
+            resolvedDomain = org.primary_domain || domain;
+            employeeCount = org.employees;
+            console.log(`✅ Company resolved via AI-inferred domain "${domain}" + name validation: ${org.name} (score: ${matchScore.toFixed(2)})`);
+          } else {
+            console.log(`⚠️ AI domain "${domain}" matched "${org.name}" but score ${matchScore.toFixed(2)} too low for "${extractedCompanyName}" — rejecting`);
+          }
+        }
+      } catch (e) {
+        console.warn(`Enrich failed for inferred domain "${domain}":`, e);
+      }
+    }
+  }
+
+  // Step 3: Fallback to validated name-based search
   if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified") {
     try {
-      const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
-      const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName);
-      if (matchedOrg) {
-        resolvedOrgId = matchedOrg.id;
-        resolvedName = matchedOrg.name;
-        resolvedDomain = matchedOrg.primary_domain || null;
-        employeeCount = matchedOrg.employees;
-        console.log(`✅ Company resolved via name "${extractedCompanyName}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
-      } else {
-        console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via Apollo name search`);
+      // Try enrich by name first
+      const enriched = await apolloService.enrichOrganization({ name: extractedCompanyName });
+      if (enriched) {
+        const matchScore = scoreOrgMatch(enriched.name, extractedCompanyName);
+        if (matchScore >= 0.6) {
+          resolvedOrgId = enriched.id;
+          resolvedName = enriched.name;
+          resolvedDomain = enriched.primary_domain || null;
+          employeeCount = enriched.employees;
+          console.log(`✅ Company resolved via enrich by name "${extractedCompanyName}": ${enriched.name} (score: ${matchScore.toFixed(2)})`);
+        }
+      }
+
+      // If enrich didn't work, fall back to search + validation
+      if (!resolvedOrgId) {
+        const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
+        const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName);
+        if (matchedOrg) {
+          resolvedOrgId = matchedOrg.id;
+          resolvedName = matchedOrg.name;
+          resolvedDomain = matchedOrg.primary_domain || null;
+          employeeCount = matchedOrg.employees;
+          console.log(`✅ Company resolved via name search "${extractedCompanyName}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
+        } else {
+          console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via any method`);
+        }
       }
     } catch (e) {
       console.warn(`Name-based company resolution failed:`, e);
