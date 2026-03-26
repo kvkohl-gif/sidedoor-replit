@@ -177,7 +177,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-lg border border-[#E2E8F0] p-4">
+        <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
               <Building2 className="w-5 h-5 text-[#6B46C1]" />
@@ -189,7 +189,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-[#E2E8F0] p-4">
+        <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
               <Users className="w-5 h-5 text-[#4299E1]" />
@@ -201,7 +201,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-[#E2E8F0] p-4">
+        <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
               <CheckCircle className="w-5 h-5 text-[#48BB78]" />
@@ -273,7 +273,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
           return (
             <div
               key={job.id}
-              className="group bg-white rounded-lg border border-[#E2E8F0] p-5 hover:border-[#6B46C1] hover:shadow-sm transition-all"
+              className="group bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-5 hover:border-[#6B46C1] hover:shadow-md transition-all"
               data-testid={`job-card-${job.id}`}
             >
               <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -392,7 +392,7 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
 
       {/* Empty State */}
       {filteredJobs.length === 0 && (
-        <div className="bg-white rounded-lg border border-[#E2E8F0] p-12 text-center">
+        <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-12 text-center">
           <div className="w-16 h-16 bg-[#F9FAFB] rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-8 h-8 text-[#A0AEC0]" />
           </div>

@@ -574,7 +574,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
       {/* Collapsible Job Details panel */}
       {showJobInfo && (
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
           <div style={{ display: "grid", gridTemplateColumns: companyDesc ? "1fr 1fr" : "1fr", gap: 24 }}>
             {/* Left: JD content */}
             <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.65 }}>
@@ -624,7 +624,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
 
       {/* Collapsible Notes panel */}
       {showNotes && (
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, marginBottom: 20, animation: "fadeUp 0.2s ease", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
           <textarea
             placeholder="Add notes about this application..."
             value={notesValue}
@@ -682,9 +682,9 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
           <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>No contacts found</p>
         </div>
       ) : (
-        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)" }}>
           {/* Table header */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0, padding: "10px 20px", borderBottom: "1px solid #f0f0f3", background: "#fafafe" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0, padding: "10px 20px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb" }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Contact</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</span>

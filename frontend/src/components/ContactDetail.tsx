@@ -118,10 +118,11 @@ const css = `
 
 .cd-card {
   background: #fff;
-  border: 1px solid #e8eaed;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
 }
 .cd-card-inner { padding: 20px 24px; }
 

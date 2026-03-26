@@ -51,7 +51,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-40
-          w-64 bg-white border-r border-[#E2E8F0]
+          w-64 bg-white border-r border-[#E2E8F0] shadow-[2px_0_8px_rgba(0,0,0,0.03)]
           transform transition-transform duration-200 ease-in-out
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}

@@ -131,10 +131,10 @@ const css = `
 
   .contacts-table-wrap {
     background: #fff;
-    border: 1px solid #e8eaed;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
   }
 
   .contacts-table-wrap table {
@@ -150,8 +150,8 @@ const css = `
     text-transform: uppercase;
     letter-spacing: 0.4px;
     text-align: left;
-    border-bottom: 1px solid #f0f0f3;
-    background: #fafbfc;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8f9fb;
     white-space: nowrap;
     user-select: none;
   }
