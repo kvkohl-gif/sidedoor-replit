@@ -262,13 +262,28 @@ export class EnhancedEnrichmentService {
           console.log(`Department inference details: ${departmentInference.departments.length} departments, ${departmentInference.primary_titles.length} titles`);
           console.log("Using enhanced department-based search strategy...");
           
-          // Log debug info about organization_id
-          console.log(`Organization ID: ${request.organization_id || 'Not provided - will use company name search'}`);
-          
+          // Auto-resolve organization_id if not provided
           if (!request.organization_id) {
-            console.log("No organization_id provided, will use fallback search method");
+            console.log("No organization_id provided, attempting to resolve from Apollo...");
+            try {
+              const orgs = await apolloService.searchOrganizations({ company_name: request.company_name });
+              const matchedOrg = apolloService.findBestOrganizationMatch(orgs, request.company_name);
+              if (matchedOrg) {
+                request.organization_id = matchedOrg.id;
+                if (!request.employee_count && matchedOrg.employees) {
+                  request.employee_count = matchedOrg.employees;
+                }
+                console.log(`Auto-resolved organization_id: ${matchedOrg.id} (${matchedOrg.name}, ${matchedOrg.employees} employees)`);
+              } else {
+                console.log(`⚠️ Could not resolve organization for "${request.company_name}" — will use name-based search`);
+              }
+            } catch (e) {
+              console.warn("Could not auto-resolve organization:", e);
+            }
+          } else {
+            console.log(`Organization ID provided: ${request.organization_id}`);
           }
-          
+
           if (request.organization_id) {
             // Use organization-specific search plans
             const searchPlans = buildApolloPlans(request.organization_id, departmentInference);

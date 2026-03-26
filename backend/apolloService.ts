@@ -123,6 +123,37 @@ const RECRUITER_TITLES = [
   "senior talent sourcer"
 ];
 
+/**
+ * Score how well an Apollo organization name matches the expected company name.
+ * Returns 0-1 where 1 is a perfect match.
+ */
+function scoreOrgMatch(orgName: string, expectedName: string): number {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const orgNorm = normalize(orgName);
+  const expNorm = normalize(expectedName);
+
+  // Exact match
+  if (orgNorm === expNorm) return 1.0;
+
+  // One contains the other fully
+  if (orgNorm.includes(expNorm) || expNorm.includes(orgNorm)) return 0.9;
+
+  // Check if all words of expected appear in org name
+  const expWords = expNorm.split(/\s+/);
+  const orgWords = orgNorm.split(/\s+/);
+  const allExpWordsInOrg = expWords.every(w => orgWords.some(ow => ow.includes(w) || w.includes(ow)));
+  if (allExpWordsInOrg) return 0.8;
+
+  // First word match (e.g. "Hone" matches "Hone Health" but NOT "Honeywell")
+  if (orgWords[0] === expWords[0] && orgWords[0].length >= 3) return 0.7;
+
+  // Starts-with on full string (catches abbreviation-style matches)
+  if (orgNorm.startsWith(expNorm) || expNorm.startsWith(orgNorm)) return 0.6;
+
+  // Poor match — names diverge significantly
+  return 0.1;
+}
+
 class ApolloService {
   private apiKey: string;
   private baseUrl = "https://api.apollo.io/api/v1";
@@ -132,6 +163,38 @@ class ApolloService {
     if (!this.apiKey) {
       console.warn("Apollo API key not found in environment variables");
     }
+  }
+
+  /**
+   * Find the best-matching organization from Apollo search results.
+   * Returns null if no result scores above the threshold (0.6).
+   */
+  findBestOrganizationMatch(
+    organizations: ApolloOrganization[],
+    expectedCompanyName: string,
+    threshold = 0.6
+  ): ApolloOrganization | null {
+    if (organizations.length === 0) return null;
+
+    let bestOrg: ApolloOrganization | null = null;
+    let bestScore = 0;
+
+    for (const org of organizations) {
+      const score = scoreOrgMatch(org.name, expectedCompanyName);
+      console.log(`  Org match: "${org.name}" vs "${expectedCompanyName}" → score ${score.toFixed(2)} (domain: ${org.primary_domain || 'none'})`);
+      if (score > bestScore) {
+        bestScore = score;
+        bestOrg = org;
+      }
+    }
+
+    if (bestScore >= threshold) {
+      console.log(`✅ Best org match: "${bestOrg!.name}" (score: ${bestScore.toFixed(2)}, id: ${bestOrg!.id}, domain: ${bestOrg!.primary_domain})`);
+      return bestOrg;
+    }
+
+    console.log(`⚠️ No org matched "${expectedCompanyName}" above threshold ${threshold}. Best was "${bestOrg?.name}" at ${bestScore.toFixed(2)}`);
+    return null;
   }
 
   /**
@@ -691,20 +754,27 @@ class ApolloService {
     strategy: {name: string, location: string | null}
   ): Promise<ProcessedContact[]> {
     try {
-      // First get the company domain from organization search
+      // Find and validate the correct organization
       const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const companyDomain = organizations.length > 0 ? organizations[0].primary_domain : null;
-      
-      console.log(`Using company domain: ${companyDomain || 'UNKNOWN'} for ${params.company_name}`);
-      
-      // Build search payload with location filtering
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      const companyDomain = matchedOrg?.primary_domain || null;
+      const resolvedOrgId = matchedOrg?.id || null;
+
+      console.log(`Using company domain: ${companyDomain || 'UNKNOWN'} for ${params.company_name} (org: ${matchedOrg?.name || 'NO MATCH'})`);
+
+      // Build search payload — use org_id for precision when available
       let searchPayload: any = {
-        q_organization_name: params.company_name,
         person_titles: RECRUITER_TITLES,
         page: 1,
         per_page: 10
       };
-      
+
+      if (resolvedOrgId) {
+        searchPayload.organization_ids = [resolvedOrgId];
+      } else {
+        searchPayload.q_organization_name = params.company_name;
+      }
+
       // Add location filtering
       if (strategy.location) {
         searchPayload.person_locations = [strategy.location];
@@ -738,16 +808,23 @@ class ApolloService {
    */
   private async searchFallback(params: RecruiterSearchParams): Promise<ProcessedContact[]> {
     try {
-      // Get company domain first
+      // Find and validate the correct organization
       const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const companyDomain = organizations.length > 0 ? organizations[0].primary_domain : null;
-      
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      const companyDomain = matchedOrg?.primary_domain || null;
+      const resolvedOrgId = matchedOrg?.id || null;
+
       const searchPayload: any = {
-        q_organization_name: params.company_name,
         person_titles: RECRUITER_TITLES,
         page: 1,
         per_page: 10
       };
+
+      if (resolvedOrgId) {
+        searchPayload.organization_ids = [resolvedOrgId];
+      } else {
+        searchPayload.q_organization_name = params.company_name;
+      }
 
       console.log(`Fallback search without location filtering:`, searchPayload);
       
@@ -1169,10 +1246,12 @@ class ApolloService {
     }
 
     try {
-      // Get company domain from organization search
+      // Find and validate the correct organization
       const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const companyDomain = organizations.length > 0 ? organizations[0].primary_domain : null;
-      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'}`);
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      const companyDomain = matchedOrg?.primary_domain || null;
+      const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
+      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'})`);
 
       const searchPayload: any = {
         person_titles: RECRUITER_TITLES,
@@ -1180,14 +1259,14 @@ class ApolloService {
         per_page: params.per_page || 10
       };
 
-      // Use organization_id for precise matching if available
-      if (params.organization_id) {
-        searchPayload.organization_ids = [params.organization_id];
-        console.log(`Using organization_id for recruiting search: ${params.organization_id}`);
+      // Use organization_id for precise matching — prefer validated org match
+      if (resolvedOrgId) {
+        searchPayload.organization_ids = [resolvedOrgId];
+        console.log(`Using organization_id for recruiting search: ${resolvedOrgId} (from: ${params.organization_id ? 'request' : 'org match'})`);
       } else {
-        // Fallback to name-based search
+        // Fallback to name-based search only if no org match found
         searchPayload.q_organization_name = params.company_name;
-        console.log(`Using company name for recruiting search: ${params.company_name}`);
+        console.log(`⚠️ No validated org — using fuzzy company name for recruiting search: ${params.company_name}`);
       }
 
       // Add geographic filtering if available
@@ -1198,9 +1277,7 @@ class ApolloService {
       console.log(`Searching for recruiting contacts:`, JSON.stringify(searchPayload, null, 2));
 
       const result = await this.executeApolloSearch(searchPayload);
-      
-      // result.contacts are already processed ProcessedContact[] from executeApolloSearch
-      // They already have all required properties, so just enrich them directly
+
       console.log(`Recruiting search found ${result.contacts.length} contacts (already processed)`);
 
       // Use smart email discovery with actual company domain
@@ -1240,10 +1317,12 @@ class ApolloService {
     }
 
     try {
-      // Get company domain from organization search
+      // Find and validate the correct organization
       const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const companyDomain = organizations.length > 0 ? organizations[0].primary_domain : null;
-      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'}`);
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      const companyDomain = matchedOrg?.primary_domain || null;
+      const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
+      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'})`);
 
       const searchPayload: any = {
         person_titles: params.titles,
@@ -1252,14 +1331,14 @@ class ApolloService {
         per_page: params.per_page || 10
       };
 
-      // Use organization_id for precise matching if available
-      if (params.organization_id) {
-        searchPayload.organization_ids = [params.organization_id];
-        console.log(`Using organization_id for department lead search: ${params.organization_id}`);
+      // Use organization_id for precise matching — prefer validated org match
+      if (resolvedOrgId) {
+        searchPayload.organization_ids = [resolvedOrgId];
+        console.log(`Using organization_id for department lead search: ${resolvedOrgId} (from: ${params.organization_id ? 'request' : 'org match'})`);
       } else {
-        // Fallback to name-based search
+        // Fallback to name-based search only if no org match found
         searchPayload.q_organization_name = params.company_name;
-        console.log(`Using company name for department lead search: ${params.company_name}`);
+        console.log(`⚠️ No validated org — using fuzzy company name for department lead search: ${params.company_name}`);
       }
 
       // Add geographic filtering if available
@@ -1319,9 +1398,10 @@ class ApolloService {
 
       console.log(`Found ${candidateContacts.length} candidate contacts without title filtering, processing...`);
       
-      // Use smart email discovery
+      // Use smart email discovery with validated org match
       const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const apolloCompanyDomain = organizations.length > 0 ? organizations[0].primary_domain : null;
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      const apolloCompanyDomain = matchedOrg?.primary_domain || null;
       
       if (apolloCompanyDomain) {
         return await this.enrichAndInferEmails(candidateContacts, apolloCompanyDomain);
