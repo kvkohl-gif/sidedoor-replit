@@ -193,31 +193,47 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       .map(x => x.title)
   );
 
-  const SENIORITIES = ['director', 'vp', 'c_suite', 'head', 'lead'];
+  // Include manager and senior — most hiring managers and recruiters at mid-size companies
+  // have these seniority levels, not just director/VP/C-suite
+  const LEADERSHIP_SENIORITIES = ['manager', 'director', 'vp', 'c_suite', 'head', 'lead'];
+  const BROAD_SENIORITIES = ['senior', 'manager', 'director', 'vp', 'c_suite', 'head', 'lead'];
 
   const plans: ApolloSearchPlan[] = [
+    // Plan 1: Department-aligned leadership with specific titles
     {
       label: 'primary-dept+titles',
       payload: {
         organization_ids: [orgId],
         person_titles: primaryTitles,
-        person_seniorities: SENIORITIES,
+        person_seniorities: LEADERSHIP_SENIORITIES,
         person_departments: deptFilters,
-        per_page: 3,
+        per_page: 5,
         reveal_personal_emails: true
       },
-      hardLimit: 3
+      hardLimit: 5
     },
+    // Plan 2: Broader seniority with department filter (catches senior ICs who are hiring managers)
     {
-      label: 'primary-dept+seniorities',
+      label: 'primary-dept+broad-seniority',
       payload: {
         organization_ids: [orgId],
-        person_seniorities: SENIORITIES,
+        person_seniorities: BROAD_SENIORITIES,
         person_departments: deptFilters,
-        per_page: 3,
+        per_page: 5,
         reveal_personal_emails: true
       },
-      hardLimit: 3
+      hardLimit: 5
+    },
+    // Plan 3: Title match WITHOUT department filter (catches misclassified contacts)
+    {
+      label: 'titles-only-no-dept-filter',
+      payload: {
+        organization_ids: [orgId],
+        person_titles: primaryTitles,
+        per_page: 5,
+        reveal_personal_emails: true
+      },
+      hardLimit: 5
     }
   ];
 
@@ -227,25 +243,25 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference):
       payload: {
         organization_ids: [orgId],
         person_titles: crossTitles,
-        person_seniorities: SENIORITIES,
-        per_page: 2,
+        person_seniorities: BROAD_SENIORITIES,
+        per_page: 3,
         reveal_personal_emails: true
       },
-      hardLimit: 2
+      hardLimit: 3
     });
   }
 
+  // Recruiting contacts — broad search without department filter
+  // Many recruiters at smaller companies aren't tagged with "people" department
   plans.push({
     label: 'recruiting-fallback',
     payload: {
       organization_ids: [orgId],
-      person_titles: ['Recruiter', 'Senior Recruiter', 'Talent Acquisition', 'Head of Talent', 'Director of Talent'],
-      person_seniorities: SENIORITIES,
-      person_departments: APOLLO_DEPT_MAP.people,
-      per_page: 2,
+      person_titles: ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent Acquisition', 'Talent Acquisition Manager', 'Head of Talent', 'Director of Talent', 'HR Manager', 'People Operations'],
+      per_page: 5,
       reveal_personal_emails: true
     },
-    hardLimit: 2
+    hardLimit: 3
   });
 
   return plans;
