@@ -40,7 +40,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
   ];
 
   return (
-    <div className="flex h-screen bg-[#FAFBFC]">
+    <div className="flex h-screen bg-gray-50">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
