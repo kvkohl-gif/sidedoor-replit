@@ -5,7 +5,16 @@ import { STRIPE_PRICE_IDS, PLAN_CREDITS, type PlanType } from "../constants/cred
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
 import { nanoid } from "nanoid";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
+
+// Guard: reject Stripe-dependent routes when key is missing
+function requireStripe(_req: Request, res: Response, next: Function) {
+  if (!stripe) {
+    return res.status(503).json({ error: "Stripe is not configured" });
+  }
+  next();
+}
 
 const router = Router();
 
@@ -63,7 +72,7 @@ router.get("/transactions", requireAuth, async (req: Request, res: Response) => 
 
 // ─── POST /api/billing/create-checkout-session ───
 // Creates a Stripe Checkout Session for upgrading to a paid plan
-router.post("/create-checkout-session", requireAuth, async (req: Request, res: Response) => {
+router.post("/create-checkout-session", requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const { planType } = req.body as { planType: PlanType };
@@ -89,7 +98,7 @@ router.post("/create-checkout-session", requireAuth, async (req: Request, res: R
         .eq("id", userId)
         .single();
 
-      const customer = await stripe.customers.create({
+      const customer = await stripe!.customers.create({
         email: user?.email,
         name: user ? `${user.first_name} ${user.last_name}` : undefined,
         metadata: { user_id: userId },
@@ -106,7 +115,7 @@ router.post("/create-checkout-session", requireAuth, async (req: Request, res: R
 
     const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripe!.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
@@ -124,7 +133,7 @@ router.post("/create-checkout-session", requireAuth, async (req: Request, res: R
 
 // ─── POST /api/billing/create-portal-session ───
 // Creates a Stripe Customer Portal session for managing subscription
-router.post("/create-portal-session", requireAuth, async (req: Request, res: Response) => {
+router.post("/create-portal-session", requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const sub = await getUserSubscription(userId);
@@ -135,7 +144,7 @@ router.post("/create-portal-session", requireAuth, async (req: Request, res: Res
 
     const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
-    const portalSession = await stripe.billingPortal.sessions.create({
+    const portalSession = await stripe!.billingPortal.sessions.create({
       customer: sub.stripe_customer_id,
       return_url: `${baseUrl}/billing`,
     });
@@ -149,6 +158,10 @@ router.post("/create-portal-session", requireAuth, async (req: Request, res: Res
 
 // ─── Webhook Handler (exported separately — needs raw body) ───
 export async function handleStripeWebhook(req: Request, res: Response) {
+  if (!stripe) {
+    return res.status(503).json({ error: "Stripe is not configured" });
+  }
+
   const sig = req.headers["stripe-signature"] as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -219,7 +232,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   // Retrieve subscription dates from Stripe
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
   // Update user subscription
   const { error } = await supabaseAdmin
@@ -280,7 +293,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   // Update billing cycle dates
   const subscriptionId = invoice.subscription as string;
   if (subscriptionId) {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
     await supabaseAdmin
       .from("user_subscriptions")
       .update({
