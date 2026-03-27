@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { registerContactRoutes } from "./routes/contacts";
 import { registerOutreachProfileRoutes } from "./routes/outreachProfile";
+import { registerNotificationRoutes } from "./routes/notifications";
+import { registerOutreachRoutes } from "./routes/outreach";
 import dbTestRouter from "./routes/dbTest";
 import { supabaseAdmin } from "./lib/supabaseClient";
 // Use supabaseAdmin for all queries — the app handles auth via sessionAuth middleware
@@ -1561,6 +1563,8 @@ RULES:
   // Register contact routes
   registerContactRoutes(app);
   registerOutreachProfileRoutes(app);
+  registerNotificationRoutes(app);
+  registerOutreachRoutes(app);
 
   // Debug endpoint for department targeting (dev only, auth required)
   app.post('/api/debug/department-test', requireAuth, async (req, res) => {

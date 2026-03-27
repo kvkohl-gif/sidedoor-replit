@@ -139,7 +139,7 @@ Requirements:
         </div>
 
         {/* Main Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-[#E2E8F0] overflow-hidden">
+        <div className="bg-white rounded-xl shadow-md border border-[#E2E8F0] overflow-hidden">
           {/* Input Section */}
           <div className="p-6">
             <div className="flex items-center justify-between mb-3">

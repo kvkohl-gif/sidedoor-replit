@@ -14,10 +14,12 @@ import {
   Save,
   FileText,
   Users,
+  Wand2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "../lib/queryClient";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 
 interface ContactDetailProps {
   onNavigate: (page: string, data?: any) => void;
@@ -47,11 +49,11 @@ interface Contact {
   createdAt: string | null;
 }
 
-const VERIFICATION: Record<string, { label: string; dot: string }> = {
-  valid:   { label: "Verified",   dot: "#10b981" },
-  risky:   { label: "Risky",      dot: "#f59e0b" },
-  invalid: { label: "Invalid",    dot: "#ef4444" },
-  unknown: { label: "Unverified", dot: "#9ca3af" },
+const VERIFICATION: Record<string, { label: string; dot: string; tooltip: string }> = {
+  valid:   { label: "Verified",        dot: "#10b981", tooltip: "This email has been confirmed as a real, active inbox." },
+  risky:   { label: "Likely Valid",    dot: "#3b82f6", tooltip: "This email follows the company's pattern and the domain accepts mail. It's worth sending — most corporate emails show this status." },
+  invalid: { label: "Not Deliverable", dot: "#ef4444", tooltip: "This email bounced during verification. Try reaching out via LinkedIn instead." },
+  unknown: { label: "Unconfirmed",     dot: "#9ca3af", tooltip: "We haven't been able to verify this email yet. Use with caution or try LinkedIn." },
 };
 
 const STATUSES = [
@@ -117,10 +119,11 @@ const css = `
 
 .cd-card {
   background: #fff;
-  border: 1px solid #e8eaed;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
 }
 .cd-card-inner { padding: 20px 24px; }
 
@@ -481,6 +484,8 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
   const [notesValue, setNotesValue] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refineInput, setRefineInput] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
 
   const { data: contact, isLoading, error } = useQuery<Contact>({
@@ -573,6 +578,28 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
+    },
+  });
+
+  const refineMutation = useMutation({
+    mutationFn: async (instructions: string) => {
+      if (!contactId) throw new Error("No contact");
+      setIsRefining(true);
+      return apiRequest("POST", `/api/contacts/${contactId}/generate-message`, {
+        instructions,
+        currentDraft: emailDraft,
+        currentLinkedin: linkedinDraft,
+      }).then(r => r.json());
+    },
+    onSuccess: (data) => {
+      if (data.emailContent) setEmailDraft(data.emailContent);
+      if (data.linkedinContent) setLinkedinDraft(data.linkedinContent);
+      setRefineInput("");
+      setIsRefining(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
+    },
+    onError: () => {
+      setIsRefining(false);
     },
   });
 
@@ -694,10 +721,20 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
             <div className="cd-contact-row">
               <Mail size={15} />
               <span className="cd-email-text">{contact.email || "No email"}</span>
-              <span className="cd-verification">
-                <span className="vdot" style={{ backgroundColor: v.dot }} />
-                <span style={{ color: v.dot }}>{v.label}</span>
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cd-verification cursor-default">
+                    <span className="vdot" style={{ backgroundColor: v.dot }} />
+                    <span style={{ color: v.dot }}>{v.label}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg"
+                >
+                  {v.tooltip}
+                </TooltipContent>
+              </Tooltip>
             </div>
             {contact.linkedinUrl && (
               <div className="cd-contact-row">
@@ -890,6 +927,45 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
                 </div>
               )}
             </>
+          )}
+
+          {/* AI Refine */}
+          {(hasEmail || hasLinkedin) && (
+            <div style={{ background: "#f5f3ff", border: "1px solid #e9e5f5", borderRadius: 10, padding: 12, marginTop: 12 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Wand2 size={14} style={{ color: "#7c3aed", flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={refineInput}
+                  onChange={e => setRefineInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && refineInput.trim()) {
+                      refineMutation.mutate(refineInput.trim());
+                    }
+                  }}
+                  placeholder="Refine with AI — e.g. 'make it shorter', 'add a question about their team'..."
+                  style={{
+                    flex: 1, padding: "7px 10px", border: "1px solid #ddd6fe", borderRadius: 7,
+                    fontSize: 13, fontFamily: "inherit", color: "#374151", outline: "none",
+                    background: "#fff",
+                  }}
+                  disabled={isRefining}
+                />
+                <button
+                  onClick={() => { if (refineInput.trim()) refineMutation.mutate(refineInput.trim()); }}
+                  disabled={!refineInput.trim() || isRefining}
+                  style={{
+                    padding: "7px 14px", borderRadius: 7, border: "none", background: "#7c3aed",
+                    color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    cursor: !refineInput.trim() || isRefining ? "default" : "pointer",
+                    opacity: !refineInput.trim() || isRefining ? 0.5 : 1, flexShrink: 0,
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}
+                >
+                  {isRefining ? <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Refining...</> : "Refine"}
+                </button>
+              </div>
+            </div>
           )}
 
           {generateMutation.isError && (

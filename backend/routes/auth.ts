@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { supabaseAdmin } from "../lib/supabaseClient";
 import { createFreeSubscription } from "../services/creditService";
+import { initializeOnboarding } from "../services/onboardingService";
 
 const router = Router();
 
@@ -82,8 +83,8 @@ router.post("/register", async (req: Request, res: Response) => {
     // Create free-tier subscription with 50 credits (21-day trial)
     await createFreeSubscription(userId);
 
-    // Create free-tier subscription with 50 credits (21-day trial)
-    await createFreeSubscription(userId);
+    // Initialize onboarding checklist
+    await initializeOnboarding(userId);
 
     return res.json({ success: true });
   } catch (error) {

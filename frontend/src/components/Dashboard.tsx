@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import OnboardingChecklist from "./OnboardingChecklist";
 import {
   Users,
   FileText,
@@ -289,8 +290,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </p>
       </div>
 
+      {/* ── Onboarding Checklist ──────────────────────────────────── */}
+      <div className="mb-6">
+        <OnboardingChecklist onNavigate={onNavigate} />
+      </div>
+
       {/* ── 1. Pipeline Funnel ─────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 mb-6">
+      <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 mb-6">
         {/* Desktop: horizontal */}
         <div className="hidden md:flex items-center gap-0">
           {PIPELINE_STAGES.map((stage, i) => {
@@ -379,7 +385,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           return (
             <div
               key={stat.label}
-              className="bg-white rounded-lg border border-[#E2E8F0] px-4 py-3 flex items-center gap-3"
+              className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm px-4 py-3 flex items-center gap-3"
             >
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -404,7 +410,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             return (
               <div
                 key={card.id}
-                className="bg-white rounded-xl border border-[#E2E8F0] p-5 relative overflow-hidden"
+                className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow p-5 relative overflow-hidden"
               >
                 {/* Accent left border */}
                 <div
@@ -447,7 +453,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* ── 4. Activity Timeline ───────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-[#E2E8F0]">
           <h2 className="text-[#0F172A] text-base font-semibold">Recent Activity</h2>
         </div>

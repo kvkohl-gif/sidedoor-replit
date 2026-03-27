@@ -11,6 +11,21 @@ declare global {
   }
 }
 
+/**
+ * Requires the user to be authenticated; returns 401 if not.
+ * Must be used AFTER sessionAuth middleware has populated req.user.
+ */
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
 export async function sessionAuth(
   req: Request,
   res: Response,

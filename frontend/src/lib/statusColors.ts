@@ -18,11 +18,11 @@ export const JOB_STATUS_COLORS: Record<string, { color: string; bg: string; dot:
   closed:           { color: '#9ca3af', bg: '#f3f4f6', dot: '#d1d5db', border: '#e5e7eb', label: 'Closed' },
 };
 
-export const VERIFICATION_COLORS: Record<string, { color: string; bg: string; dot: string; label: string }> = {
-  valid:    { color: '#059669', bg: '#ecfdf5', dot: '#10b981', label: 'Verified' },
-  risky:    { color: '#d97706', bg: '#fffbeb', dot: '#f59e0b', label: 'Risky' },
-  invalid:  { color: '#dc2626', bg: '#fef2f2', dot: '#ef4444', label: 'Invalid' },
-  unknown:  { color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af', label: 'Unverified' },
+export const VERIFICATION_COLORS: Record<string, { color: string; bg: string; dot: string; label: string; tooltip: string }> = {
+  valid:    { color: '#059669', bg: '#ecfdf5', dot: '#10b981', label: 'Verified',        tooltip: 'This email has been confirmed as a real, active inbox.' },
+  risky:    { color: '#2563eb', bg: '#eff6ff', dot: '#3b82f6', label: 'Likely Valid',     tooltip: 'This email follows the company\'s pattern and the domain accepts mail. It\'s worth sending — most corporate emails show this status.' },
+  invalid:  { color: '#dc2626', bg: '#fef2f2', dot: '#ef4444', label: 'Not Deliverable',  tooltip: 'This email bounced during verification. Try reaching out via LinkedIn instead.' },
+  unknown:  { color: '#6b7280', bg: '#f3f4f6', dot: '#9ca3af', label: 'Unconfirmed',      tooltip: 'We haven\'t been able to verify this email yet. Use with caution or try LinkedIn.' },
 };
 
 export const LEGACY_STATUS_MAP: Record<string, string> = {

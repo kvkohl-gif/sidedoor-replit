@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Search, Plus } from "lucide-react";
 import { STATUS_COLORS, VERIFICATION_COLORS, getContactStatusStyle, getVerificationStyle } from "../lib/statusColors";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 
 interface AllContactsProps {
   onNavigate: (page: string, data?: any) => void;
@@ -130,10 +131,10 @@ const css = `
 
   .contacts-table-wrap {
     background: #fff;
-    border: 1px solid #e8eaed;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
   }
 
   .contacts-table-wrap table {
@@ -149,8 +150,8 @@ const css = `
     text-transform: uppercase;
     letter-spacing: 0.4px;
     text-align: left;
-    border-bottom: 1px solid #f0f0f3;
-    background: #fafbfc;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8f9fb;
     white-space: nowrap;
     user-select: none;
   }
@@ -547,7 +548,14 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                         {initials}
                       </div>
                       <div className="name-text">
-                        <div className="full-name">{c.name || "Unknown"}</div>
+                        <div className="full-name" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          {c.name || "Unknown"}
+                          {c.linkedinUrl && (
+                            <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="View LinkedIn profile">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="#0a66c2" opacity="0.6" style={{ flexShrink: 0 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            </a>
+                          )}
+                        </div>
                         <div className="role-title" title={c.title || ""}>{c.title || "Unknown Title"}</div>
                       </div>
                     </div>
@@ -558,10 +566,17 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                   <td>
                     <div className="email-cell">
                       <span className="email-text">{c.email || "—"}</span>
-                      <span className="dot-badge">
-                        <span className="dot" style={{ backgroundColor: v.dot }} />
-                        <span style={{ color: v.dot }}>{v.label}</span>
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="dot-badge cursor-default">
+                            <span className="dot" style={{ backgroundColor: v.dot }} />
+                            <span style={{ color: v.color }}>{v.label}</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                          {v.tooltip}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </td>
 
@@ -632,7 +647,14 @@ export function AllContacts({ onNavigate }: AllContactsProps) {
                   {initials}
                 </div>
                 <div className="name-text" style={{ flex: 1 }}>
-                  <div className="full-name">{c.name || "Unknown"}</div>
+                  <div className="full-name" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    {c.name || "Unknown"}
+                    {c.linkedinUrl && (
+                      <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="View LinkedIn profile">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="#0a66c2" opacity="0.6" style={{ flexShrink: 0 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      </a>
+                    )}
+                  </div>
                   <div className="role-title">{c.title || "Unknown Title"}</div>
                 </div>
                 <span className={`type-badge ${isRecruiter ? "recruiter" : "hiring"}`}>
