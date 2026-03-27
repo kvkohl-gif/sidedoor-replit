@@ -1,6 +1,7 @@
-import { Home, Search, Clock, Users, Settings, CreditCard, User, Menu, X, ChevronRight, Plus, UserCircle, Key, LogOut } from "lucide-react";
+import { Home, Search, Clock, Users, Settings, CreditCard, User, Menu, X, ChevronRight, Plus, UserCircle, Key, LogOut, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import NotificationCenter from "./NotificationCenter";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
     { icon: Clock, label: "Job History", id: "job-history" },
     { icon: Users, label: "Contacts", id: "contacts" },
     { icon: UserCircle, label: "Outreach Profile", id: "outreach-profile" },
+    { icon: MessageCircle, label: "Outreach Hub", id: "outreach-hub" },
   ];
 
   const bottomNavItems = [
@@ -57,14 +59,15 @@ export function Layout({ children, currentPage, onNavigate, onLogout, userName }
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="h-16 flex items-center px-6 border-b border-[#E2E8F0]">
+          {/* Logo + Notifications */}
+          <div className="h-16 flex items-center justify-between px-6 border-b border-[#E2E8F0]">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 bg-gradient-to-br from-[#6B46C1] to-[#9F7AEA] rounded-md flex items-center justify-center">
                 <Key className="w-4 h-4 text-white" />
               </div>
               <span className="font-semibold text-[#1A202C] text-[15px]">The Side Door</span>
             </div>
+            <NotificationCenter onNavigate={onNavigate} />
           </div>
 
           {/* New Search CTA */}

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import OnboardingChecklist from "./OnboardingChecklist";
 import {
   Users,
   FileText,
@@ -287,6 +288,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         <p className="text-[#64748B] text-[15px]">
           Track your progress from contact discovery to interview
         </p>
+      </div>
+
+      {/* ── Onboarding Checklist ──────────────────────────────────── */}
+      <div className="mb-6">
+        <OnboardingChecklist onNavigate={onNavigate} />
       </div>
 
       {/* ── 1. Pipeline Funnel ─────────────────────────────────────── */}

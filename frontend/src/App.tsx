@@ -10,6 +10,8 @@ import { ContactDetail } from "./components/ContactDetail";
 import { Subscription } from "./components/Subscription";
 import { Settings } from "./components/Settings";
 import { OutreachProfile } from "./components/OutreachProfile";
+import OnboardingWizard from "./components/OnboardingWizard";
+import { OutreachHub } from "./components/OutreachHub";
 import { TermsOfService } from "./components/TermsOfService";
 import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { LoginScreen } from "../components/Login";
@@ -27,6 +29,7 @@ const pageToPath: Record<string, string> = {
   "all-contacts": "/contacts",
   "contact-detail": "/contacts", // needs /:id appended
   "outreach-profile": "/outreach-profile",
+  "outreach-hub": "/outreach",
   billing: "/billing",
   settings: "/settings",
   terms: "/terms",
@@ -44,6 +47,7 @@ const pathToPage: Record<string, string> = {
   "/jobs": "job-history",
   "/contacts": "contacts",
   "/outreach-profile": "outreach-profile",
+  "/outreach": "outreach-hub",
   "/billing": "billing",
   "/settings": "settings",
   "/terms": "terms",
@@ -212,6 +216,7 @@ export default function App() {
     <>
     <StagingBanner />
     <div className={stagingOffset}>
+    <OnboardingWizard onNavigate={handleNavigate} />
     <Layout
       currentPage={currentPage}
       onNavigate={handleNavigate}
@@ -239,6 +244,9 @@ export default function App() {
         </Route>
         <Route path="/outreach-profile">
           <OutreachProfile />
+        </Route>
+        <Route path="/outreach">
+          <OutreachHub onNavigate={handleNavigate} />
         </Route>
         <Route path="/billing">
           <Subscription />
