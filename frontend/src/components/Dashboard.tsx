@@ -12,6 +12,10 @@ import {
   ChevronUp,
   Check,
   Zap,
+  TrendingUp,
+  Sparkles,
+  Target,
+  Clock,
 } from "lucide-react";
 import { useOnboarding } from "../hooks/useOnboarding";
 
@@ -56,7 +60,6 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-const AWAITING_STATUSES = new Set(["awaiting_reply", "follow_up_needed"]);
 const SENT_STATUSES = new Set([
   "email_sent",
   "linkedin_sent",
@@ -70,16 +73,16 @@ const SENT_STATUSES = new Set([
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { bg: string; text: string; label: string }> = {
     not_contacted: { bg: "bg-gray-100", text: "text-gray-600", label: "Not Contacted" },
-    email_sent: { bg: "bg-blue-100", text: "text-blue-700", label: "Email Sent" },
-    linkedin_sent: { bg: "bg-blue-100", text: "text-blue-700", label: "LinkedIn Sent" },
-    awaiting_reply: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Awaiting Reply" },
-    follow_up_needed: { bg: "bg-orange-100", text: "text-orange-700", label: "Follow-up Needed" },
-    replied: { bg: "bg-green-100", text: "text-green-700", label: "Replied" },
-    interview_scheduled: { bg: "bg-green-100", text: "text-green-700", label: "Interview" },
+    email_sent: { bg: "bg-blue-50", text: "text-blue-700", label: "Email Sent" },
+    linkedin_sent: { bg: "bg-blue-50", text: "text-blue-700", label: "LinkedIn Sent" },
+    awaiting_reply: { bg: "bg-amber-50", text: "text-amber-700", label: "Awaiting Reply" },
+    follow_up_needed: { bg: "bg-orange-50", text: "text-orange-700", label: "Follow-up" },
+    replied: { bg: "bg-emerald-50", text: "text-emerald-700", label: "Replied" },
+    interview_scheduled: { bg: "bg-emerald-50", text: "text-emerald-700", label: "Interview" },
   };
   const c = config[status] || config.not_contacted;
   return (
-    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>
+    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${c.bg} ${c.text} uppercase tracking-wide`}>
       {c.label}
     </span>
   );
@@ -134,13 +137,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     const items: Array<{
       id: string;
       icon: typeof Users;
+      iconBg: string;
       iconColor: string;
       title: string;
       subtitle: string;
       onClick: () => void;
     }> = [];
 
-    // 1. Contacts needing follow-up (outreach > 5 days ago)
+    // 1. Contacts needing follow-up
     const needFollowUp = allContacts.filter(
       (c: any) =>
         SENT_STATUSES.has(c.contactStatus) &&
@@ -153,28 +157,30 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       items.push({
         id: "follow-up",
         icon: Zap,
-        iconColor: "text-amber-500",
+        iconBg: "bg-amber-50",
+        iconColor: "text-amber-600",
         title: `Follow up with ${first.name || "a contact"}`,
-        subtitle: `${first.companyName || ""}${first.lastContactedAt ? ` \u00B7 Contacted ${timeAgo(first.lastContactedAt)}` : ""}`,
+        subtitle: `${first.companyName || ""}${first.lastContactedAt ? ` · Contacted ${timeAgo(first.lastContactedAt)}` : ""}`,
         onClick: () => onNavigate("contact-detail", { contactId: first.id }),
       });
     }
 
-    // Also check using createdAt for contacts that were emailed but don't have lastContactedAt
+    // Stale awaiting contacts
     if (needFollowUp.length === 0) {
       const staleAwaiting = allContacts.filter(
         (c: any) =>
-          AWAITING_STATUSES.has(c.contactStatus) &&
+          (c.contactStatus === "awaiting_reply" || c.contactStatus === "follow_up_needed") &&
           c.createdAt &&
           olderThanDays(c.createdAt, 5)
       );
       if (staleAwaiting.length > 0) {
         items.push({
           id: "follow-up-stale",
-          icon: Zap,
-          iconColor: "text-amber-500",
+          icon: Clock,
+          iconBg: "bg-amber-50",
+          iconColor: "text-amber-600",
           title: `${staleAwaiting.length} contact${staleAwaiting.length > 1 ? "s" : ""} awaiting reply`,
-          subtitle: "Follow-ups boost reply rates by 22-49%",
+          subtitle: "Follow-ups boost reply rates by 22–49%",
           onClick: () => onNavigate("contacts"),
         });
       }
@@ -188,7 +194,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       items.push({
         id: "unsent-messages",
         icon: Mail,
-        iconColor: "text-blue-500",
+        iconBg: "bg-blue-50",
+        iconColor: "text-blue-600",
         title: `Review ${unsentDrafts.length} ready message${unsentDrafts.length > 1 ? "s" : ""}`,
         subtitle: `${unsentDrafts.length} draft${unsentDrafts.length > 1 ? "s" : ""} waiting to be sent`,
         onClick: () => onNavigate("contacts"),
@@ -200,10 +207,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     if (completeness < 80) {
       items.push({
         id: "profile",
-        icon: UserCheck,
-        iconColor: "text-purple-500",
-        title: "Complete your profile",
-        subtitle: "Better messages with more context",
+        icon: Target,
+        iconBg: "bg-purple-50",
+        iconColor: "text-purple-600",
+        title: "Complete your outreach profile",
+        subtitle: "Better messages with more context about you",
         onClick: () => onNavigate("outreach-profile"),
       });
     }
@@ -220,7 +228,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       items.push({
         id: "new-contacts",
         icon: Users,
-        iconColor: "text-purple-500",
+        iconBg: "bg-emerald-50",
+        iconColor: "text-emerald-600",
         title: `${recentUnreviewed.length} new contact${recentUnreviewed.length > 1 ? "s" : ""} to review`,
         subtitle: "Generate messages to start outreach",
         onClick: () => onNavigate("contacts"),
@@ -236,6 +245,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       id: string;
       date: string;
       text: string;
+      subtext: string;
       type: "submission" | "contact" | "draft";
     }> = [];
 
@@ -245,6 +255,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           id: `sub-${sub.id}`,
           date: sub.submittedAt || sub.createdAt,
           text: `Added ${sub.jobTitle || "a position"} at ${sub.companyName || "a company"}`,
+          subtext: "Added to your Job History tracking.",
           type: "submission",
         });
       }
@@ -255,7 +266,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         items.push({
           id: `contact-${c.id}`,
           date: c.createdAt,
-          text: `Found ${c.name || "a contact"}${c.title ? ` (${c.title})` : ""}${c.companyName ? ` at ${c.companyName}` : ""}`,
+          text: `Found ${c.name || "a contact"}${c.title ? ` (${c.title})` : ""} at ${c.companyName || "a company"}`,
+          subtext: c.email ? "Verified contact email and LinkedIn profile." : "Lead identified via deep search algorithm.",
           type: "contact",
         });
       }
@@ -264,6 +276,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           id: `draft-${c.id}`,
           date: c.createdAt,
           text: `Drafted message for ${c.name || "a contact"}`,
+          subtext: "Found matching expertise for your saved search.",
           type: "draft",
         });
       }
@@ -305,7 +318,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       <div className="p-6 md:p-8 lg:p-10 flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading dashboard...</p>
+          <p className="text-gray-500 text-sm">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -313,328 +326,406 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] bg-gray-50 min-h-full">
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
-        </p>
-      </div>
+    <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-full">
+      <div className="max-w-[1200px] mx-auto">
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Your Outreach Pipeline
+          </h1>
+          <p className="text-gray-500 text-[15px] mt-1">
+            {firstName
+              ? `Welcome back, ${firstName}. `
+              : ""}
+            Track your progress from contact discovery to interview.
+          </p>
+        </div>
 
-      {/* ── 1. Metric Cards ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[
-          {
-            label: "Contacts this week",
-            value: metrics.contactsThisWeek,
-            icon: Users,
-            iconBg: "bg-purple-50",
-            iconText: "text-purple-600",
-            page: "contacts",
-          },
-          {
-            label: "Messages drafted",
-            value: metrics.emailsDrafted,
-            icon: Mail,
-            iconBg: "bg-blue-50",
-            iconText: "text-blue-600",
-            page: "contacts",
-          },
-          {
-            label: "Active jobs",
-            value: metrics.activeJobs,
-            icon: Briefcase,
-            iconBg: "bg-indigo-50",
-            iconText: "text-indigo-600",
-            page: "job-history",
-          },
-          {
-            label: "Profile strength",
-            value: `${metrics.profileStrength}%`,
-            icon: UserCheck,
-            iconBg: "bg-green-50",
-            iconText: "text-green-600",
-            page: "outreach-profile",
-          },
-        ].map((card) => {
-          const Icon = card.icon;
-          return (
-            <button
-              key={card.label}
-              onClick={() => onNavigate(card.page)}
-              className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-3 hover:border-purple-300 hover:shadow-md transition-all text-left"
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.iconBg}`}>
-                <Icon className={`w-5 h-5 ${card.iconText}`} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-2xl font-bold text-gray-900 leading-tight">{card.value}</div>
-                <div className="text-xs text-gray-500 leading-tight truncate">{card.label}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+        {/* ── 1. Metric Cards ─────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[
+            {
+              label: "Contacts this week",
+              value: metrics.contactsThisWeek,
+              icon: Users,
+              iconBg: "bg-purple-100",
+              iconColor: "text-purple-600",
+              cardBg: "bg-white",
+              page: "contacts",
+            },
+            {
+              label: "Emails drafted",
+              value: metrics.emailsDrafted,
+              icon: Mail,
+              iconBg: "bg-blue-100",
+              iconColor: "text-blue-600",
+              cardBg: "bg-white",
+              page: "contacts",
+            },
+            {
+              label: "Active jobs",
+              value: metrics.activeJobs,
+              icon: Briefcase,
+              iconBg: "bg-emerald-100",
+              iconColor: "text-emerald-600",
+              cardBg: "bg-white",
+              page: "job-history",
+            },
+            {
+              label: "Profile strength",
+              value: `${metrics.profileStrength}%`,
+              icon: UserCheck,
+              iconBg: "bg-rose-100",
+              iconColor: "text-rose-600",
+              cardBg: "bg-white",
+              page: "outreach-profile",
+            },
+          ].map((card) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.label}
+                onClick={() => onNavigate(card.page)}
+                className={`${card.cardBg} border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-gray-300 transition-all text-left group`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.iconBg}`}>
+                  <Icon className={`w-5 h-5 ${card.iconColor}`} />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 leading-none mb-1">
+                  {card.value}
+                </div>
+                <div className="text-[13px] text-gray-500">{card.label}</div>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* ── 2. Middle Row: Getting Started + Suggested Next Steps ──── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Getting Started / Onboarding */}
-        {showChecklist && (
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <button
-              onClick={() => setChecklistCollapsed(!checklistCollapsed)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <h2 className="text-base font-semibold text-gray-900">Getting Started</h2>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400">{completedCount}/{CHECKLIST_ITEMS.length}</span>
-                {checklistCollapsed ? (
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                ) : (
-                  <ChevronUp className="w-4 h-4 text-gray-400" />
-                )}
-              </div>
-            </button>
+        {/* ── 2. Middle Row: Profile / Checklist + Recommendations ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
+          {/* Left: Profile Completion / Getting Started */}
+          <div className="lg:col-span-3">
+            {showChecklist ? (
+              /* Getting Started Checklist */
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm h-full">
+                <button
+                  onClick={() => setChecklistCollapsed(!checklistCollapsed)}
+                  className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors rounded-t-xl"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+                      {completedCount}/{CHECKLIST_ITEMS.length}
+                    </div>
+                    <div>
+                      <h2 className="text-[15px] font-semibold text-gray-900">Getting Started</h2>
+                      <p className="text-xs text-gray-500">Complete your setup</p>
+                    </div>
+                  </div>
+                  {checklistCollapsed ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
 
-            {/* Progress bar */}
-            <div className="px-5 pb-3">
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-purple-600 rounded-full transition-all duration-500"
-                  style={{ width: `${completionPercent}%` }}
-                />
-              </div>
-              <div className="text-right mt-1">
-                <span className="text-xs text-gray-400">{Math.round(completionPercent)}%</span>
-              </div>
-            </div>
+                {/* Progress bar */}
+                <div className="px-5 pb-3">
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-600 rounded-full transition-all duration-500"
+                      style={{ width: `${completionPercent}%` }}
+                    />
+                  </div>
+                </div>
 
-            {/* Checklist items */}
-            {!checklistCollapsed && (
-              <div className="px-5 pb-4 space-y-0.5">
-                {CHECKLIST_ITEMS.map((item) => {
-                  const done = checklist[item.key];
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => {
-                        if (!done && item.page) onNavigate(item.page);
-                      }}
-                      disabled={done || !item.page}
-                      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-md text-left text-sm transition-colors ${
-                        done
-                          ? "text-gray-400 cursor-default"
-                          : "text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`flex items-center justify-center w-5 h-5 rounded-full shrink-0 ${
+                {/* Checklist items */}
+                {!checklistCollapsed && (
+                  <div className="px-5 pb-5 space-y-1">
+                    {CHECKLIST_ITEMS.map((item) => {
+                      const done = checklist[item.key];
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => {
+                            if (!done && item.page) onNavigate(item.page);
+                          }}
+                          disabled={done || !item.page}
+                          className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors ${
                             done
-                              ? "bg-green-500 text-white"
-                              : "border-2 border-gray-300"
+                              ? "text-gray-400 cursor-default"
+                              : "text-gray-700 hover:bg-purple-50 hover:text-purple-700"
                           }`}
                         >
-                          {done && <Check className="w-3 h-3" />}
-                        </div>
-                        <span className={done ? "line-through" : ""}>{item.label}</span>
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`flex items-center justify-center w-5 h-5 rounded-full shrink-0 ${
+                                done
+                                  ? "bg-purple-600 text-white"
+                                  : "border-2 border-gray-300"
+                              }`}
+                            >
+                              {done && <Check className="w-3 h-3" />}
+                            </div>
+                            <span className={done ? "line-through" : ""}>{item.label}</span>
+                          </div>
+                          {!done && item.page && (
+                            <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Profile Completion Card (shown after onboarding) */
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 h-full">
+                <div className="flex items-start gap-5">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      <h2 className="text-[15px] font-semibold text-gray-900">
+                        Complete your outreach profile
+                      </h2>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                      Our AI needs more context to generate high-conversion messages. Upload your resume
+                      or fill in your background to unlock tailored outreach.
+                    </p>
+                    <div className="flex items-center gap-4 mb-4">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Profile Status
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {metrics.profileStrength}% Completed
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full mb-4">
+                      <div
+                        className="h-full bg-purple-600 rounded-full transition-all duration-500"
+                        style={{ width: `${metrics.profileStrength}%` }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => onNavigate("outreach-profile")}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-purple-600 hover:text-purple-700 transition-colors"
+                    >
+                      Edit profile
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: AI Recommendations / Suggested Next Steps */}
+          <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl shadow-sm h-full flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <h2 className="text-[15px] font-semibold text-gray-900">AI Recommendations</h2>
+            </div>
+
+            {suggestions.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center px-5 py-8">
+                <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center mb-3">
+                  <TrendingUp className="w-6 h-6 text-purple-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">You're all caught up!</p>
+                <p className="text-xs text-gray-500 mb-4 text-center">Start a new search to discover more contacts</p>
+                <button
+                  onClick={() => onNavigate("search")}
+                  className="text-sm font-medium text-purple-600 hover:text-purple-700 inline-flex items-center gap-1"
+                >
+                  New search
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 divide-y divide-gray-100">
+                {suggestions.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={item.onClick}
+                      className="w-full flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition-colors text-left group"
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.iconBg}`}>
+                        <Icon className={`w-4 h-4 ${item.iconColor}`} />
                       </div>
-                      {!done && item.page && (
-                        <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 mb-0.5">{item.title}</p>
+                        <p className="text-xs text-gray-500 leading-relaxed">{item.subtitle}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 mt-1 transition-colors" />
                     </button>
                   );
                 })}
               </div>
             )}
           </div>
-        )}
-
-        {/* Suggested Next Steps */}
-        <div className={`bg-white border border-gray-200 rounded-lg shadow-sm ${!showChecklist ? "lg:col-span-2" : ""}`}>
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Suggested Next Steps</h2>
-          </div>
-
-          {suggestions.length === 0 ? (
-            <div className="px-5 py-8 text-center">
-              <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 mb-3">You're all caught up!</p>
-              <button
-                onClick={() => onNavigate("search")}
-                className="text-sm font-medium text-purple-600 hover:text-purple-700 inline-flex items-center gap-1"
-              >
-                Run a new search
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {suggestions.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={item.onClick}
-                    className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors text-left group"
-                  >
-                    <Icon className={`w-4 h-4 flex-shrink-0 ${item.iconColor}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{item.subtitle}</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 transition-colors" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* ── 3. Bottom Row: Activity Feed + Active Jobs ─────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        {/* Recent Activity (takes 3/5 on desktop) */}
-        <div className="lg:col-span-3 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Recent Activity</h2>
-            {timeline.length > 10 && (
-              <button
-                onClick={() => onNavigate("contacts")}
-                className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
-              >
-                View all
-                <ArrowRight className="w-3 h-3" />
-              </button>
+        {/* ── 3. Bottom Row: Activity Feed + Active Jobs ──────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          {/* Recent Activity (takes 3/5 on desktop) */}
+          <div className="lg:col-span-3 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-gray-900">Recent Activity</h2>
+              {timeline.length > 10 && (
+                <button
+                  onClick={() => onNavigate("contacts")}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                >
+                  View all
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {groupedTimeline.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                  <Search className="w-6 h-6 text-gray-400" />
+                </div>
+                <h3 className="text-sm font-medium text-gray-900 mb-1">No activity yet</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Paste a job posting to start finding contacts
+                </p>
+                <button
+                  onClick={() => onNavigate("search")}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center gap-2 text-sm font-medium"
+                >
+                  <Search className="w-4 h-4" />
+                  Start New Search
+                </button>
+              </div>
+            ) : (
+              <div className="max-h-[420px] overflow-y-auto">
+                <div className="px-5 py-3 space-y-4">
+                  {groupedTimeline.map((group) => (
+                    <div key={group.label}>
+                      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                        {group.label}
+                      </div>
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const dotColor =
+                            item.type === "submission"
+                              ? "bg-indigo-500"
+                              : item.type === "contact"
+                              ? "bg-purple-500"
+                              : "bg-blue-500";
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-start gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex-shrink-0 mt-1.5">
+                                <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-800 font-medium leading-snug truncate">
+                                  {item.text}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                  {item.subtext}
+                                </p>
+                              </div>
+                              <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5 tabular-nums">
+                                {formatTime(item.date)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          {groupedTimeline.length === 0 ? (
-            <div className="px-5 py-10 text-center">
-              <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No activity yet</h3>
-              <p className="text-xs text-gray-500 mb-4">
-                Paste a job posting to start finding contacts
-              </p>
-              <button
-                onClick={() => onNavigate("search")}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center gap-2 text-sm"
-              >
-                <Search className="w-4 h-4" />
-                Start New Search
-              </button>
+          {/* Active Jobs (takes 2/5 on desktop) */}
+          <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-gray-900">Active Jobs</h2>
+              {submissions.length > 5 && (
+                <button
+                  onClick={() => onNavigate("job-history")}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                >
+                  View all
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
             </div>
-          ) : (
-            <div className="max-h-[400px] overflow-y-auto">
-              <div className="px-5 py-3 space-y-4">
-                {groupedTimeline.map((group) => (
-                  <div key={group.label}>
-                    <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-2">
-                      {group.label}
-                    </div>
-                    <div className="space-y-0">
-                      {group.items.map((item) => {
-                        const dotColor =
-                          item.type === "submission"
-                            ? "bg-indigo-500"
-                            : item.type === "contact"
-                            ? "bg-purple-500"
-                            : "bg-blue-500";
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-start gap-3 py-1.5 px-2 -mx-2 rounded hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex-shrink-0 mt-1.5">
-                              <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+
+            {activeJobs.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center px-5 py-12">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <Briefcase className="w-6 h-6 text-gray-400" />
+                </div>
+                <h3 className="text-sm font-medium text-gray-900 mb-1">No active jobs</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Search for a job to get started
+                </p>
+                <button
+                  onClick={() => onNavigate("search")}
+                  className="text-sm font-medium text-purple-600 hover:text-purple-700 inline-flex items-center gap-1"
+                >
+                  New search
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col">
+                <div className="divide-y divide-gray-100 flex-1 max-h-[360px] overflow-y-auto">
+                  {activeJobs.map((job: any) => {
+                    const contactCount = job.recruiters?.length ?? 0;
+                    const mostRecentStatus = job.recruiters?.[0]?.contactStatus || "not_contacted";
+                    return (
+                      <button
+                        key={job.id}
+                        onClick={() => onNavigate("job-details", { submissionId: job.id })}
+                        className="w-full px-5 py-4 hover:bg-gray-50 transition-colors text-left group"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-500">
+                              {(job.companyName || "?")[0].toUpperCase()}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 leading-snug truncate">
-                                {item.text}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {job.jobTitle || "Untitled Position"}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {job.companyName || "Unknown Company"}
+                                {(job.submittedAt || job.createdAt) && (
+                                  <span className="text-gray-400"> · {timeAgo(job.submittedAt || job.createdAt)}</span>
+                                )}
                               </p>
                             </div>
-                            <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">
-                              {formatTime(item.date)}
-                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <StatusBadge status={mostRecentStatus} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {submissions.filter((s: any) => !s.isArchived).length > 5 && (
+                  <div className="px-5 py-3 border-t border-gray-100">
+                    <button
+                      onClick={() => onNavigate("job-history")}
+                      className="w-full text-center text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                    >
+                      Explore all active roles
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Active Jobs (takes 2/5 on desktop) */}
-        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Active Jobs</h2>
-            {submissions.length > 5 && (
-              <button
-                onClick={() => onNavigate("job-history")}
-                className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
-              >
-                View all
-                <ArrowRight className="w-3 h-3" />
-              </button>
             )}
           </div>
-
-          {activeJobs.length === 0 ? (
-            <div className="px-5 py-10 text-center">
-              <Briefcase className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No active jobs</h3>
-              <p className="text-xs text-gray-500 mb-4">
-                Search for a job to get started
-              </p>
-              <button
-                onClick={() => onNavigate("search")}
-                className="text-sm font-medium text-purple-600 hover:text-purple-700 inline-flex items-center gap-1"
-              >
-                New search
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
-              {activeJobs.map((job: any) => {
-                const contactCount = job.recruiters?.length ?? 0;
-                const mostRecentStatus = job.recruiters?.[0]?.contactStatus || "not_contacted";
-                return (
-                  <button
-                    key={job.id}
-                    onClick={() => onNavigate("job-details", { submissionId: job.id })}
-                    className="w-full px-5 py-3.5 hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {job.jobTitle || "Untitled Position"}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">
-                          {job.companyName || "Unknown Company"}
-                          {(job.submittedAt || job.createdAt) && (
-                            <span> &middot; {timeAgo(job.submittedAt || job.createdAt)}</span>
-                          )}
-                        </p>
-                      </div>
-                      <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">
-                        {contactCount} contact{contactCount !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <StatusBadge status={mostRecentStatus} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
     </div>
