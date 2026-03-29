@@ -26,11 +26,57 @@ export const PLAN_PRICES: Record<string, number> = {
 export const FREE_TIER_DAYS = 21;
 export const GRACE_PERIOD_DAYS = 3;
 
-export const STRIPE_PRICE_IDS = {
-  starter: process.env.STRIPE_STARTER_PRICE_ID || "",
-  pro: process.env.STRIPE_PRO_PRICE_ID || "",
-  max: process.env.STRIPE_MAX_PRICE_ID || "",
-} as const;
+// ── Billing Periods ──────────────────────────────────────────────────
+export type BillingPeriod = "monthly" | "3month" | "6month" | "annual";
+
+export const BILLING_PERIODS: {
+  id: BillingPeriod;
+  label: string;
+  months: number;
+  discount: number;
+  tag: string | null;
+}[] = [
+  { id: "monthly", label: "Monthly", months: 1, discount: 0, tag: null },
+  { id: "3month", label: "3-Month", months: 3, discount: 0.15, tag: "-15%" },
+  { id: "6month", label: "6-Month", months: 6, discount: 0.25, tag: "-25%" },
+  { id: "annual", label: "Annual", months: 12, discount: 0.25, tag: "-25%" },
+];
+
+export function getPlanPrice(
+  plan: string,
+  period: BillingPeriod
+): { perMonth: number; total: number; savings: number } {
+  const base = PLAN_PRICES[plan] || 0;
+  const periodInfo = BILLING_PERIODS.find((b) => b.id === period)!;
+  const discountedMonthly = Math.round(base * (1 - periodInfo.discount));
+  const total = discountedMonthly * periodInfo.months;
+  const savings = (base * periodInfo.months) - total;
+  return { perMonth: discountedMonthly, total, savings };
+}
+
+// ── Stripe Price IDs ─────────────────────────────────────────────────
+// Each plan has a price ID per billing period.
+// These must be created in Stripe Dashboard and set as env vars.
+export const STRIPE_PRICE_IDS: Record<string, Record<BillingPeriod, string>> = {
+  starter: {
+    monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || "",
+    "3month": process.env.STRIPE_STARTER_3MONTH_PRICE_ID || "",
+    "6month": process.env.STRIPE_STARTER_6MONTH_PRICE_ID || "",
+    annual: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID || "",
+  },
+  pro: {
+    monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || process.env.STRIPE_PRO_PRICE_ID || "",
+    "3month": process.env.STRIPE_PRO_3MONTH_PRICE_ID || "",
+    "6month": process.env.STRIPE_PRO_6MONTH_PRICE_ID || "",
+    annual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "",
+  },
+  max: {
+    monthly: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || process.env.STRIPE_MAX_PRICE_ID || "",
+    "3month": process.env.STRIPE_MAX_3MONTH_PRICE_ID || "",
+    "6month": process.env.STRIPE_MAX_6MONTH_PRICE_ID || "",
+    annual: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || "",
+  },
+};
 
 export const PLAN_FEATURES = {
   free: {

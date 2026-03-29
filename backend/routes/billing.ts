@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { supabaseAdmin } from "../lib/supabaseClient";
-import { STRIPE_PRICE_IDS, PLAN_CREDITS, type PlanType } from "../constants/credits";
+import { STRIPE_PRICE_IDS, PLAN_CREDITS, BILLING_PERIODS, type PlanType, type BillingPeriod } from "../constants/credits";
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
 import { nanoid } from "nanoid";
 
@@ -75,15 +75,23 @@ router.get("/transactions", requireAuth, async (req: Request, res: Response) => 
 router.post("/create-checkout-session", requireAuth, requireStripe, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { planType } = req.body as { planType: PlanType };
+    const { planType, billingPeriod = "monthly" } = req.body as {
+      planType: PlanType;
+      billingPeriod?: BillingPeriod;
+    };
 
     if (!planType || !["starter", "pro", "max"].includes(planType)) {
       return res.status(400).json({ error: "Invalid plan type" });
     }
 
-    const priceId = STRIPE_PRICE_IDS[planType as keyof typeof STRIPE_PRICE_IDS];
+    const validPeriods: BillingPeriod[] = ["monthly", "3month", "6month", "annual"];
+    if (!validPeriods.includes(billingPeriod)) {
+      return res.status(400).json({ error: "Invalid billing period" });
+    }
+
+    const priceId = STRIPE_PRICE_IDS[planType as keyof typeof STRIPE_PRICE_IDS]?.[billingPeriod];
     if (!priceId) {
-      return res.status(400).json({ error: "Stripe price not configured for this plan" });
+      return res.status(400).json({ error: "Stripe price not configured for this plan/period" });
     }
 
     // Get or create Stripe customer
@@ -121,7 +129,7 @@ router.post("/create-checkout-session", requireAuth, requireStripe, async (req: 
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/billing?upgraded=true`,
       cancel_url: `${baseUrl}/billing?canceled=true`,
-      metadata: { user_id: userId, plan_type: planType },
+      metadata: { user_id: userId, plan_type: planType, billing_period: billingPeriod },
     });
 
     return res.json({ checkoutUrl: session.url });
