@@ -34,8 +34,8 @@ const BILLING_PERIODS: {
 }[] = [
   { id: "monthly", label: "Monthly", months: 1, discount: 0, tag: null },
   { id: "3month", label: "3-Month", months: 3, discount: 0.10, tag: "-10%" },
-  { id: "6month", label: "6-Month", months: 6, discount: 0.20, tag: "-20%" },
-  { id: "annual", label: "Annual", months: 12, discount: 0.30, tag: "-30%" },
+  { id: "6month", label: "6-Month", months: 6, discount: 0.15, tag: "-15%" },
+  { id: "annual", label: "Annual", months: 12, discount: 0.20, tag: "-20%" },
 ];
 
 function getPlanPrice(baseMo: number, period: BillingPeriod) {
