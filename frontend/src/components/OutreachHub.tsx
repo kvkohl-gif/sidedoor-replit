@@ -215,8 +215,8 @@ function pillStyle(active: boolean): React.CSSProperties {
 // =====================================================================
 function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
   const [period, setPeriod] = useState("7d");
-  const [replyFilter, setReplyFilter] = useState("");
-  const [replyPeriod, setReplyPeriod] = useState("7d");
+  const [emailFilter, setEmailFilter] = useState("");
+  const [emailCategory, setEmailCategory] = useState<"all" | "draft" | "sent" | "replied" | "follow_up">("all");
   const { ref: containerRef, width } = useContainerWidth();
   const narrow = width < 700;
 
@@ -228,6 +228,24 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
     },
   });
 
+  // Fetch ALL contacts for the recent emails table
+  const { data: allContacts = [] } = useQuery<any[]>({
+    queryKey: ["/api/outreach/contacts", "overview-all"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/outreach/contacts?limit=100");
+      return res.json();
+    },
+  });
+
+  // Also fetch drafts (contacts with generated messages but not contacted)
+  const { data: draftContacts = [] } = useQuery<any[]>({
+    queryKey: ["/api/contacts/all", "overview-drafts"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/contacts/all");
+      return res.json();
+    },
+  });
+
   const periodOptions = [
     { key: "today", label: "Today" },
     { key: "7d", label: "Last 7 days" },
@@ -235,39 +253,76 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
     { key: "all", label: "All Time" },
   ];
 
-  const replyPeriodOptions = [
-    { key: "7d", label: "Last 7 days" },
-    { key: "30d", label: "Last 30 days" },
-    { key: "month", label: "This month" },
+  const categoryOptions = [
+    { key: "all" as const, label: "All" },
+    { key: "draft" as const, label: "Drafts" },
+    { key: "sent" as const, label: "Sent" },
+    { key: "replied" as const, label: "Replies" },
+    { key: "follow_up" as const, label: "Follow-ups" },
   ];
 
-  // Filter recent replies client-side
-  const filteredReplies = useMemo(() => {
-    const replies: any[] = metrics?.recentReplies ?? [];
-    let filtered = replies;
+  // Classify contacts into categories and merge
+  const recentEmails = useMemo(() => {
+    const sentStatuses = new Set(["email_sent", "linkedin_sent", "awaiting_reply"]);
+    const followUpStatuses = new Set(["follow_up_needed"]);
+    const repliedStatuses = new Set(["replied", "interview_scheduled"]);
 
-    // Period filter
-    if (replyPeriod === "7d") {
-      filtered = filtered.filter((r: any) => r.date && isWithinDays(r.date, 7));
-    } else if (replyPeriod === "30d") {
-      filtered = filtered.filter((r: any) => r.date && isWithinDays(r.date, 30));
-    } else if (replyPeriod === "month") {
-      filtered = filtered.filter((r: any) => r.date && isWithinMonth(r.date));
+    // From outreach contacts (already contacted)
+    const contacted = allContacts.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      subject: c.emailSubject || "—",
+      company: c.companyName,
+      date: c.lastContactedAt || c.createdAt,
+      category: repliedStatuses.has(c.contactStatus)
+        ? "replied"
+        : followUpStatuses.has(c.contactStatus)
+          ? "follow_up"
+          : sentStatuses.has(c.contactStatus)
+            ? "sent"
+            : "sent",
+      status: c.contactStatus,
+    }));
+
+    // From all contacts — just drafts (have generated message, not contacted)
+    const drafts = draftContacts
+      .filter((c: any) => c.generatedEmailMessage && c.contactStatus === "not_contacted")
+      .map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        subject: c.emailSubject || "Draft",
+        company: c.companyName,
+        date: c.createdAt,
+        category: "draft" as const,
+        status: "draft",
+      }));
+
+    let combined = [...contacted, ...drafts];
+
+    // Sort by date descending
+    combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Filter by category
+    if (emailCategory !== "all") {
+      combined = combined.filter((c) => c.category === emailCategory);
     }
 
     // Search filter
-    if (replyFilter.trim()) {
-      const q = replyFilter.toLowerCase();
-      filtered = filtered.filter(
-        (r: any) =>
-          (r.name || "").toLowerCase().includes(q) ||
-          (r.email || "").toLowerCase().includes(q) ||
-          (r.subject || "").toLowerCase().includes(q)
+    if (emailFilter.trim()) {
+      const q = emailFilter.toLowerCase();
+      combined = combined.filter(
+        (c) =>
+          (c.name || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
+          (c.subject || "").toLowerCase().includes(q) ||
+          (c.company || "").toLowerCase().includes(q)
       );
     }
 
-    return filtered;
-  }, [metrics, replyFilter, replyPeriod]);
+    return combined.slice(0, 25);
+  }, [allContacts, draftContacts, emailFilter, emailCategory]);
 
   if (isLoading) {
     return (
@@ -419,7 +474,7 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
         </div>
       </div>
 
-      {/* Recent Replies section */}
+      {/* Recent Emails section */}
       <div
         style={{
           background: "#ffffff",
@@ -440,7 +495,7 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
           }}
         >
           <h3 style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>
-            Recent replies
+            Recent emails
           </h3>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {/* Search input */}
@@ -458,9 +513,9 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
               />
               <input
                 type="text"
-                placeholder="Search replies..."
-                value={replyFilter}
-                onChange={(e) => setReplyFilter(e.target.value)}
+                placeholder="Search emails..."
+                value={emailFilter}
+                onChange={(e) => setEmailFilter(e.target.value)}
                 style={{
                   padding: "6px 10px 6px 30px",
                   fontSize: 13,
@@ -472,12 +527,12 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
                 }}
               />
             </div>
-            {/* Period pills */}
-            {replyPeriodOptions.map((opt) => (
+            {/* Category pills */}
+            {categoryOptions.map((opt) => (
               <button
                 key={opt.key}
-                onClick={() => setReplyPeriod(opt.key)}
-                style={pillStyle(replyPeriod === opt.key)}
+                onClick={() => setEmailCategory(opt.key)}
+                style={pillStyle(emailCategory === opt.key)}
               >
                 {opt.label}
               </button>
@@ -485,10 +540,10 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
           </div>
         </div>
 
-        {filteredReplies.length === 0 ? (
+        {recentEmails.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center" }}>
-            <MessageSquare style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
-            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No replies yet for this period</p>
+            <Mail style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
+            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No emails yet</p>
           </div>
         ) : (
           <div>
@@ -496,7 +551,7 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "40px 1fr 1.2fr 1.5fr 120px",
+                gridTemplateColumns: "36px 1fr 1fr 90px 120px 100px",
                 padding: "8px 20px",
                 borderBottom: "1px solid #f3f4f6",
                 fontSize: 11,
@@ -507,22 +562,31 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
               }}
             >
               <span />
-              <span>Name</span>
-              <span>Email</span>
+              <span>Contact</span>
               <span>Subject</span>
+              <span>Category</span>
+              <span>Company</span>
               <span>Date</span>
             </div>
             {/* Table rows */}
-            {filteredReplies.map((reply: any, i: number) => {
-              const initial = (reply.name || "?")[0].toUpperCase();
+            {recentEmails.map((item: any, i: number) => {
+              const initial = (item.name || "?")[0].toUpperCase();
+              const catConfig: Record<string, { bg: string; text: string; label: string }> = {
+                draft: { bg: "#f3f4f6", text: "#6b7280", label: "Draft" },
+                sent: { bg: "#eff6ff", text: "#2563eb", label: "Sent" },
+                replied: { bg: "#f0fdf4", text: "#16a34a", label: "Replied" },
+                follow_up: { bg: "#fff7ed", text: "#ea580c", label: "Follow-up" },
+              };
+              const cat = catConfig[item.category] || catConfig.draft;
+
               return (
                 <div
-                  key={reply.contactId || i}
-                  onClick={() => onNavigate("contact-detail", { contactId: reply.contactId })}
+                  key={`${item.id}-${item.category}-${i}`}
+                  onClick={() => onNavigate("contact-detail", { contactId: item.id })}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "40px 1fr 1.2fr 1.5fr 120px",
-                    padding: "12px 20px",
+                    gridTemplateColumns: "36px 1fr 1fr 90px 120px 100px",
+                    padding: "10px 20px",
                     borderBottom: "1px solid #f9fafb",
                     alignItems: "center",
                     cursor: "pointer",
@@ -531,34 +595,53 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
                   onMouseEnter={(e) => { e.currentTarget.style.background = "#fafbfc"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  {/* Avatar */}
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 26,
+                      height: 26,
                       borderRadius: "50%",
                       background: "#ede9fe",
                       color: "#7c3aed",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 600,
                     }}
                   >
                     {initial}
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {reply.name}
-                  </span>
+                  <div style={{ overflow: "hidden" }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.email || "—"}
+                    </div>
+                  </div>
                   <span style={{ fontSize: 13, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {reply.email}
+                    {item.subject || "—"}
                   </span>
-                  <span style={{ fontSize: 13, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {reply.subject || "—"}
+                  <span
+                    style={{
+                      display: "inline-block",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "3px 8px",
+                      borderRadius: 12,
+                      background: cat.bg,
+                      color: cat.text,
+                      textAlign: "center",
+                      width: "fit-content",
+                    }}
+                  >
+                    {cat.label}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.company || "—"}
                   </span>
                   <span style={{ fontSize: 12, color: "#9ca3af" }}>
-                    {reply.date ? formatDate(reply.date) : "—"}
+                    {item.date ? formatDate(item.date) : "—"}
                   </span>
                 </div>
               );
@@ -1541,14 +1624,209 @@ function FollowUpsTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate
 }
 
 // =====================================================================
+// =====================================================================
+// DraftsTab — contacts with generated messages not yet sent
+// =====================================================================
+function DraftsTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
+  const [search, setSearch] = useState("");
+
+  const { data: allContacts = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/contacts/all", "drafts-tab"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/contacts/all");
+      return res.json();
+    },
+  });
+
+  const drafts = useMemo(() => {
+    let filtered = allContacts.filter(
+      (c: any) => c.generatedEmailMessage && c.contactStatus === "not_contacted"
+    );
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (c: any) =>
+          (c.name || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
+          (c.companyName || "").toLowerCase().includes(q)
+      );
+    }
+    return filtered.sort(
+      (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [allContacts, search]);
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+        <Loader2 style={{ width: 28, height: 28, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Search */}
+      <div style={{ marginBottom: 16, position: "relative", maxWidth: 320 }}>
+        <Search style={{ width: 14, height: 14, color: "#9ca3af", position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+        <input
+          type="text"
+          placeholder="Search drafts..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ padding: "8px 12px 8px 34px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 8, outline: "none", width: "100%", background: "#fff" }}
+        />
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+        {drafts.length === 0 ? (
+          <div style={{ padding: 48, textAlign: "center" }}>
+            <FileText style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
+            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No drafts yet. Generate a message from a contact to see it here.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px 100px", padding: "8px 20px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.3 }}>
+              <span>Contact</span>
+              <span>Company</span>
+              <span>Job</span>
+              <span>Created</span>
+            </div>
+            {drafts.map((c: any) => (
+              <div
+                key={c.id}
+                onClick={() => onNavigate("contact-detail", { contactId: c.id })}
+                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px 100px", padding: "12px 20px", borderBottom: "1px solid #f9fafb", alignItems: "center", cursor: "pointer", transition: "background 0.1s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fafbfc"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{c.title || "—"}</div>
+                </div>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>{c.companyName || "—"}</span>
+                <span style={{ fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.jobTitle || "—"}</span>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{formatDate(c.createdAt)}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 12 }}>
+        {drafts.length} draft{drafts.length !== 1 ? "s" : ""} ready to send
+      </p>
+    </div>
+  );
+}
+
+// =====================================================================
+// RepliesTab — contacts that have replied
+// =====================================================================
+function RepliesTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
+  const [search, setSearch] = useState("");
+
+  const { data: contacts = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/outreach/contacts", "replies-tab"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/outreach/contacts?status=replied,interview_scheduled&limit=100");
+      return res.json();
+    },
+  });
+
+  const replies = useMemo(() => {
+    let filtered = contacts;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (c: any) =>
+          (c.name || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
+          (c.companyName || "").toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [contacts, search]);
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+        <Loader2 style={{ width: 28, height: 28, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16, position: "relative", maxWidth: 320 }}>
+        <Search style={{ width: 14, height: 14, color: "#9ca3af", position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+        <input
+          type="text"
+          placeholder="Search replies..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ padding: "8px 12px 8px 34px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 8, outline: "none", width: "100%", background: "#fff" }}
+        />
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+        {replies.length === 0 ? (
+          <div style={{ padding: 48, textAlign: "center" }}>
+            <MessageSquare style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
+            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No replies yet. Keep sending — they'll come!</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px 120px 100px", padding: "8px 20px", borderBottom: "1px solid #f3f4f6", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.3 }}>
+              <span>Contact</span>
+              <span>Company</span>
+              <span>Status</span>
+              <span>Tags</span>
+              <span>Date</span>
+            </div>
+            {replies.map((c: any) => (
+              <div
+                key={c.id}
+                onClick={() => onNavigate("contact-detail", { contactId: c.id })}
+                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px 120px 100px", padding: "12px 20px", borderBottom: "1px solid #f9fafb", alignItems: "center", cursor: "pointer", transition: "background 0.1s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fafbfc"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{c.email || "—"}</div>
+                </div>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>{c.companyName || "—"}</span>
+                <StatusBadge status={c.contactStatus} />
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {(c.tags || []).slice(0, 2).map((tag: string) => (
+                    <TagPill key={tag} tag={tag} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{c.lastContactedAt ? formatDate(c.lastContactedAt) : "—"}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 12 }}>
+        {replies.length} repl{replies.length !== 1 ? "ies" : "y"}
+      </p>
+    </div>
+  );
+}
+
 // OutreachHub (main export)
 // =====================================================================
 export function OutreachHub({ onNavigate }: OutreachHubProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "sent" | "followups">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "drafts" | "sent" | "replies" | "followups">("overview");
 
   const tabs = [
     { key: "overview" as const, label: "Overview" },
+    { key: "drafts" as const, label: "Drafts" },
     { key: "sent" as const, label: "Sent Messages" },
+    { key: "replies" as const, label: "Replies" },
     { key: "followups" as const, label: "Follow-ups" },
   ];
 
@@ -1606,7 +1884,9 @@ export function OutreachHub({ onNavigate }: OutreachHubProps) {
 
         {/* Tab content */}
         {activeTab === "overview" && <OverviewTab onNavigate={onNavigate} />}
+        {activeTab === "drafts" && <DraftsTab onNavigate={onNavigate} />}
         {activeTab === "sent" && <SentMessagesTab onNavigate={onNavigate} />}
+        {activeTab === "replies" && <RepliesTab onNavigate={onNavigate} />}
         {activeTab === "followups" && <FollowUpsTab onNavigate={onNavigate} />}
       </div>
 
