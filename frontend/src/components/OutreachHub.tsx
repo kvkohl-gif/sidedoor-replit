@@ -1,279 +1,1622 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import {
-  MessageCircle,
-  Users,
-  Clock,
-  Send,
-  Mail,
-  Linkedin,
-  CheckCircle2,
-  Calendar,
-  ChevronRight,
-  AlertCircle,
-  Loader2,
-  ArrowRight,
+  FileText, Send, Eye, MessageSquare, TrendingUp, TrendingDown,
+  Search, Filter, Calendar, Tag, ChevronDown, X, Check,
+  Clock, AlertCircle, ArrowRight, Mail, Loader2, Plus,
 } from "lucide-react";
 
 interface OutreachHubProps {
   onNavigate: (page: string, data?: any) => void;
 }
 
-// Pipeline stage definitions
-const PIPELINE_STAGES = [
-  { key: "not_contacted", label: "Not Contacted", icon: Users, color: "#94A3B8" },
-  { key: "reached_out", label: "Reached Out", icon: Send, color: "#6B46C1" },
-  { key: "awaiting_reply", label: "Awaiting Reply", icon: Clock, color: "#D97706" },
-  { key: "replied", label: "Replied", icon: CheckCircle2, color: "#059669" },
-  { key: "interview", label: "Interview", icon: Calendar, color: "#10B981" },
-] as const;
+// ── Predefined tags ──────────────────────────────────────────────────
+const PREDEFINED_TAGS = [
+  "Hot Lead",
+  "High Priority",
+  "Call Scheduled",
+  "Needs Revision",
+  "Referral",
+  "Cold Outreach",
+];
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
+const TAG_COLORS: Record<string, { bg: string; text: string }> = {
+  "Hot Lead": { bg: "#fef2f2", text: "#dc2626" },
+  "High Priority": { bg: "#fff7ed", text: "#ea580c" },
+  "Call Scheduled": { bg: "#eff6ff", text: "#2563eb" },
+  "Needs Revision": { bg: "#fefce8", text: "#ca8a04" },
+  "Referral": { bg: "#f0fdf4", text: "#16a34a" },
+  "Cold Outreach": { bg: "#f8fafc", text: "#64748b" },
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function daysSince(dateStr: string): number {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
 }
 
-export function OutreachHub({ onNavigate }: OutreachHubProps) {
-  const queryClient = useQueryClient();
+function isWithinDays(dateStr: string, days: number): boolean {
+  return Date.now() - new Date(dateStr).getTime() <= days * 86_400_000;
+}
 
-  // Fetch pipeline counts
-  const { data: pipeline, isLoading: pipelineLoading } = useQuery<Record<string, number>>({
-    queryKey: ["/api/outreach/pipeline"],
-  });
+function isWithinMonth(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
 
-  // Fetch follow-ups due
-  const { data: followUpsData, isLoading: followUpsLoading } = useQuery<{ contacts: any[] }>({
-    queryKey: ["/api/outreach/follow-ups"],
-  });
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return (
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+  );
+}
 
-  // Fetch all contacts for the contact list
-  const { data: allContacts = [], isLoading: contactsLoading } = useQuery<any[]>({
-    queryKey: ["/api/contacts/all"],
-  });
+// ── StatusBadge ──────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const config: Record<string, { bg: string; text: string; icon: any; label: string }> = {
+    email_sent: { bg: "#eff6ff", text: "#2563eb", icon: Send, label: "Sent" },
+    linkedin_sent: { bg: "#eff6ff", text: "#2563eb", icon: Send, label: "LinkedIn Sent" },
+    awaiting_reply: { bg: "#fffbeb", text: "#d97706", icon: Clock, label: "Awaiting Reply" },
+    follow_up_needed: { bg: "#fff7ed", text: "#ea580c", icon: AlertCircle, label: "Follow-up" },
+    replied: { bg: "#f0fdf4", text: "#16a34a", icon: MessageSquare, label: "Replied" },
+    interview_scheduled: { bg: "#f0fdf4", text: "#059669", icon: Check, label: "Interview" },
+    not_contacted: { bg: "#f3f4f6", text: "#6b7280", icon: Mail, label: "Not Contacted" },
+  };
+  const c = config[status] || config.not_contacted;
+  const Icon = c.icon;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 12,
+        fontWeight: 500,
+        padding: "3px 10px",
+        borderRadius: 20,
+        background: c.bg,
+        color: c.text,
+      }}
+    >
+      <Icon style={{ width: 12, height: 12 }} />
+      {c.label}
+    </span>
+  );
+}
 
-  const isLoading = pipelineLoading || followUpsLoading || contactsLoading;
+// ── DeltaBadge ───────────────────────────────────────────────────────
+function DeltaBadge({ value }: { value: number }) {
+  if (value === 0) return null;
+  const positive = value > 0;
+  const Icon = positive ? TrendingUp : TrendingDown;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+        fontSize: 11,
+        fontWeight: 600,
+        color: positive ? "#16a34a" : "#dc2626",
+        background: positive ? "#f0fdf4" : "#fef2f2",
+        padding: "2px 6px",
+        borderRadius: 8,
+      }}
+    >
+      <Icon style={{ width: 10, height: 10 }} />
+      {positive ? "+" : ""}
+      {value}
+    </span>
+  );
+}
 
-  // Log activity mutation
-  const logActivityMutation = useMutation({
-    mutationFn: async (data: { contactId: number; activityType: string; channel?: string; notes?: string }) => {
-      const res = await apiRequest("POST", "/api/outreach/activities", data);
+// ── TagPill ──────────────────────────────────────────────────────────
+function TagPill({ tag }: { tag: string }) {
+  const colors = TAG_COLORS[tag] || { bg: "#f3f4f6", text: "#374151" };
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        fontSize: 11,
+        fontWeight: 500,
+        padding: "2px 8px",
+        borderRadius: 10,
+        background: colors.bg,
+        color: colors.text,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {tag}
+    </span>
+  );
+}
+
+// ── Custom dropdown hook (close on outside click) ────────────────────
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return { open, setOpen, ref };
+}
+
+// ── useContainerWidth (ResizeObserver) ───────────────────────────────
+function useContainerWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(1200);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, width };
+}
+
+// ── Tab button style helper ──────────────────────────────────────────
+function tabStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "8px 16px",
+    fontSize: 14,
+    fontWeight: active ? 600 : 400,
+    color: active ? "#6B46C1" : "#6b7280",
+    background: active ? "#f5f3ff" : "transparent",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  };
+}
+
+// ── Pill button style helper ─────────────────────────────────────────
+function pillStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "5px 12px",
+    fontSize: 12,
+    fontWeight: 500,
+    color: active ? "#6B46C1" : "#6b7280",
+    background: active ? "#f5f3ff" : "#ffffff",
+    border: `1px solid ${active ? "#6B46C1" : "#e5e7eb"}`,
+    borderRadius: 20,
+    cursor: "pointer",
+    transition: "all 0.15s",
+    whiteSpace: "nowrap" as const,
+  };
+}
+
+// =====================================================================
+// OverviewTab
+// =====================================================================
+function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
+  const [period, setPeriod] = useState("7d");
+  const [replyFilter, setReplyFilter] = useState("");
+  const [replyPeriod, setReplyPeriod] = useState("7d");
+  const { ref: containerRef, width } = useContainerWidth();
+  const narrow = width < 700;
+
+  const { data: metrics, isLoading } = useQuery<any>({
+    queryKey: ["/api/outreach/metrics", period],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/outreach/metrics?period=${period}`);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/outreach/pipeline"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/outreach/follow-ups"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts/all"] });
-    },
   });
 
-  const followUps = followUpsData?.contacts ?? [];
+  const periodOptions = [
+    { key: "today", label: "Today" },
+    { key: "7d", label: "Last 7 days" },
+    { key: "month", label: "This month" },
+    { key: "all", label: "All Time" },
+  ];
 
-  // Contacts grouped by status for the main list
-  const contactsByStatus = allContacts.reduce((acc: Record<string, any[]>, contact: any) => {
-    const status = contact.contactStatus || "not_contacted";
-    let bucket = "not_contacted";
-    if (status === "email_sent" || status === "linkedin_sent") bucket = "reached_out";
-    else if (status === "awaiting_reply" || status === "follow_up_needed") bucket = "awaiting_reply";
-    else if (status === "replied") bucket = "replied";
-    else if (status === "interview_scheduled") bucket = "interview";
-    if (!acc[bucket]) acc[bucket] = [];
-    acc[bucket].push(contact);
-    return acc;
-  }, {});
+  const replyPeriodOptions = [
+    { key: "7d", label: "Last 7 days" },
+    { key: "30d", label: "Last 30 days" },
+    { key: "month", label: "This month" },
+  ];
+
+  // Filter recent replies client-side
+  const filteredReplies = useMemo(() => {
+    const replies: any[] = metrics?.recentReplies ?? [];
+    let filtered = replies;
+
+    // Period filter
+    if (replyPeriod === "7d") {
+      filtered = filtered.filter((r: any) => r.date && isWithinDays(r.date, 7));
+    } else if (replyPeriod === "30d") {
+      filtered = filtered.filter((r: any) => r.date && isWithinDays(r.date, 30));
+    } else if (replyPeriod === "month") {
+      filtered = filtered.filter((r: any) => r.date && isWithinMonth(r.date));
+    }
+
+    // Search filter
+    if (replyFilter.trim()) {
+      const q = replyFilter.toLowerCase();
+      filtered = filtered.filter(
+        (r: any) =>
+          (r.name || "").toLowerCase().includes(q) ||
+          (r.email || "").toLowerCase().includes(q) ||
+          (r.subject || "").toLowerCase().includes(q)
+      );
+    }
+
+    return filtered;
+  }, [metrics, replyFilter, replyPeriod]);
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 lg:p-10 flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-[#6B46C1] animate-spin mx-auto mb-4" />
-          <p className="text-[#64748B]">Loading outreach hub...</p>
+      <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+        <Loader2 style={{ width: 28, height: 28, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  const drafted = metrics?.drafted ?? 0;
+  const draftedDelta = metrics?.draftedDelta ?? 0;
+  const sent = metrics?.sent ?? 0;
+  const sentDelta = metrics?.sentDelta ?? 0;
+  const opened = metrics?.opened ?? 0;
+  const openedDelta = metrics?.openedDelta ?? 0;
+  const replied = metrics?.replied ?? 0;
+  const repliedDelta = metrics?.repliedDelta ?? 0;
+
+  return (
+    <div ref={containerRef}>
+      {/* Time filter pills */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {periodOptions.map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setPeriod(opt.key)}
+            style={pillStyle(period === opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Metric card groups */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: narrow ? "1fr" : "1fr 1fr",
+          gap: 16,
+          marginBottom: 32,
+        }}
+      >
+        {/* Initiation card */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 16px",
+              borderBottom: "1px solid #f3f4f6",
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              color: "#9ca3af",
+            }}
+          >
+            Initiation
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+            {/* Drafted */}
+            <div
+              style={{
+                padding: "20px 16px",
+                borderRight: "1px solid #f3f4f6",
+                position: "relative",
+              }}
+            >
+              <FileText style={{ width: 16, height: 16, color: "#9ca3af", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#111827", lineHeight: 1.1 }}>
+                {drafted}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Drafted</div>
+              <div style={{ position: "absolute", top: 12, right: 12 }}>
+                <DeltaBadge value={draftedDelta} />
+              </div>
+            </div>
+            {/* Sent */}
+            <div style={{ padding: "20px 16px", position: "relative" }}>
+              <Send style={{ width: 16, height: 16, color: "#9ca3af", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#111827", lineHeight: 1.1 }}>
+                {sent}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Sent</div>
+              <div style={{ position: "absolute", top: 12, right: 12 }}>
+                <DeltaBadge value={sentDelta} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Engagement card */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 16px",
+              borderBottom: "1px solid #f3f4f6",
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              color: "#9ca3af",
+            }}
+          >
+            Engagement
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+            {/* Opened */}
+            <div
+              style={{
+                padding: "20px 16px",
+                borderRight: "1px solid #f3f4f6",
+                position: "relative",
+              }}
+            >
+              <Eye style={{ width: 16, height: 16, color: "#9ca3af", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#111827", lineHeight: 1.1 }}>
+                {opened}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Opened</div>
+              <div style={{ position: "absolute", top: 12, right: 12 }}>
+                <DeltaBadge value={openedDelta} />
+              </div>
+            </div>
+            {/* Replied */}
+            <div style={{ padding: "20px 16px", position: "relative" }}>
+              <MessageSquare style={{ width: 16, height: 16, color: "#9ca3af", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#111827", lineHeight: 1.1 }}>
+                {replied}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Replied</div>
+              <div style={{ position: "absolute", top: 12, right: 12 }}>
+                <DeltaBadge value={repliedDelta} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Replies section */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid #f3f4f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>
+            Recent replies
+          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {/* Search input */}
+            <div style={{ position: "relative" }}>
+              <Search
+                style={{
+                  width: 14,
+                  height: 14,
+                  color: "#9ca3af",
+                  position: "absolute",
+                  left: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search replies..."
+                value={replyFilter}
+                onChange={(e) => setReplyFilter(e.target.value)}
+                style={{
+                  padding: "6px 10px 6px 30px",
+                  fontSize: 13,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  outline: "none",
+                  width: 180,
+                  background: "#f9fafb",
+                }}
+              />
+            </div>
+            {/* Period pills */}
+            {replyPeriodOptions.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setReplyPeriod(opt.key)}
+                style={pillStyle(replyPeriod === opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredReplies.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <MessageSquare style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
+            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>No replies yet for this period</p>
+          </div>
+        ) : (
+          <div>
+            {/* Table header */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "40px 1fr 1.2fr 1.5fr 120px",
+                padding: "8px 20px",
+                borderBottom: "1px solid #f3f4f6",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: 0.3,
+              }}
+            >
+              <span />
+              <span>Name</span>
+              <span>Email</span>
+              <span>Subject</span>
+              <span>Date</span>
+            </div>
+            {/* Table rows */}
+            {filteredReplies.map((reply: any, i: number) => {
+              const initial = (reply.name || "?")[0].toUpperCase();
+              return (
+                <div
+                  key={reply.contactId || i}
+                  onClick={() => onNavigate("contact-detail", { contactId: reply.contactId })}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "40px 1fr 1.2fr 1.5fr 120px",
+                    padding: "12px 20px",
+                    borderBottom: "1px solid #f9fafb",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#fafbfc"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  {/* Avatar */}
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      background: "#ede9fe",
+                      color: "#7c3aed",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {initial}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {reply.name}
+                  </span>
+                  <span style={{ fontSize: 13, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {reply.email}
+                  </span>
+                  <span style={{ fontSize: 13, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {reply.subject || "—"}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                    {reply.date ? formatDate(reply.date) : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// TagEditorPopover
+// =====================================================================
+function TagEditorPopover({
+  contactId,
+  currentTags,
+  anchorRect,
+  onClose,
+}: {
+  contactId: number;
+  currentTags: string[];
+  anchorRect: { top: number; left: number };
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [tags, setTags] = useState<string[]>(currentTags);
+  const [customTag, setCustomTag] = useState("");
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  const mutation = useMutation({
+    mutationFn: async (newTags: string[]) => {
+      const res = await apiRequest("PATCH", `/api/contacts/${contactId}`, { tags: newTags });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach/contacts"] });
+      onClose();
+    },
+  });
+
+  function toggleTag(tag: string) {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    setTags(next);
+    mutation.mutate(next);
+  }
+
+  function addCustom() {
+    const trimmed = customTag.trim();
+    if (!trimmed || tags.includes(trimmed)) return;
+    const next = [...tags, trimmed];
+    setTags(next);
+    setCustomTag("");
+    mutation.mutate(next);
+  }
+
+  return (
+    <div
+      ref={popoverRef}
+      style={{
+        position: "fixed",
+        top: anchorRect.top,
+        left: anchorRect.left,
+        zIndex: 9999,
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: 10,
+        boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+        padding: 12,
+        width: 220,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+        Tags
+      </div>
+      {PREDEFINED_TAGS.map((tag) => {
+        const checked = tags.includes(tag);
+        return (
+          <label
+            key={tag}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 0",
+              cursor: "pointer",
+              fontSize: 13,
+              color: "#374151",
+            }}
+          >
+            <div
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                border: `1px solid ${checked ? "#6B46C1" : "#d1d5db"}`,
+                background: checked ? "#6B46C1" : "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+              onClick={(e) => { e.preventDefault(); toggleTag(tag); }}
+            >
+              {checked && <Check style={{ width: 10, height: 10, color: "#ffffff" }} />}
+            </div>
+            <span onClick={(e) => { e.preventDefault(); toggleTag(tag); }}>{tag}</span>
+          </label>
+        );
+      })}
+      <div style={{ borderTop: "1px solid #f3f4f6", marginTop: 8, paddingTop: 8, display: "flex", gap: 4 }}>
+        <input
+          type="text"
+          placeholder="Custom tag..."
+          value={customTag}
+          onChange={(e) => setCustomTag(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") addCustom(); }}
+          style={{
+            flex: 1,
+            fontSize: 12,
+            padding: "5px 8px",
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={addCustom}
+          style={{
+            padding: "5px 8px",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "#ffffff",
+            background: "#6B46C1",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+          }}
+        >
+          <Plus style={{ width: 12, height: 12 }} />
+          Add
+        </button>
+      </div>
+      {mutation.isPending && (
+        <div style={{ textAlign: "center", marginTop: 6 }}>
+          <Loader2 style={{ width: 14, height: 14, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// MultiCheckboxDropdown
+// =====================================================================
+function MultiCheckboxDropdown({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+}) {
+  const { open, setOpen, ref } = useDropdown();
+
+  function toggle(value: string) {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  }
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "7px 12px",
+          fontSize: 13,
+          color: selected.length > 0 ? "#111827" : "#6b7280",
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 8,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+        {selected.length > 0 && (
+          <span
+            style={{
+              background: "#6B46C1",
+              color: "#ffffff",
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "1px 5px",
+              borderRadius: 8,
+              minWidth: 16,
+              textAlign: "center",
+            }}
+          >
+            {selected.length}
+          </span>
+        )}
+        <ChevronDown style={{ width: 14, height: 14, color: "#9ca3af" }} />
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            zIndex: 50,
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+            padding: 8,
+            minWidth: 180,
+          }}
+        >
+          {options.map((opt) => {
+            const checked = selected.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "5px 6px",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: "#374151",
+                  borderRadius: 6,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f9fafb"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 4,
+                    border: `1px solid ${checked ? "#6B46C1" : "#d1d5db"}`,
+                    background: checked ? "#6B46C1" : "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                  onClick={(e) => { e.preventDefault(); toggle(opt.value); }}
+                >
+                  {checked && <Check style={{ width: 10, height: 10, color: "#ffffff" }} />}
+                </div>
+                <span onClick={(e) => { e.preventDefault(); toggle(opt.value); }}>{opt.label}</span>
+              </label>
+            );
+          })}
+          {selected.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "5px 6px",
+                marginTop: 4,
+                fontSize: 12,
+                color: "#6B46C1",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// SentMessagesTab
+// =====================================================================
+function SentMessagesTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const companyDropdown = useDropdown();
+  const { ref: containerRef, width } = useContainerWidth();
+  const narrow = width < 700;
+
+  // Tag editor state
+  const [tagEditor, setTagEditor] = useState<{
+    contactId: number;
+    tags: string[];
+    rect: { top: number; left: number };
+  } | null>(null);
+
+  const { data: contacts = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/outreach/contacts"],
+  });
+
+  const { data: companies = [] } = useQuery<string[]>({
+    queryKey: ["/api/outreach/companies"],
+  });
+
+  const statusOptions = [
+    { value: "email_sent", label: "Email Sent" },
+    { value: "linkedin_sent", label: "LinkedIn Sent" },
+    { value: "awaiting_reply", label: "Awaiting Reply" },
+    { value: "follow_up_needed", label: "Follow-up Needed" },
+    { value: "replied", label: "Replied" },
+    { value: "interview_scheduled", label: "Interview Scheduled" },
+    { value: "not_contacted", label: "Not Contacted" },
+  ];
+
+  const tagOptions = PREDEFINED_TAGS.map((t) => ({ value: t, label: t }));
+
+  // Client-side filtering
+  const filtered = useMemo(() => {
+    let list = contacts;
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (c: any) =>
+          (c.name || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (dateFrom) {
+      const from = new Date(dateFrom).getTime();
+      list = list.filter((c: any) => c.lastContactedAt && new Date(c.lastContactedAt).getTime() >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo).getTime() + 86_400_000;
+      list = list.filter((c: any) => c.lastContactedAt && new Date(c.lastContactedAt).getTime() < to);
+    }
+
+    if (selectedCompany) {
+      list = list.filter((c: any) => (c.companyName || "") === selectedCompany);
+    }
+
+    if (selectedStatuses.length > 0) {
+      list = list.filter((c: any) => selectedStatuses.includes(c.contactStatus || "not_contacted"));
+    }
+
+    if (selectedTags.length > 0) {
+      list = list.filter((c: any) => {
+        const cTags: string[] = c.tags || [];
+        return selectedTags.some((t) => cTags.includes(t));
+      });
+    }
+
+    return list;
+  }, [contacts, search, dateFrom, dateTo, selectedCompany, selectedStatuses, selectedTags]);
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+        <Loader2 style={{ width: 28, height: 28, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef}>
+      {/* Filter bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        {/* Search */}
+        <div style={{ position: "relative", flex: narrow ? "1 1 100%" : "0 1 auto" }}>
+          <Search
+            style={{
+              width: 14,
+              height: 14,
+              color: "#9ca3af",
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Search name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              padding: "7px 10px 7px 30px",
+              fontSize: 13,
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              outline: "none",
+              width: narrow ? "100%" : 200,
+              background: "#f9fafb",
+            }}
+          />
+        </div>
+
+        {/* Date from */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Calendar style={{ width: 14, height: 14, color: "#9ca3af" }} />
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{
+              padding: "6px 8px",
+              fontSize: 12,
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              outline: "none",
+              color: dateFrom ? "#111827" : "#9ca3af",
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#9ca3af" }}>to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{
+              padding: "6px 8px",
+              fontSize: 12,
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              outline: "none",
+              color: dateTo ? "#111827" : "#9ca3af",
+            }}
+          />
+        </div>
+
+        {/* Company dropdown */}
+        <div ref={companyDropdown.ref} style={{ position: "relative" }}>
+          <button
+            onClick={() => companyDropdown.setOpen(!companyDropdown.open)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "7px 12px",
+              fontSize: 13,
+              color: selectedCompany ? "#111827" : "#6b7280",
+              background: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {selectedCompany || "Company"}
+            <ChevronDown style={{ width: 14, height: 14, color: "#9ca3af" }} />
+          </button>
+          {companyDropdown.open && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                left: 0,
+                zIndex: 50,
+                background: "#ffffff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+                padding: 4,
+                minWidth: 180,
+                maxHeight: 240,
+                overflowY: "auto",
+              }}
+            >
+              <div
+                onClick={() => { setSelectedCompany(""); companyDropdown.setOpen(false); }}
+                style={{
+                  padding: "6px 10px",
+                  fontSize: 13,
+                  color: "#6b7280",
+                  cursor: "pointer",
+                  borderRadius: 6,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f9fafb"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                All companies
+              </div>
+              {(companies as string[]).map((c) => (
+                <div
+                  key={c}
+                  onClick={() => { setSelectedCompany(c); companyDropdown.setOpen(false); }}
+                  style={{
+                    padding: "6px 10px",
+                    fontSize: 13,
+                    color: "#111827",
+                    cursor: "pointer",
+                    borderRadius: 6,
+                    fontWeight: selectedCompany === c ? 600 : 400,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f9fafb"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  {c}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status dropdown */}
+        <MultiCheckboxDropdown
+          label="Status"
+          options={statusOptions}
+          selected={selectedStatuses}
+          onChange={setSelectedStatuses}
+        />
+
+        {/* Tags dropdown */}
+        <MultiCheckboxDropdown
+          label="Tags"
+          options={tagOptions}
+          selected={selectedTags}
+          onChange={setSelectedTags}
+        />
+      </div>
+
+      {/* Table */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
+      >
+        {/* Table header */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: narrow
+              ? "1fr 100px"
+              : "1.2fr 1.5fr 100px 120px 1fr 1fr",
+            padding: "10px 20px",
+            borderBottom: "1px solid #f3f4f6",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#9ca3af",
+            textTransform: "uppercase",
+            letterSpacing: 0.3,
+          }}
+        >
+          <span>Contact</span>
+          {!narrow && <span>Subject</span>}
+          <span>Date</span>
+          {!narrow && <span>Status</span>}
+          {!narrow && <span>Company</span>}
+          {!narrow && <span>Tags</span>}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <Send style={{ width: 24, height: 24, color: "#d1d5db", margin: "0 auto 8px" }} />
+            <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>
+              No sent messages match your filters
+            </p>
+          </div>
+        ) : (
+          filtered.map((contact: any) => {
+            const contactTags: string[] = contact.tags || [];
+            return (
+              <div
+                key={contact.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: narrow
+                    ? "1fr 100px"
+                    : "1.2fr 1.5fr 100px 120px 1fr 1fr",
+                  padding: "12px 20px",
+                  borderBottom: "1px solid #f9fafb",
+                  alignItems: "center",
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fafbfc"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                {/* Contact name */}
+                <span
+                  onClick={() => onNavigate("contact-detail", { contactId: contact.id })}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#111827",
+                    cursor: "pointer",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#6B46C1"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#111827"; }}
+                >
+                  {contact.name || "Unknown"}
+                </span>
+
+                {/* Subject */}
+                {!narrow && (
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "#6b7280",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      paddingRight: 8,
+                    }}
+                  >
+                    {contact.emailSubject || "—"}
+                  </span>
+                )}
+
+                {/* Date */}
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                  {contact.lastContactedAt ? formatDate(contact.lastContactedAt) : "—"}
+                </span>
+
+                {/* Status */}
+                {!narrow && (
+                  <span>
+                    <StatusBadge status={contact.contactStatus || "not_contacted"} />
+                  </span>
+                )}
+
+                {/* Company */}
+                {!narrow && (
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "#6b7280",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {contact.companyName || "—"}
+                  </span>
+                )}
+
+                {/* Tags */}
+                {!narrow && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      flexWrap: "wrap",
+                      cursor: "pointer",
+                      minHeight: 24,
+                    }}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTagEditor({
+                        contactId: contact.id,
+                        tags: contactTags,
+                        rect: { top: rect.bottom + 4, left: rect.left },
+                      });
+                    }}
+                  >
+                    {contactTags.length > 0 ? (
+                      contactTags.map((tag) => <TagPill key={tag} tag={tag} />)
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#d1d5db" }}>+ Add tag</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Tag editor popover */}
+      {tagEditor && (
+        <TagEditorPopover
+          contactId={tagEditor.contactId}
+          currentTags={tagEditor.tags}
+          anchorRect={tagEditor.rect}
+          onClose={() => setTagEditor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// FollowUpsTab
+// =====================================================================
+function FollowUpsTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] }) {
+  const queryClient = useQueryClient();
+  const { ref: containerRef, width } = useContainerWidth();
+  const narrow = width < 600;
+
+  const { data: followUpsData, isLoading } = useQuery<{ contacts: any[] }>({
+    queryKey: ["/api/outreach/follow-ups"],
+  });
+
+  const followUpMutation = useMutation({
+    mutationFn: async (contactId: number) => {
+      const res = await apiRequest("POST", "/api/outreach/activities", {
+        contactId,
+        activityType: "follow_up_sent",
+        channel: "email",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach/follow-ups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach/contacts"] });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+        <Loader2 style={{ width: 28, height: 28, color: "#6B46C1", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  const contacts = followUpsData?.contacts ?? [];
+
+  // Split into overdue (>7 days) and due soon (5-7 days)
+  const overdue = contacts.filter((c: any) => {
+    const days = c.last_contacted_at ? daysSince(c.last_contacted_at) : 0;
+    return days > 7;
+  });
+
+  const dueSoon = contacts.filter((c: any) => {
+    const days = c.last_contacted_at ? daysSince(c.last_contacted_at) : 0;
+    return days >= 5 && days <= 7;
+  });
+
+  if (overdue.length === 0 && dueSoon.length === 0) {
+    return (
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 60,
+          textAlign: "center",
+        }}
+      >
+        <Check style={{ width: 32, height: 32, color: "#16a34a", margin: "0 auto 12px" }} />
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 4px" }}>
+          No follow-ups due
+        </h3>
+        <p style={{ fontSize: 14, color: "#9ca3af", margin: 0 }}>
+          You're all caught up!
+        </p>
+      </div>
+    );
+  }
+
+  function renderGroup(title: string, items: any[], tint: "red" | "amber") {
+    if (items.length === 0) return null;
+    const headerBg = tint === "red" ? "#fef2f2" : "#fffbeb";
+    const headerColor = tint === "red" ? "#dc2626" : "#d97706";
+    const headerBorder = tint === "red" ? "#fecaca" : "#fde68a";
+
+    return (
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          overflow: "hidden",
+          marginBottom: 16,
+        }}
+      >
+        {/* Group header */}
+        <div
+          style={{
+            padding: "10px 20px",
+            background: headerBg,
+            borderBottom: `1px solid ${headerBorder}`,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {tint === "red" ? (
+            <AlertCircle style={{ width: 14, height: 14, color: headerColor }} />
+          ) : (
+            <Clock style={{ width: 14, height: 14, color: headerColor }} />
+          )}
+          <span style={{ fontSize: 13, fontWeight: 600, color: headerColor }}>
+            {title} ({items.length})
+          </span>
+        </div>
+
+        {/* Contact cards */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: narrow ? "1fr" : "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: 0,
+          }}
+        >
+          {items.map((contact: any) => {
+            const days = contact.last_contacted_at ? daysSince(contact.last_contacted_at) : 0;
+            const initial = ((contact.full_name || contact.name || "?")[0] || "?").toUpperCase();
+            const followUpCount = contact.follow_up_count ?? 0;
+            const company = contact.job_submissions?.company_name || contact.companyName || "";
+
+            return (
+              <div
+                key={contact.id}
+                style={{
+                  padding: "16px 20px",
+                  borderBottom: "1px solid #f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                {/* Avatar */}
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    background: tint === "red" ? "#fee2e2" : "#fef3c7",
+                    color: tint === "red" ? "#dc2626" : "#d97706",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
+                  {initial}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {contact.full_name || contact.name || "Unknown"}
+                    </span>
+                    {followUpCount > 0 && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: "#6b7280",
+                          background: "#f3f4f6",
+                          padding: "1px 6px",
+                          borderRadius: 8,
+                        }}
+                      >
+                        {followUpCount}x
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6b7280",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {contact.title || ""}
+                    {company ? ` at ${company}` : ""}
+                  </div>
+                  <div style={{ fontSize: 11, color: headerColor, fontWeight: 500, marginTop: 2 }}>
+                    {days} days since last contact
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => followUpMutation.mutate(contact.id)}
+                    disabled={followUpMutation.isPending}
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "#ffffff",
+                      background: "#6B46C1",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      opacity: followUpMutation.isPending ? 0.6 : 1,
+                    }}
+                  >
+                    <Mail style={{ width: 12, height: 12 }} />
+                    Follow Up
+                  </button>
+                  <button
+                    onClick={() => onNavigate("contact-detail", { contactId: contact.id })}
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "#6B46C1",
+                      background: "#f5f3ff",
+                      border: "1px solid #ede9fe",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Eye style={{ width: 12, height: 12 }} />
+                    View
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 lg:p-10 max-w-[1400px]">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-[#0F172A] mb-1.5">Outreach Hub</h1>
-        <p className="text-[#64748B] text-[15px]">
-          Track your outreach pipeline and manage follow-ups
-        </p>
-      </div>
+    <div ref={containerRef}>
+      {renderGroup("Overdue", overdue, "red")}
+      {renderGroup("Due Soon", dueSoon, "amber")}
+    </div>
+  );
+}
 
-      {/* Pipeline Overview */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 mb-6">
-        <h2 className="text-sm font-semibold text-[#64748B] uppercase tracking-wider mb-4">Pipeline</h2>
-        <div className="flex items-center gap-0">
-          {PIPELINE_STAGES.map((stage, i) => {
-            const count = pipeline?.[stage.key] ?? 0;
-            const Icon = stage.icon;
-            const isLast = i === PIPELINE_STAGES.length - 1;
-            return (
-              <div key={stage.key} className="flex items-center flex-1 min-w-0">
-                <div className="flex flex-col items-center gap-2 flex-1">
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: `${stage.color}15` }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: stage.color }} />
-                  </div>
-                  <span className="text-2xl font-bold text-[#0F172A]">{count}</span>
-                  <span className="text-xs text-[#64748B] font-medium text-center">{stage.label}</span>
-                </div>
-                {!isLast && (
-                  <div className="flex-shrink-0 mx-1">
-                    <ChevronRight className="w-4 h-4 text-[#CBD5E1]" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+// =====================================================================
+// OutreachHub (main export)
+// =====================================================================
+export function OutreachHub({ onNavigate }: OutreachHubProps) {
+  const [activeTab, setActiveTab] = useState<"overview" | "sent" | "followups">("overview");
 
-      {/* Follow-ups Due */}
-      {followUps.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm mb-6 overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-500" />
-            <h2 className="text-[#0F172A] font-semibold text-sm">Follow-ups Due ({followUps.length})</h2>
-          </div>
-          <div className="divide-y divide-[#F1F5F9]">
-            {followUps.slice(0, 10).map((contact: any) => {
-              const days = contact.last_contacted_at ? daysSince(contact.last_contacted_at) : 0;
-              const company = contact.job_submissions?.company_name || "";
-              return (
-                <div
-                  key={contact.id}
-                  className="px-6 py-4 flex items-center justify-between hover:bg-[#FAFBFC] transition-colors"
-                >
-                  <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#0F172A] truncate">
-                        {contact.full_name || contact.name}
-                      </p>
-                      <p className="text-xs text-[#64748B] truncate">
-                        {contact.title}{company ? ` at ${company}` : ""}
-                        {" — "}
-                        <span className="text-amber-600 font-medium">{days} days since last contact</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                    <button
-                      onClick={() => logActivityMutation.mutate({
-                        contactId: contact.id,
-                        activityType: "follow_up_sent",
-                        channel: "email",
-                      })}
-                      disabled={logActivityMutation.isPending}
-                      className="px-3 py-1.5 text-xs font-medium text-[#6B46C1] bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-                      title="Log email follow-up"
-                    >
-                      <Mail className="w-3.5 h-3.5 inline mr-1" />
-                      Follow up
-                    </button>
-                    <button
-                      onClick={() => onNavigate("contact-detail", { contactId: contact.id })}
-                      className="p-1.5 text-[#94A3B8] hover:text-[#6B46C1] transition-colors"
-                      title="View contact"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+  const tabs = [
+    { key: "overview" as const, label: "Overview" },
+    { key: "sent" as const, label: "Sent Messages" },
+    { key: "followups" as const, label: "Follow-ups" },
+  ];
 
-      {/* Contact List by Pipeline Stage */}
-      <div className="space-y-4">
-        {PIPELINE_STAGES.map((stage) => {
-          const contacts = contactsByStatus[stage.key] ?? [];
-          if (contacts.length === 0) return null;
-          const Icon = stage.icon;
-          return (
-            <div key={stage.key} className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center gap-2">
-                <Icon className="w-4 h-4" style={{ color: stage.color }} />
-                <h2 className="text-[#0F172A] font-semibold text-sm">
-                  {stage.label} ({contacts.length})
-                </h2>
-              </div>
-              <div className="divide-y divide-[#F1F5F9]">
-                {contacts.slice(0, 8).map((contact: any) => (
-                  <button
-                    key={contact.id}
-                    onClick={() => onNavigate("contact-detail", { contactId: contact.id })}
-                    className="w-full px-6 py-3 flex items-center justify-between hover:bg-[#FAFBFC] transition-colors text-left"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[#0F172A] truncate">
-                        {contact.name}
-                      </p>
-                      <p className="text-xs text-[#64748B] truncate">
-                        {contact.title}{contact.companyName ? ` at ${contact.companyName}` : ""}
-                      </p>
-                    </div>
-                    {contact.createdAt && (
-                      <span className="text-[11px] text-[#94A3B8] flex-shrink-0 ml-4">
-                        {timeAgo(contact.createdAt)}
-                      </span>
-                    )}
-                    <ChevronRight className="w-4 h-4 text-[#CBD5E1] flex-shrink-0 ml-2" />
-                  </button>
-                ))}
-                {contacts.length > 8 && (
-                  <div className="px-6 py-3 text-center">
-                    <button
-                      onClick={() => onNavigate("contacts")}
-                      className="text-xs font-medium text-[#6B46C1] hover:text-[#5a3ba1]"
-                    >
-                      View all {contacts.length} contacts
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Empty state */}
-      {allContacts.length === 0 && (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-10 text-center">
-          <MessageCircle className="w-10 h-10 text-[#CBD5E1] mx-auto mb-3" />
-          <h3 className="text-[#0F172A] font-medium mb-1">No outreach yet</h3>
-          <p className="text-[#64748B] text-sm mb-5">
-            Start by searching for a job to find contacts you can reach out to.
-          </p>
-          <button
-            onClick={() => onNavigate("search")}
-            className="px-4 py-2 bg-[#6B46C1] text-white rounded-lg hover:bg-[#5a3ba1] transition-colors inline-flex items-center gap-2 text-sm"
+  return (
+    <div style={{ padding: 24, minHeight: "100%", background: "#f9fafb" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 24 }}>
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#111827",
+              margin: 0,
+              lineHeight: 1.3,
+            }}
           >
-            Start New Search
-          </button>
+            Outreach Hub
+          </h1>
+          <p
+            style={{
+              fontSize: 14,
+              color: "#6b7280",
+              margin: "4px 0 0",
+            }}
+          >
+            Track your outreach pipeline, sent messages, and follow-ups.
+          </p>
         </div>
-      )}
+
+        {/* Tab bar */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            marginBottom: 24,
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 10,
+            padding: 4,
+            width: "fit-content",
+          }}
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={tabStyle(activeTab === tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {activeTab === "overview" && <OverviewTab onNavigate={onNavigate} />}
+        {activeTab === "sent" && <SentMessagesTab onNavigate={onNavigate} />}
+        {activeTab === "followups" && <FollowUpsTab onNavigate={onNavigate} />}
+      </div>
+
+      {/* Spin keyframes (for Loader2 animation) */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

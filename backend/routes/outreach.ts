@@ -141,4 +141,163 @@ export function registerOutreachRoutes(app: Application) {
       res.status(500).json({ error: error.message || "Failed to mark checklist item" });
     }
   });
+
+  // Get outreach metrics with period comparison
+  app.get("/api/outreach/metrics", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const period = (req.query.period as string) || "7d";
+
+      const periodDays: Record<string, number> = { "1d": 1, "7d": 7, "30d": 30, "90d": 90, all: 9999 };
+      const days = periodDays[period] || 7;
+
+      const now = new Date();
+      const periodStart = new Date(now.getTime() - days * 86400000);
+      const prevPeriodStart = new Date(periodStart.getTime() - days * 86400000);
+
+      // Get all user's contacts via job_submissions
+      const { data: allContacts = [] } = await supabaseAdmin
+        .from("recruiter_contacts")
+        .select("id, contact_status, generated_email_message, last_contacted_at, created_at, name, email, email_subject, title, job_submissions!inner(company_name, user_id)")
+        .eq("job_submissions.user_id", userId);
+
+      const sentStatuses = new Set(["email_sent", "linkedin_sent", "awaiting_reply", "follow_up_needed", "replied", "interview_scheduled"]);
+
+      // Current period metrics
+      const inPeriod = days >= 9999 ? allContacts : allContacts.filter((c: any) => new Date(c.created_at) >= periodStart);
+      const drafted = inPeriod.filter((c: any) => c.generated_email_message).length;
+      const sent = inPeriod.filter((c: any) => sentStatuses.has(c.contact_status)).length;
+      const replied = inPeriod.filter((c: any) => c.contact_status === "replied").length;
+
+      // Previous period for delta
+      const inPrevPeriod = allContacts.filter((c: any) => {
+        const d = new Date(c.created_at);
+        return d >= prevPeriodStart && d < periodStart;
+      });
+      const prevDrafted = inPrevPeriod.filter((c: any) => c.generated_email_message).length;
+      const prevSent = inPrevPeriod.filter((c: any) => sentStatuses.has(c.contact_status)).length;
+      const prevReplied = inPrevPeriod.filter((c: any) => c.contact_status === "replied").length;
+
+      // Opened count from email_events
+      const { count: openedCount } = await supabaseAdmin
+        .from("email_events")
+        .select("recruiter_contact_id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("event_type", "opened");
+      const opened = openedCount || 0;
+
+      const { count: prevOpenedCount } = await supabaseAdmin
+        .from("email_events")
+        .select("recruiter_contact_id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("event_type", "opened")
+        .lt("created_at", periodStart.toISOString());
+      const prevOpened = prevOpenedCount || 0;
+
+      // Recent replies
+      const recentReplies = allContacts
+        .filter((c: any) => c.contact_status === "replied")
+        .sort((a: any, b: any) => new Date(b.last_contacted_at || b.created_at).getTime() - new Date(a.last_contacted_at || a.created_at).getTime())
+        .slice(0, 10)
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          emailSubject: c.email_subject || "No subject",
+          companyName: c.job_submissions?.company_name || "",
+          lastContactedAt: c.last_contacted_at || c.created_at,
+        }));
+
+      return res.json({
+        drafted, sent, opened, replied,
+        draftedDelta: drafted - prevDrafted,
+        sentDelta: sent - prevSent,
+        openedDelta: opened - prevOpened,
+        repliedDelta: replied - prevReplied,
+        recentReplies,
+      });
+    } catch (error) {
+      console.error("Metrics error:", error);
+      return res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
+  // Get outreach contacts (contacted contacts with filtering)
+  app.get("/api/outreach/contacts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const { search, status, company, tags, dateFrom, dateTo, sort, limit: limitStr } = req.query;
+      const limit = parseInt(limitStr as string) || 50;
+
+      let query = supabaseAdmin
+        .from("recruiter_contacts")
+        .select("*, job_submissions!inner(company_name, job_title, user_id)")
+        .eq("job_submissions.user_id", userId)
+        .neq("contact_status", "not_contacted")
+        .order("last_contacted_at", { ascending: false, nullsFirst: false })
+        .limit(limit);
+
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+      if (status) {
+        query = query.in("contact_status", (status as string).split(","));
+      }
+      if (tags) {
+        query = query.contains("tags", (tags as string).split(","));
+      }
+      if (dateFrom) {
+        query = query.gte("last_contacted_at", dateFrom as string);
+      }
+      if (dateTo) {
+        query = query.lte("last_contacted_at", dateTo as string);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Filter by company name (can't do in Supabase query on joined field easily)
+      let results = data || [];
+      if (company) {
+        results = results.filter((c: any) => c.job_submissions?.company_name === company);
+      }
+
+      const mapped = results.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        title: c.title,
+        contactStatus: c.contact_status,
+        emailSubject: c.email_subject,
+        lastContactedAt: c.last_contacted_at,
+        createdAt: c.created_at,
+        tags: c.tags || [],
+        companyName: c.job_submissions?.company_name || "",
+        jobTitle: c.job_submissions?.job_title || "",
+        followUpCount: c.follow_up_count || 0,
+      }));
+
+      return res.json(mapped);
+    } catch (error) {
+      console.error("Outreach contacts error:", error);
+      return res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+
+  // Get distinct company names for filtering
+  app.get("/api/outreach/companies", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const { data } = await supabaseAdmin
+        .from("job_submissions")
+        .select("company_name")
+        .eq("user_id", userId)
+        .not("company_name", "is", null);
+
+      const companies = [...new Set((data || []).map((d: any) => d.company_name).filter(Boolean))].sort();
+      return res.json(companies);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch companies" });
+    }
+  });
 }

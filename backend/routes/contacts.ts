@@ -147,6 +147,8 @@ export function registerContactRoutes(app: Express) {
         linkedinMessage: contact.linkedin_message,
         generatedEmailMessage: contact.generated_email_message,
         generatedLinkedInMessage: contact.generated_linkedin_message,
+        tags: contact.tags || [],
+        emailSubject: contact.email_subject,
         createdAt: contact.created_at,
         jobTitle: jobSubmission.job_title,
         companyName: jobSubmission.company_name,
@@ -209,6 +211,8 @@ export function registerContactRoutes(app: Express) {
       if (updates.linkedinMessage !== undefined) updateData.linkedin_message = updates.linkedinMessage;
       if (updates.generatedEmailMessage !== undefined) updateData.generated_email_message = updates.generatedEmailMessage;
       if (updates.generatedLinkedInMessage !== undefined) updateData.generated_linkedin_message = updates.generatedLinkedInMessage;
+      if (updates.tags !== undefined) updateData.tags = updates.tags;
+      if (updates.emailSubject !== undefined) updateData.email_subject = updates.emailSubject;
 
       // Update the contact using Supabase
       const { data: updatedContact, error: updateError } = await supabase
@@ -250,6 +254,8 @@ export function registerContactRoutes(app: Express) {
         linkedinMessage: updatedContact.linkedin_message,
         generatedEmailMessage: updatedContact.generated_email_message,
         generatedLinkedInMessage: updatedContact.generated_linkedin_message,
+        tags: updatedContact.tags || [],
+        emailSubject: updatedContact.email_subject,
         createdAt: updatedContact.created_at,
         updatedAt: updatedContact.updated_at,
       };
