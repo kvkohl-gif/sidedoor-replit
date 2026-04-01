@@ -146,12 +146,13 @@ export async function getFollowUpsDue(userId: string) {
     .from("recruiter_contacts")
     .select(`
       *,
-      job_submissions:job_submission_id (
+      job_submissions!inner(
         company_name,
-        job_title
+        job_title,
+        user_id
       )
     `)
-    .eq("user_id", userId)
+    .eq("job_submissions.user_id", userId)
     .in("contact_status", [
       "email_sent",
       "linkedin_sent",
@@ -175,8 +176,8 @@ export async function getFollowUpsDue(userId: string) {
 export async function getPipelineCounts(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("recruiter_contacts")
-    .select("contact_status")
-    .eq("user_id", userId);
+    .select("contact_status, job_submissions!inner(user_id)")
+    .eq("job_submissions.user_id", userId);
 
   if (error) {
     throw new Error(`Failed to get pipeline counts: ${error.message}`);
