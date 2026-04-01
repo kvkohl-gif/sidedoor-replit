@@ -439,7 +439,7 @@ export function OutreachProfile() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header - full width above sidebar and content */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -489,7 +489,7 @@ export function OutreachProfile() {
         <div className="flex gap-8">
           {/* Sidebar - hidden on mobile */}
           <div className="hidden md:block flex-shrink-0" style={{ width: 220 }}>
-            <div className="sticky top-[120px]">
+            <div>
               {/* Progress Ring */}
               <div className="flex flex-col items-center mb-6 pb-5 border-b border-gray-200">
                 <ProgressRing percentage={completeness} />
