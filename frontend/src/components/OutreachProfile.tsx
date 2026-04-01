@@ -487,9 +487,9 @@ export function OutreachProfile() {
       {/* Two-column layout */}
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex gap-8">
-          {/* Sidebar - hidden on mobile */}
-          <div className="hidden md:block flex-shrink-0" style={{ width: 220 }}>
-            <div>
+          {/* Sidebar - hidden on mobile, sticky within scroll container */}
+          <div className="hidden md:block flex-shrink-0 self-start sticky top-0" style={{ width: 220 }}>
+            <div className="py-2">
               {/* Progress Ring */}
               <div className="flex flex-col items-center mb-6 pb-5 border-b border-gray-200">
                 <ProgressRing percentage={completeness} />
