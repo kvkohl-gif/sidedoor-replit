@@ -510,16 +510,15 @@ export function OutreachProfile() {
                         <button
                           key={s.key}
                           onClick={() => scrollToSection(s.key)}
-                          className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left text-[13px] transition-all ${
+                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[13px] transition-all ${
                             isActive
                               ? "text-purple-700 font-medium bg-purple-50"
                               : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                           }`}
-                          style={isActive ? { borderLeft: "2px solid #6B46C1", paddingLeft: 6 } : { borderLeft: "2px solid transparent", paddingLeft: 6 }}
+                          style={isActive ? { borderLeft: "2px solid #6B46C1", paddingLeft: 10 } : { borderLeft: "2px solid transparent", paddingLeft: 10 }}
                         >
-                          <s.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-purple-600" : s.iconColor}`} />
-                          <span className="flex-1 truncate">{s.label}</span>
                           <CompletionDot status={status} />
+                          <span className="flex-1 truncate">{s.label}</span>
                         </button>
                       );
                     })}
@@ -531,6 +530,11 @@ export function OutreachProfile() {
 
           {/* Main content area */}
           <div className="flex-1 min-w-0 space-y-6">
+
+            {/* Group: ESSENTIALS */}
+            <div>
+              <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4 px-1">Essentials</h2>
+            </div>
 
             {/* Section 1: Resume Upload */}
             <div
@@ -704,6 +708,11 @@ export function OutreachProfile() {
                   <span className="font-medium">Tip:</span> Focus on your narrative, not just your job history. What's the thread that connects your career moves?
                 </p>
               </div>
+            </div>
+
+            {/* Group: ACHIEVEMENTS & GOALS */}
+            <div className="pt-4">
+              <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4 px-1">Achievements & Goals</h2>
             </div>
 
             {/* Section 3: Signature Wins */}
@@ -931,6 +940,11 @@ export function OutreachProfile() {
               </div>
             </div>
 
+            {/* Group: COMMUNICATION STYLE */}
+            <div className="pt-4">
+              <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4 px-1">Communication Style</h2>
+            </div>
+
             {/* Section 5: Voice & Tone */}
             <div
               id="section-voice"
@@ -1118,6 +1132,11 @@ export function OutreachProfile() {
                   <span className="font-medium">Examples:</span> "My family has been in construction for 3 generations", "I'm a real estate investor with 4 properties"
                 </p>
               </div>
+            </div>
+
+            {/* Group: EXTRAS */}
+            <div className="pt-4">
+              <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4 px-1">Extras</h2>
             </div>
 
             {/* Section 7: Cover Letter (Collapsible) */}
