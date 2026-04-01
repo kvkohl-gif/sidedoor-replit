@@ -285,9 +285,10 @@ function OverviewTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"
       status: c.contactStatus,
     }));
 
-    // From all contacts — just drafts (have generated message, not contacted)
+    // From all contacts — just drafts (have generated message, not contacted/sent)
+    const sentSet = new Set(["email_sent", "linkedin_sent", "awaiting_reply", "follow_up_needed", "replied", "interview_scheduled"]);
     const drafts = draftContacts
-      .filter((c: any) => c.generatedEmailMessage && c.contactStatus === "not_contacted")
+      .filter((c: any) => c.generatedEmailMessage && !sentSet.has(c.contactStatus))
       .map((c: any) => ({
         id: c.id,
         name: c.name,
@@ -1639,8 +1640,9 @@ function DraftsTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"] 
   });
 
   const drafts = useMemo(() => {
+    const sentStatuses = new Set(["email_sent", "linkedin_sent", "awaiting_reply", "follow_up_needed", "replied", "interview_scheduled"]);
     let filtered = allContacts.filter(
-      (c: any) => c.generatedEmailMessage && c.contactStatus === "not_contacted"
+      (c: any) => c.generatedEmailMessage && !sentStatuses.has(c.contactStatus)
     );
     if (search.trim()) {
       const q = search.toLowerCase();
