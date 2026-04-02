@@ -293,36 +293,34 @@ export function Subscription() {
                 : `You have ${creditsRemaining} of ${creditsTotal} credits remaining this cycle.`}
             </p>
           </div>
-          {subscription?.stripe_customer_id && (
-            <button
-              onClick={handleManageBilling}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 16px",
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                color: "#6b7280",
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#6B46C1";
-                e.currentTarget.style.color = "#6B46C1";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#e5e7eb";
-                e.currentTarget.style.color = "#6b7280";
-              }}
-            >
-              <ExternalLink style={{ width: 14, height: 14 }} />
-              Manage Billing
-            </button>
-          )}
+          <button
+            onClick={handleManageBilling}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              color: "#6b7280",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#6B46C1";
+              e.currentTarget.style.color = "#6B46C1";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "#e5e7eb";
+              e.currentTarget.style.color = "#6b7280";
+            }}
+          >
+            <ExternalLink style={{ width: 14, height: 14 }} />
+            Manage Billing
+          </button>
         </div>
       </div>
 

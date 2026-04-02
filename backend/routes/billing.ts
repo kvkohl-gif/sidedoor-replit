@@ -175,15 +175,35 @@ router.post("/create-portal-session", requireAuth, requireStripe, async (req: Re
   try {
     const userId = req.user!.id;
     const sub = await getUserSubscription(userId);
+    let customerId = sub?.stripe_customer_id;
 
-    if (!sub?.stripe_customer_id) {
-      return res.status(400).json({ error: "No billing account found" });
+    // Create a Stripe customer on-the-fly if none exists (e.g., free trial user)
+    if (!customerId) {
+      const { data: user } = await supabaseAdmin
+        .from("users")
+        .select("email, first_name, last_name")
+        .eq("id", userId)
+        .single();
+
+      const customer = await stripe!.customers.create({
+        email: user?.email,
+        name: user ? `${user.first_name} ${user.last_name}` : undefined,
+        metadata: { user_id: userId },
+      });
+
+      customerId = customer.id;
+
+      // Store the customer ID
+      await supabaseAdmin
+        .from("user_subscriptions")
+        .update({ stripe_customer_id: customerId })
+        .eq("user_id", userId);
     }
 
     const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
     const portalSession = await stripe!.billingPortal.sessions.create({
-      customer: sub.stripe_customer_id,
+      customer: customerId,
       return_url: `${baseUrl}/billing`,
     });
 
