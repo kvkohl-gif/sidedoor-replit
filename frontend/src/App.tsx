@@ -12,6 +12,8 @@ import { Settings } from "./components/Settings";
 import { OutreachProfile } from "./components/OutreachProfile";
 import OnboardingWizard from "./components/OnboardingWizard";
 import { OutreachHub } from "./components/OutreachHub";
+import { TrialExpiredModal } from "./components/TrialExpiredModal";
+import { usePlanAccess } from "./hooks/usePlanAccess";
 import { TermsOfService } from "./components/TermsOfService";
 import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { LoginScreen } from "../components/Login";
@@ -66,6 +68,13 @@ function getCurrentPage(location: string): string {
   if (location.startsWith("/contacts/")) return "contact-detail";
   // Default
   return "dashboard";
+}
+
+// TrialGate: renders TrialExpiredModal when trial is expired and user is on free plan
+function TrialGate({ onLogout }: { onLogout: () => void }) {
+  const { trialExpired, isFreeTier, isLoading } = usePlanAccess();
+  if (isLoading || !trialExpired || !isFreeTier) return null;
+  return <TrialExpiredModal onLogout={onLogout} />;
 }
 
 const APP_ENV = import.meta.env.VITE_APP_ENV || "production";
@@ -216,6 +225,7 @@ export default function App() {
     <>
     <StagingBanner />
     <div className={stagingOffset}>
+    <TrialGate onLogout={handleLogout} />
     <OnboardingWizard onNavigate={handleNavigate} />
     <Layout
       currentPage={currentPage}

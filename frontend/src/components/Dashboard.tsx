@@ -18,6 +18,8 @@ import {
   Clock,
 } from "lucide-react";
 import { useOnboarding } from "../hooks/useOnboarding";
+import { usePlanAccess } from "../hooks/usePlanAccess";
+import { TrialWarningBanner, PastDueBanner, CreditsExhaustedBanner } from "./BillingBanners";
 
 interface DashboardProps {
   onNavigate: (page: string, data?: any) => void;
@@ -143,6 +145,22 @@ const CHECKLIST_ITEMS = [
 ];
 
 // ── Component ────────────────────────────────────────────────────────
+function DashboardBanners({ onNavigate }: { onNavigate: (page: string, data?: any) => void }) {
+  const { trialWarning, trialDaysLeft, isPastDue, creditsExhausted, billingCycleEnd, planName } = usePlanAccess();
+
+  return (
+    <>
+      {isPastDue && <PastDueBanner onNavigate={onNavigate} />}
+      {trialWarning && trialDaysLeft !== null && (
+        <TrialWarningBanner daysLeft={trialDaysLeft} onNavigate={onNavigate} />
+      )}
+      {creditsExhausted && !isPastDue && (
+        <CreditsExhaustedBanner billingCycleEnd={billingCycleEnd} planName={planName} onNavigate={onNavigate} />
+      )}
+    </>
+  );
+}
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const [checklistCollapsed, setChecklistCollapsed] = useState(false);
 
@@ -413,6 +431,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             Here's what's happening with your outreach.
           </p>
         </div>
+
+        {/* ─── Billing Banners ────────────────────────────────── */}
+        <DashboardBanners onNavigate={onNavigate} />
 
         {/* ─── Metric Cards ── 4 columns ─────────────────────── */}
         <div

@@ -68,7 +68,20 @@ router.get("/subscription", requireAuth, async (req: Request, res: Response) => 
         credits_remaining: 0,
         credits_total: 0,
         free_tier_expires_at: null,
+        trial_days_left: null,
+        trial_expired: false,
       });
+    }
+
+    // Calculate trial days left
+    let trialDaysLeft: number | null = null;
+    let trialExpired = false;
+    if (sub.plan_type === "free" && sub.free_tier_expires_at) {
+      const expiresAt = new Date(sub.free_tier_expires_at);
+      const now = new Date();
+      const diffMs = expiresAt.getTime() - now.getTime();
+      trialDaysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      trialExpired = diffMs <= 0;
     }
 
     return res.json({
@@ -77,6 +90,8 @@ router.get("/subscription", requireAuth, async (req: Request, res: Response) => 
       credits_remaining: sub.credits_remaining,
       credits_total: sub.credits_total,
       free_tier_expires_at: sub.free_tier_expires_at,
+      trial_days_left: trialDaysLeft,
+      trial_expired: trialExpired,
       billing_cycle_start: sub.billing_cycle_start,
       billing_cycle_end: sub.billing_cycle_end,
       stripe_customer_id: sub.stripe_customer_id ? true : false, // Don't leak actual ID
