@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { supabaseAdmin } from "../lib/supabaseClient";
 import { STRIPE_PRICE_IDS, PLAN_CREDITS, BILLING_PERIODS, type PlanType, type BillingPeriod } from "../constants/credits";
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
+import { createNotification } from "../services/notificationService";
 import { nanoid } from "nanoid";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -22,6 +23,35 @@ const router = Router();
 function requireAuth(req: Request, res: Response, next: Function) {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   next();
+}
+
+// ─── Gap 4: Webhook Idempotency ───
+// Track processed Stripe event IDs to prevent duplicate processing
+const processedEvents = new Map<string, number>(); // eventId -> timestamp
+const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function isEventAlreadyProcessed(eventId: string): boolean {
+  const processed = processedEvents.get(eventId);
+  if (processed) return true;
+  processedEvents.set(eventId, Date.now());
+  // Cleanup old entries every 100 events
+  if (processedEvents.size > 500) {
+    const cutoff = Date.now() - IDEMPOTENCY_TTL;
+    for (const [id, ts] of processedEvents.entries()) {
+      if (ts < cutoff) processedEvents.delete(id);
+    }
+  }
+  return false;
+}
+
+// ─── Helper: Resolve price ID to plan type ───
+function resolvePlanFromPriceId(priceId: string): PlanType | null {
+  for (const [plan, periods] of Object.entries(STRIPE_PRICE_IDS)) {
+    for (const [_period, id] of Object.entries(periods)) {
+      if (id === priceId) return plan as PlanType;
+    }
+  }
+  return null;
 }
 
 // ─── GET /api/billing/subscription ───
@@ -164,6 +194,139 @@ router.post("/create-portal-session", requireAuth, requireStripe, async (req: Re
   }
 });
 
+// ─── POST /api/billing/change-plan ───
+// Gap 5: In-app plan change (upgrade or downgrade) without requiring portal
+router.post("/change-plan", requireAuth, requireStripe, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { planType, billingPeriod = "monthly" } = req.body as {
+      planType: PlanType;
+      billingPeriod?: BillingPeriod;
+    };
+
+    if (!planType || !["starter", "pro", "max"].includes(planType)) {
+      return res.status(400).json({ error: "Invalid plan type" });
+    }
+
+    const sub = await getUserSubscription(userId);
+    if (!sub?.stripe_subscription_id || !sub?.stripe_customer_id) {
+      return res.status(400).json({ error: "No active subscription to change. Use checkout to subscribe." });
+    }
+
+    const priceId = STRIPE_PRICE_IDS[planType as keyof typeof STRIPE_PRICE_IDS]?.[billingPeriod];
+    if (!priceId) {
+      return res.status(400).json({ error: "Price not configured for this plan/period" });
+    }
+
+    // Retrieve current subscription to get the item ID
+    const subscription = await stripe!.subscriptions.retrieve(sub.stripe_subscription_id);
+    const currentItemId = subscription.items.data[0]?.id;
+    if (!currentItemId) {
+      return res.status(400).json({ error: "Could not find subscription item" });
+    }
+
+    // Determine if upgrade or downgrade
+    const planOrder = { free: 0, starter: 1, pro: 2, max: 3 };
+    const isDowngrade = planOrder[planType] < planOrder[sub.plan_type as PlanType];
+
+    if (isDowngrade) {
+      // Downgrade: schedule at end of period (no proration)
+      await stripe!.subscriptions.update(sub.stripe_subscription_id, {
+        items: [{ id: currentItemId, price: priceId }],
+        proration_behavior: "none",
+        billing_cycle_anchor: "unchanged",
+      });
+
+      // Create notification about scheduled downgrade
+      await createNotification(
+        userId,
+        "plan_change",
+        "Plan downgrade scheduled",
+        `Your plan will change to ${planType} at the end of your current billing period.`,
+        "/billing"
+      );
+
+      return res.json({
+        success: true,
+        message: `Downgrade to ${planType} scheduled for end of billing period`,
+        effective: "end_of_period",
+      });
+    } else {
+      // Upgrade: immediate with proration
+      await stripe!.subscriptions.update(sub.stripe_subscription_id, {
+        items: [{ id: currentItemId, price: priceId }],
+        proration_behavior: "always_invoice",
+      });
+
+      return res.json({
+        success: true,
+        message: `Upgraded to ${planType}`,
+        effective: "immediate",
+      });
+    }
+  } catch (error: any) {
+    console.error("Plan change error:", error);
+    return res.status(500).json({ error: error.message || "Failed to change plan" });
+  }
+});
+
+// ─── POST /api/billing/cancel ───
+// Cancel subscription at end of period
+router.post("/cancel", requireAuth, requireStripe, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const sub = await getUserSubscription(userId);
+
+    if (!sub?.stripe_subscription_id) {
+      return res.status(400).json({ error: "No active subscription to cancel" });
+    }
+
+    // Cancel at period end (not immediately)
+    await stripe!.subscriptions.update(sub.stripe_subscription_id, {
+      cancel_at_period_end: true,
+    });
+
+    await createNotification(
+      userId,
+      "subscription_canceled",
+      "Subscription cancellation scheduled",
+      "Your subscription will end at the close of your current billing period. You'll retain access until then.",
+      "/billing"
+    );
+
+    return res.json({
+      success: true,
+      message: "Subscription will cancel at end of billing period",
+      cancels_at: sub.billing_cycle_end,
+    });
+  } catch (error: any) {
+    console.error("Cancel subscription error:", error);
+    return res.status(500).json({ error: error.message || "Failed to cancel subscription" });
+  }
+});
+
+// ─── POST /api/billing/reactivate ───
+// Reactivate a subscription that was scheduled for cancellation
+router.post("/reactivate", requireAuth, requireStripe, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const sub = await getUserSubscription(userId);
+
+    if (!sub?.stripe_subscription_id) {
+      return res.status(400).json({ error: "No subscription to reactivate" });
+    }
+
+    await stripe!.subscriptions.update(sub.stripe_subscription_id, {
+      cancel_at_period_end: false,
+    });
+
+    return res.json({ success: true, message: "Subscription reactivated" });
+  } catch (error: any) {
+    console.error("Reactivate error:", error);
+    return res.status(500).json({ error: error.message || "Failed to reactivate" });
+  }
+});
+
 // ─── Webhook Handler (exported separately — needs raw body) ───
 export async function handleStripeWebhook(req: Request, res: Response) {
   if (!stripe) {
@@ -185,6 +348,12 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   } catch (err: any) {
     console.error("Webhook signature verification failed:", err.message);
     return res.status(400).json({ error: "Invalid signature" });
+  }
+
+  // Gap 4: Idempotency check — skip if we already processed this event
+  if (isEventAlreadyProcessed(event.id)) {
+    console.log(`[Stripe] Skipping duplicate event: ${event.id} (${event.type})`);
+    return res.json({ received: true, duplicate: true });
   }
 
   try {
@@ -326,18 +495,14 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   if (!sub) return;
 
-  // Determine new plan from price ID
+  // Determine new plan from price ID (search nested structure)
   const priceId = subscription.items.data[0]?.price?.id;
-  let newPlanType: PlanType | null = null;
+  const newPlanType = resolvePlanFromPriceId(priceId || "");
 
-  for (const [plan, id] of Object.entries(STRIPE_PRICE_IDS)) {
-    if (id === priceId) {
-      newPlanType = plan as PlanType;
-      break;
-    }
+  if (!newPlanType) {
+    console.log(`[Stripe] Could not resolve plan for price ID: ${priceId}`);
+    return;
   }
-
-  if (!newPlanType) return;
 
   // Mid-cycle upgrade: grant prorated credits
   const oldCredits = PLAN_CREDITS[sub.plan_type as PlanType]?.total || 0;
@@ -398,6 +563,15 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     created_at: new Date().toISOString(),
   });
 
+  // Gap 2: Notify user about cancellation
+  await createNotification(
+    sub.user_id,
+    "subscription_canceled",
+    "Subscription Ended",
+    "Your subscription has been canceled and your account has been downgraded to the free tier. Upgrade anytime to regain access to premium features.",
+    "/billing"
+  );
+
   console.log(`[Stripe] Subscription canceled for user ${sub.user_id}`);
 }
 
@@ -406,7 +580,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
   const { data: sub } = await supabaseAdmin
     .from("user_subscriptions")
-    .select("user_id")
+    .select("user_id, plan_type")
     .eq("stripe_customer_id", customerId)
     .single();
 
@@ -418,7 +592,29 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     .update({ status: "past_due" })
     .eq("user_id", sub.user_id);
 
-  console.log(`[Stripe] Payment failed for user ${sub.user_id} — marked past_due`);
+  // Gap 2: Send in-app notification about failed payment
+  const attemptCount = invoice.attempt_count || 1;
+  const nextAttempt = invoice.next_payment_attempt
+    ? new Date(invoice.next_payment_attempt * 1000).toLocaleDateString()
+    : null;
+
+  let message = "Your payment failed. Please update your payment method to continue using SideDoor.";
+  if (attemptCount > 1 && nextAttempt) {
+    message = `Payment attempt #${attemptCount} failed. Next retry on ${nextAttempt}. Update your payment method to avoid service interruption.`;
+  } else if (attemptCount > 2) {
+    message = `Payment has failed ${attemptCount} times. Your subscription will be canceled soon if not resolved. Please update your payment method immediately.`;
+  }
+
+  await createNotification(
+    sub.user_id,
+    "payment_failed",
+    "⚠️ Payment Failed",
+    message,
+    "/billing",
+    { attempt_count: attemptCount, invoice_id: invoice.id }
+  );
+
+  console.log(`[Stripe] Payment failed (attempt ${attemptCount}) for user ${sub.user_id} — marked past_due, notification sent`);
 }
 
 export default router;
