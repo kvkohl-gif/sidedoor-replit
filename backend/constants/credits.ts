@@ -59,22 +59,22 @@ export function getPlanPrice(
 // These must be created in Stripe Dashboard and set as env vars.
 export const STRIPE_PRICE_IDS: Record<string, Record<BillingPeriod, string>> = {
   starter: {
-    monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || "price_1TFGRDLiDTm2SgmCAWKCcImj",
-    "3month": process.env.STRIPE_STARTER_3MONTH_PRICE_ID || "price_1TGT4DLiDTm2SgmCsq32cQjd",
-    "6month": process.env.STRIPE_STARTER_6MONTH_PRICE_ID || "price_1TGT8CLiDTm2SgmCndM5kGZX",
-    annual: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID || "price_1TGT8CLiDTm2SgmCtfUi42cR",
+    monthly: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || "price_1THsIuLkrZkecmzO8KxCEGW7",
+    "3month": process.env.STRIPE_STARTER_3MONTH_PRICE_ID || "price_1THsIuLkrZkecmzOdZGMpDru",
+    "6month": process.env.STRIPE_STARTER_6MONTH_PRICE_ID || "price_1THsIvLkrZkecmzOQEMV1KnU",
+    annual: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID || "price_1THsIvLkrZkecmzOFbLSHe10",
   },
   pro: {
-    monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || process.env.STRIPE_PRO_PRICE_ID || "price_1TFGRELiDTm2SgmCbjOaW8Km",
-    "3month": process.env.STRIPE_PRO_3MONTH_PRICE_ID || "price_1TGT4GLiDTm2SgmCoBEafwKE",
-    "6month": process.env.STRIPE_PRO_6MONTH_PRICE_ID || "price_1TGT8ELiDTm2SgmCP2uihSnn",
-    annual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TGT8FLiDTm2SgmCSBlq2FNr",
+    monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || process.env.STRIPE_PRO_PRICE_ID || "price_1THsJ7LkrZkecmzOoidQr4ou",
+    "3month": process.env.STRIPE_PRO_3MONTH_PRICE_ID || "price_1THsJ7LkrZkecmzOZItdQyvo",
+    "6month": process.env.STRIPE_PRO_6MONTH_PRICE_ID || "price_1THsJ7LkrZkecmzO8cddkDDb",
+    annual: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1THsJ8LkrZkecmzORmFzIOhG",
   },
   max: {
-    monthly: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || process.env.STRIPE_MAX_PRICE_ID || "price_1TFGRFLiDTm2SgmCk815McTw",
-    "3month": process.env.STRIPE_MAX_3MONTH_PRICE_ID || "price_1TGT4KLiDTm2SgmC873vUpuI",
-    "6month": process.env.STRIPE_MAX_6MONTH_PRICE_ID || "price_1TGT8GLiDTm2SgmCpu5w6YpZ",
-    annual: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || "price_1TGT8HLiDTm2SgmCygvo1M3r",
+    monthly: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || process.env.STRIPE_MAX_PRICE_ID || "price_1THsJILkrZkecmzOeDThjw3k",
+    "3month": process.env.STRIPE_MAX_3MONTH_PRICE_ID || "price_1THsJJLkrZkecmzOiDFFSd3e",
+    "6month": process.env.STRIPE_MAX_6MONTH_PRICE_ID || "price_1THsJJLkrZkecmzOGJUFqClj",
+    annual: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || "price_1THsJJLkrZkecmzO3umFsFhn",
   },
 };
 
