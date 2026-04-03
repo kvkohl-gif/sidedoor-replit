@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { supabaseAdmin } from "../lib/supabaseClient";
-import { STRIPE_PRICE_IDS, PLAN_CREDITS, BILLING_PERIODS, type PlanType, type BillingPeriod } from "../constants/credits";
+import { STRIPE_PRICE_IDS, PLAN_CREDITS, PLAN_FEATURES, BILLING_PERIODS, type PlanType, type BillingPeriod } from "../constants/credits";
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
 import { createNotification } from "../services/notificationService";
 import { nanoid } from "nanoid";
@@ -70,6 +70,7 @@ router.get("/subscription", requireAuth, async (req: Request, res: Response) => 
         free_tier_expires_at: null,
         trial_days_left: null,
         trial_expired: false,
+        features: PLAN_FEATURES.free,
       });
     }
 
@@ -84,6 +85,8 @@ router.get("/subscription", requireAuth, async (req: Request, res: Response) => 
       trialExpired = diffMs <= 0;
     }
 
+    const planFeatures = PLAN_FEATURES[(sub.plan_type as PlanType)] ?? PLAN_FEATURES.free;
+
     return res.json({
       plan_type: sub.plan_type,
       status: sub.status,
@@ -95,6 +98,7 @@ router.get("/subscription", requireAuth, async (req: Request, res: Response) => 
       billing_cycle_start: sub.billing_cycle_start,
       billing_cycle_end: sub.billing_cycle_end,
       stripe_customer_id: sub.stripe_customer_id ? true : false, // Don't leak actual ID
+      features: planFeatures,
     });
   } catch (error) {
     console.error("Subscription fetch error:", error);

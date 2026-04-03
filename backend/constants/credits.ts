@@ -78,32 +78,54 @@ export const STRIPE_PRICE_IDS: Record<string, Record<BillingPeriod, string>> = {
   },
 };
 
+// All profile section IDs
+const ALL_PROFILE_SECTIONS = ["resume", "bio", "achievements", "goals", "voice", "hooks", "cover", "hobbies"] as const;
+const STARTER_PROFILE_SECTIONS = ["resume", "cover"] as const;
+
 export const PLAN_FEATURES = {
   free: {
-    maxContactsPerCompany: 1,
-    followUpSequences: false,
-    multiStepSequences: false,
+    maxContactsPerCompany: 999,
+    outreachProfileSections: [...STARTER_PROFILE_SECTIONS] as string[],
+    outreachHubFullAccess: false,
+    followUpDrafts: false,
+    linkedinDrafts: false,
+    redraftMessage: false,
+    bulkExport: false,
     integratedSend: false,
   },
   starter: {
-    maxContactsPerCompany: 1,
-    followUpSequences: false,
-    multiStepSequences: false,
+    maxContactsPerCompany: 999,
+    outreachProfileSections: [...STARTER_PROFILE_SECTIONS] as string[],
+    outreachHubFullAccess: false,
+    followUpDrafts: false,
+    linkedinDrafts: false,
+    redraftMessage: false,
+    bulkExport: false,
     integratedSend: true,
   },
   pro: {
     maxContactsPerCompany: 999,
-    followUpSequences: true,
-    multiStepSequences: false,
+    outreachProfileSections: [...ALL_PROFILE_SECTIONS] as string[],
+    outreachHubFullAccess: true,
+    followUpDrafts: true,
+    linkedinDrafts: true,
+    redraftMessage: true,
+    bulkExport: false,
     integratedSend: true,
   },
   max: {
     maxContactsPerCompany: 999,
-    followUpSequences: true,
-    multiStepSequences: true,
+    outreachProfileSections: [...ALL_PROFILE_SECTIONS] as string[],
+    outreachHubFullAccess: true,
+    followUpDrafts: true,
+    linkedinDrafts: true,
+    redraftMessage: true,
+    bulkExport: true,
     integratedSend: true,
   },
 } as const;
+
+export type PlanFeatures = typeof PLAN_FEATURES[PlanType];
 
 export type PlanType = "free" | "starter" | "pro" | "max";
 export type CreditAction = keyof typeof CREDIT_COSTS;
