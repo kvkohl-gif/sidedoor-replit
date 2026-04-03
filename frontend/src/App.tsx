@@ -253,7 +253,7 @@ export default function App() {
           <AllContacts onNavigate={handleNavigate} />
         </Route>
         <Route path="/outreach-profile">
-          <OutreachProfile />
+          <OutreachProfile onNavigate={handleNavigate} />
         </Route>
         <Route path="/outreach">
           <OutreachHub onNavigate={handleNavigate} />

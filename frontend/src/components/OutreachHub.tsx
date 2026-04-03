@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
+import { FeatureLockBadge, FeatureLockOverlay } from "./FeatureLock";
+import { usePlanAccess } from "../hooks/usePlanAccess";
 import {
   FileText, Send, Eye, MessageSquare, TrendingUp, TrendingDown,
   Search, Filter, Calendar, Tag, ChevronDown, X, Check,
@@ -1823,6 +1825,9 @@ function RepliesTab({ onNavigate }: { onNavigate: OutreachHubProps["onNavigate"]
 // =====================================================================
 export function OutreachHub({ onNavigate }: OutreachHubProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "drafts" | "sent" | "replies" | "followups">("overview");
+  const { canAccessOutreachHub } = usePlanAccess();
+
+  const lockedTabs = new Set(["sent", "replies", "followups"]);
 
   const tabs = [
     { key: "overview" as const, label: "Overview" },
@@ -1877,9 +1882,12 @@ export function OutreachHub({ onNavigate }: OutreachHubProps) {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              style={tabStyle(activeTab === tab.key)}
+              style={{ ...tabStyle(activeTab === tab.key), display: "inline-flex", alignItems: "center", gap: 4 }}
             >
               {tab.label}
+              {lockedTabs.has(tab.key) && (
+                <FeatureLockBadge feature="outreachHub" requiredPlan="pro" />
+              )}
             </button>
           ))}
         </div>
@@ -1887,9 +1895,33 @@ export function OutreachHub({ onNavigate }: OutreachHubProps) {
         {/* Tab content */}
         {activeTab === "overview" && <OverviewTab onNavigate={onNavigate} />}
         {activeTab === "drafts" && <DraftsTab onNavigate={onNavigate} />}
-        {activeTab === "sent" && <SentMessagesTab onNavigate={onNavigate} />}
-        {activeTab === "replies" && <RepliesTab onNavigate={onNavigate} />}
-        {activeTab === "followups" && <FollowUpsTab onNavigate={onNavigate} />}
+        {activeTab === "sent" && (
+          !canAccessOutreachHub ? (
+            <FeatureLockOverlay feature="outreachHub" requiredPlan="pro" onUpgrade={() => onNavigate("billing")}>
+              <SentMessagesTab onNavigate={onNavigate} />
+            </FeatureLockOverlay>
+          ) : (
+            <SentMessagesTab onNavigate={onNavigate} />
+          )
+        )}
+        {activeTab === "replies" && (
+          !canAccessOutreachHub ? (
+            <FeatureLockOverlay feature="outreachHub" requiredPlan="pro" onUpgrade={() => onNavigate("billing")}>
+              <RepliesTab onNavigate={onNavigate} />
+            </FeatureLockOverlay>
+          ) : (
+            <RepliesTab onNavigate={onNavigate} />
+          )
+        )}
+        {activeTab === "followups" && (
+          !canAccessOutreachHub ? (
+            <FeatureLockOverlay feature="outreachHub" requiredPlan="pro" onUpgrade={() => onNavigate("billing")}>
+              <FollowUpsTab onNavigate={onNavigate} />
+            </FeatureLockOverlay>
+          ) : (
+            <FollowUpsTab onNavigate={onNavigate} />
+          )
+        )}
       </div>
 
       {/* Spin keyframes (for Loader2 animation) */}
