@@ -6,6 +6,8 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "../lib/queryClient";
+import { FeatureLockBadge, FeatureLockOverlay } from "./FeatureLock";
+import { usePlanAccess } from "../hooks/usePlanAccess";
 
 interface ProfileData {
   resumeText: string;
@@ -207,7 +209,13 @@ function ProgressRing({ percentage }: { percentage: number }) {
   );
 }
 
-export function OutreachProfile() {
+interface OutreachProfileProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function OutreachProfile({ onNavigate }: OutreachProfileProps) {
+  const { canAccessProfileSection } = usePlanAccess();
+  const handleUpgrade = () => onNavigate?.("billing");
   const [profile, setProfile] = useState<ProfileData>(defaultProfile);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [newAchievement, setNewAchievement] = useState("");
@@ -648,6 +656,22 @@ export function OutreachProfile() {
             </div>
 
             {/* Section 2: Professional Bio */}
+            {!canAccessProfileSection("bio") ? (
+              <FeatureLockOverlay feature="bio" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-bio" ref={(el) => { sectionRefs.current.bio = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px]">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                      <User className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Professional Bio <FeatureLockBadge feature="bio" requiredPlan="pro" /></h3>
+                      <p className="text-sm text-gray-500">A brief overview of your background and what makes you unique</p>
+                    </div>
+                  </div>
+                  <textarea className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-400" rows={3} placeholder="e.g., I'm a Senior Product Designer with 8 years of experience..." disabled />
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-bio"
               ref={(el) => { sectionRefs.current.bio = el; }}
@@ -709,6 +733,7 @@ export function OutreachProfile() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Group: ACHIEVEMENTS & GOALS */}
             <div className="pt-4">
@@ -716,6 +741,13 @@ export function OutreachProfile() {
             </div>
 
             {/* Section 3: Signature Wins */}
+            {!canAccessProfileSection("achievements") ? (
+              <FeatureLockOverlay feature="achievements" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-achievements" ref={(el) => { sectionRefs.current.achievements = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0"><Trophy className="w-5 h-5 text-yellow-600" /></div><div><h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Signature Wins <FeatureLockBadge feature="achievements" requiredPlan="pro" /></h3><p className="text-sm text-gray-500">Quantifiable wins that demonstrate your impact</p></div></div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-achievements"
               ref={(el) => { sectionRefs.current.achievements = el; }}
@@ -819,8 +851,16 @@ export function OutreachProfile() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Section 4: Career Goals & Targeting */}
+            {!canAccessProfileSection("goals") ? (
+              <FeatureLockOverlay feature="goals" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-goals" ref={(el) => { sectionRefs.current.goals = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0"><Target className="w-5 h-5 text-blue-600" /></div><div><h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Career Goals <FeatureLockBadge feature="goals" requiredPlan="pro" /></h3><p className="text-sm text-gray-500">What you're looking for in your next role</p></div></div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-goals"
               ref={(el) => { sectionRefs.current.goals = el; }}
@@ -939,6 +979,7 @@ export function OutreachProfile() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Group: COMMUNICATION STYLE */}
             <div className="pt-4">
@@ -946,6 +987,13 @@ export function OutreachProfile() {
             </div>
 
             {/* Section 5: Voice & Tone */}
+            {!canAccessProfileSection("voice") ? (
+              <FeatureLockOverlay feature="voice" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-voice" ref={(el) => { sectionRefs.current.voice = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0"><Mic className="w-5 h-5 text-indigo-600" /></div><div><h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Voice & Tone <FeatureLockBadge feature="voice" requiredPlan="pro" /></h3><p className="text-sm text-gray-500">How your outreach should sound</p></div></div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-voice"
               ref={(el) => { sectionRefs.current.voice = el; }}
@@ -1027,8 +1075,16 @@ export function OutreachProfile() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Section 6: Personal Story Hooks */}
+            {!canAccessProfileSection("hooks") ? (
+              <FeatureLockOverlay feature="hooks" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-hooks" ref={(el) => { sectionRefs.current.hooks = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0"><Heart className="w-5 h-5 text-pink-600" /></div><div><h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Story Hooks <FeatureLockBadge feature="hooks" requiredPlan="pro" /></h3><p className="text-sm text-gray-500">Personal anecdotes that make your outreach memorable</p></div></div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-hooks"
               ref={(el) => { sectionRefs.current.hooks = el; }}
@@ -1133,6 +1189,7 @@ export function OutreachProfile() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Group: EXTRAS */}
             <div className="pt-4">
@@ -1172,6 +1229,13 @@ export function OutreachProfile() {
             </div>
 
             {/* Section 8: Hobbies (Collapsible) */}
+            {!canAccessProfileSection("hobbies") ? (
+              <FeatureLockOverlay feature="hobbies" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-hobbies" ref={(el) => { sectionRefs.current.hobbies = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0"><Heart className="w-5 h-5 text-pink-600" /></div><div><h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Hobbies <FeatureLockBadge feature="hobbies" requiredPlan="pro" /></h3><p className="text-sm text-gray-500">Personal interests that help build rapport</p></div></div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
             <div
               id="section-hobbies"
               ref={(el) => { sectionRefs.current.hobbies = el; }}
@@ -1225,6 +1289,7 @@ export function OutreachProfile() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Bottom Save Button */}
             <div className="flex justify-end pt-4">
