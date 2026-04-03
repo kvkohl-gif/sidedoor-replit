@@ -172,6 +172,8 @@ router.post("/create-checkout-session", requireAuth, requireStripe, async (req: 
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      automatic_tax: { enabled: true },
+      customer_update: { address: "auto" },
       success_url: `${baseUrl}/billing?upgraded=true`,
       cancel_url: `${baseUrl}/billing?canceled=true`,
       metadata: { user_id: userId, plan_type: planType, billing_period: billingPeriod },
