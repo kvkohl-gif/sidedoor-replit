@@ -56,6 +56,8 @@ export function registerOutreachProfileRoutes(app: Express) {
           targetRoles: [],
           targetIndustries: [],
           targetCompanyStage: [],
+          portfolioItems: [],
+          mutualConnections: [],
           profileCompleteness: 0,
         });
       }
@@ -77,6 +79,8 @@ export function registerOutreachProfileRoutes(app: Express) {
         targetRoles: safeParseArray(data.target_roles),
         targetIndustries: safeParseArray(data.target_industries),
         targetCompanyStage: safeParseArray(data.target_company_stage),
+        portfolioItems: safeParseArray(data.portfolio_items),
+        mutualConnections: safeParseArray(data.mutual_connections),
         profileCompleteness: data.profile_completeness ?? 0,
       });
     } catch (err: any) {
@@ -107,6 +111,8 @@ export function registerOutreachProfileRoutes(app: Express) {
         target_roles: JSON.stringify(body.targetRoles || []),
         target_industries: JSON.stringify(body.targetIndustries || []),
         target_company_stage: JSON.stringify(body.targetCompanyStage || []),
+        portfolio_items: JSON.stringify(body.portfolioItems || []),
+        mutual_connections: JSON.stringify(body.mutualConnections || []),
         updated_at: new Date().toISOString(),
       };
 

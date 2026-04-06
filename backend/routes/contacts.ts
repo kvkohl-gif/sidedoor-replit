@@ -297,21 +297,18 @@ export function registerContactRoutes(app: Express) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Fetch user's outreach profile for personalization
-      const { data: profile } = await supabase
-        .from('user_outreach_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      // Fetch user (for first_name) and outreach profile in parallel
+      const [{ data: profile }, { data: userRow }] = await Promise.all([
+        supabase.from('user_outreach_profiles').select('*').eq('user_id', userId).single(),
+        supabase.from('users').select('first_name').eq('id', userId).single(),
+      ]);
 
-      const parseJsonArray = (val: any): string[] => {
+      const parseJsonArray = (val: any): any[] => {
         if (Array.isArray(val)) return val;
         if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
         return [];
       };
 
-      // Use consolidated service — includes job description, resume, story hooks,
-      // outreach bucket differentiation, and research-backed frameworks
       const messages = await generatePersonalizedMessages({
         recruiterName: contact.name || "Hiring Manager",
         recruiterTitle: contact.title || "Recruiter",
@@ -320,19 +317,22 @@ export function registerContactRoutes(app: Express) {
         jobDescription: contact.job_submissions.job_input || "",
         recruiterEmail: contact.email,
         outreachBucket: contact.outreach_bucket || undefined,
+        userFirstName: userRow?.first_name || undefined,
         userBio: profile?.bio || undefined,
         userResume: profile?.resume_text || undefined,
         userAchievements: parseJsonArray(profile?.achievements),
         userStoryHooks: parseJsonArray(profile?.story_hooks),
         userCareerGoals: profile?.career_goals || undefined,
         userHobbies: parseJsonArray(profile?.hobbies),
+        portfolioItems: parseJsonArray(profile?.portfolio_items),
+        mutualConnections: parseJsonArray(profile?.mutual_connections),
         voiceFormality: profile?.voice_formality,
         voiceDirectness: profile?.voice_directness,
         voiceLength: profile?.voice_length,
         voiceNotes: profile?.voice_notes || undefined,
+        templateOverride: req.body?.templateOverride,
       });
 
-      // Save all generated fields to the contact
       await supabase
         .from('recruiter_contacts')
         .update({
@@ -348,10 +348,124 @@ export function registerContactRoutes(app: Express) {
         emailSubject: messages.emailSubject,
         emailContent: messages.emailContent,
         linkedinContent: messages.linkedinContent,
+        templateUsed: messages.templateUsed,
+        qualityScore: messages.qualityScore,
+        qualityWarnings: messages.qualityWarnings,
       });
     } catch (error) {
       console.error("Error generating message:", error);
       res.status(500).json({ message: "Failed to generate message" });
+    }
+  });
+
+  // ─── Follow-up generator ────────────────────────────────────────
+  app.post("/api/contacts/:id/generate-followup", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const contactId = parseInt(req.params.id);
+      const { recentNews } = req.body || {};
+
+      const { data: contact, error: fetchError } = await supabase
+        .from('recruiter_contacts')
+        .select(`*, job_submissions!inner (job_title, company_name, job_input, user_id)`)
+        .eq('id', contactId)
+        .single();
+      if (fetchError || !contact) return res.status(404).json({ message: "Contact not found" });
+      if (contact.job_submissions.user_id !== userId) return res.status(403).json({ message: "Access denied" });
+
+      const { data: userRow } = await supabase.from('users').select('first_name').eq('id', userId).single();
+
+      const messages = await generatePersonalizedMessages({
+        recruiterName: contact.name || "Hiring Manager",
+        recruiterTitle: contact.title || "Recruiter",
+        companyName: contact.job_submissions.company_name || "the company",
+        jobTitle: contact.job_submissions.job_title || "this position",
+        jobDescription: contact.job_submissions.job_input || "",
+        userFirstName: userRow?.first_name || undefined,
+        originalSubject: contact.email_subject || undefined,
+        recentNews,
+        templateOverride: "E_followup",
+      });
+
+      res.json(messages);
+    } catch (error) {
+      console.error("Error generating follow-up:", error);
+      res.status(500).json({ message: "Failed to generate follow-up" });
+    }
+  });
+
+  // ─── Thank-you generator ────────────────────────────────────────
+  app.post("/api/contacts/:id/generate-thankyou", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const contactId = parseInt(req.params.id);
+      const { interviewTopic, interviewDetail, followUpThought } = req.body || {};
+
+      const { data: contact, error: fetchError } = await supabase
+        .from('recruiter_contacts')
+        .select(`*, job_submissions!inner (job_title, company_name, job_input, user_id)`)
+        .eq('id', contactId)
+        .single();
+      if (fetchError || !contact) return res.status(404).json({ message: "Contact not found" });
+      if (contact.job_submissions.user_id !== userId) return res.status(403).json({ message: "Access denied" });
+
+      const [{ data: profile }, { data: userRow }] = await Promise.all([
+        supabase.from('user_outreach_profiles').select('*').eq('user_id', userId).single(),
+        supabase.from('users').select('first_name').eq('id', userId).single(),
+      ]);
+
+      const messages = await generatePersonalizedMessages({
+        recruiterName: contact.name || "Hiring Manager",
+        recruiterTitle: contact.title || "Recruiter",
+        companyName: contact.job_submissions.company_name || "the company",
+        jobTitle: contact.job_submissions.job_title || "this position",
+        jobDescription: contact.job_submissions.job_input || "",
+        userFirstName: userRow?.first_name || undefined,
+        userResume: profile?.resume_text || undefined,
+        interviewTopic,
+        interviewDetail,
+        followUpThought,
+        templateOverride: "F_thank_you",
+      });
+
+      res.json(messages);
+    } catch (error) {
+      console.error("Error generating thank-you:", error);
+      res.status(500).json({ message: "Failed to generate thank-you" });
+    }
+  });
+
+  // ─── Rejection grace note generator ─────────────────────────────
+  app.post("/api/contacts/:id/generate-rejection-grace", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const contactId = parseInt(req.params.id);
+
+      const { data: contact, error: fetchError } = await supabase
+        .from('recruiter_contacts')
+        .select(`*, job_submissions!inner (job_title, company_name, job_input, user_id)`)
+        .eq('id', contactId)
+        .single();
+      if (fetchError || !contact) return res.status(404).json({ message: "Contact not found" });
+      if (contact.job_submissions.user_id !== userId) return res.status(403).json({ message: "Access denied" });
+
+      const { data: userRow } = await supabase.from('users').select('first_name').eq('id', userId).single();
+
+      const messages = await generatePersonalizedMessages({
+        recruiterName: contact.name || "Hiring Manager",
+        recruiterTitle: contact.title || "Recruiter",
+        companyName: contact.job_submissions.company_name || "the company",
+        jobTitle: contact.job_submissions.job_title || "this position",
+        jobDescription: contact.job_submissions.job_input || "",
+        userFirstName: userRow?.first_name || undefined,
+        originalSubject: contact.email_subject || undefined,
+        templateOverride: "G_rejection_grace",
+      });
+
+      res.json(messages);
+    } catch (error) {
+      console.error("Error generating grace note:", error);
+      res.status(500).json({ message: "Failed to generate grace note" });
     }
   });
 }

@@ -9,6 +9,18 @@ import { apiRequest, queryClient } from "../lib/queryClient";
 import { FeatureLockBadge, FeatureLockOverlay } from "./FeatureLock";
 import { usePlanAccess } from "../hooks/usePlanAccess";
 
+interface PortfolioItem {
+  url: string;
+  description: string;
+  domain_tags?: string[];
+}
+
+interface MutualConnectionItem {
+  name: string;
+  context: string;
+  company?: string;
+}
+
 interface ProfileData {
   resumeText: string;
   resumeFilename: string;
@@ -25,6 +37,8 @@ interface ProfileData {
   targetRoles: string[];
   targetIndustries: string[];
   targetCompanyStage: string[];
+  portfolioItems: PortfolioItem[];
+  mutualConnections: MutualConnectionItem[];
   profileCompleteness: number;
 }
 
@@ -44,6 +58,8 @@ const defaultProfile: ProfileData = {
   targetRoles: [],
   targetIndustries: [],
   targetCompanyStage: [],
+  portfolioItems: [],
+  mutualConnections: [],
   profileCompleteness: 0,
 };
 
@@ -92,7 +108,7 @@ async function extractTextFromFile(file: File): Promise<string> {
   throw new Error("Unsupported file type. Please upload a PDF or DOCX file.");
 }
 
-type SectionKey = "resume" | "bio" | "achievements" | "goals" | "voice" | "hooks" | "cover" | "hobbies";
+type SectionKey = "resume" | "bio" | "achievements" | "goals" | "voice" | "hooks" | "portfolio" | "mutual" | "cover" | "hobbies";
 
 interface NavSection {
   key: SectionKey;
@@ -110,6 +126,8 @@ const NAV_SECTIONS: NavSection[] = [
   { key: "goals", label: "Career Goals", icon: Target, iconColor: "text-indigo-600", iconBg: "bg-indigo-100", group: "ACHIEVEMENTS & GOALS" },
   { key: "voice", label: "Voice & Tone", icon: Mic, iconColor: "text-green-600", iconBg: "bg-teal-100", group: "COMMUNICATION STYLE" },
   { key: "hooks", label: "Story Hooks", icon: Heart, iconColor: "text-rose-600", iconBg: "bg-orange-100", group: "COMMUNICATION STYLE" },
+  { key: "portfolio", label: "Portfolio & Work Samples", icon: FileText, iconColor: "text-blue-600", iconBg: "bg-blue-100", group: "PROOF & NETWORK" },
+  { key: "mutual", label: "Mutual Connections", icon: User, iconColor: "text-purple-600", iconBg: "bg-purple-100", group: "PROOF & NETWORK" },
   { key: "cover", label: "Cover Letter", icon: FileText, iconColor: "text-gray-500", iconBg: "bg-gray-100", group: "EXTRAS" },
   { key: "hobbies", label: "Hobbies", icon: Heart, iconColor: "text-gray-500", iconBg: "bg-gray-100", group: "EXTRAS" },
 ];
@@ -137,6 +155,12 @@ function getSectionCompletion(key: SectionKey, p: ProfileData): "complete" | "pa
       return "empty";
     case "hooks":
       if (p.storyHooks.length >= 1) return "complete";
+      return "empty";
+    case "portfolio":
+      if (p.portfolioItems.length >= 1) return "complete";
+      return "empty";
+    case "mutual":
+      if (p.mutualConnections.length >= 1) return "complete";
       return "empty";
     case "cover":
       if (p.coverLetter.trim().length > 20) return "complete";
@@ -241,6 +265,8 @@ export function OutreachProfile({ onNavigate }: OutreachProfileProps) {
     goals: null,
     voice: null,
     hooks: null,
+    portfolio: null,
+    mutual: null,
     cover: null,
     hobbies: null,
   });
@@ -248,7 +274,7 @@ export function OutreachProfile({ onNavigate }: OutreachProfileProps) {
   // IntersectionObserver for active section tracking
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
-    const sectionKeys: SectionKey[] = ["resume", "bio", "achievements", "goals", "voice", "hooks", "cover", "hobbies"];
+    const sectionKeys: SectionKey[] = ["resume", "bio", "achievements", "goals", "voice", "hooks", "portfolio", "mutual", "cover", "hobbies"];
 
     sectionKeys.forEach((key) => {
       const el = sectionRefs.current[key];
@@ -1189,6 +1215,184 @@ export function OutreachProfile({ onNavigate }: OutreachProfileProps) {
                 </p>
               </div>
             </div>
+            )}
+
+            {/* Group: PROOF & NETWORK */}
+            <div className="pt-4">
+              <h2 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4 px-1">Proof & Network</h2>
+            </div>
+
+            {/* Section: Portfolio & Work Samples */}
+            {!canAccessProfileSection("portfolio") ? (
+              <FeatureLockOverlay feature="portfolio" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-portfolio" ref={(el) => { sectionRefs.current.portfolio = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Portfolio & Work Samples <FeatureLockBadge feature="portfolio" requiredPlan="pro" /></h3>
+                      <p className="text-sm text-gray-500">Linked work products that match a target company's domain trigger our highest-converting email template.</p>
+                    </div>
+                  </div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
+              <div id="section-portfolio" ref={(el) => { sectionRefs.current.portfolio = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px]">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-[#1A202C] font-semibold">Portfolio & Work Samples</h3>
+                    <p className="text-[14px] text-[#718096]">Add prototypes, case studies, or writing — including domain tags so the AI knows when to lead with them.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-3">
+                  {profile.portfolioItems.map((item, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <input
+                          type="url"
+                          value={item.url}
+                          onChange={(e) => {
+                            const next = [...profile.portfolioItems];
+                            next[index] = { ...next[index], url: e.target.value };
+                            updateField("portfolioItems", next);
+                          }}
+                          placeholder="https://figma.com/file/..."
+                          className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white"
+                        />
+                        <button
+                          onClick={() => updateField("portfolioItems", profile.portfolioItems.filter((_, i) => i !== index))}
+                          className="text-gray-400 hover:text-red-500 p-2"
+                          aria-label="Remove"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => {
+                          const next = [...profile.portfolioItems];
+                          next[index] = { ...next[index], description: e.target.value };
+                          updateField("portfolioItems", next);
+                        }}
+                        placeholder="Short description (e.g. 'Financial literacy app prototype for kids')"
+                        className="w-full px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white mb-2"
+                      />
+                      <input
+                        type="text"
+                        value={(item.domain_tags || []).join(", ")}
+                        onChange={(e) => {
+                          const next = [...profile.portfolioItems];
+                          next[index] = {
+                            ...next[index],
+                            domain_tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean),
+                          };
+                          updateField("portfolioItems", next);
+                        }}
+                        placeholder="Domain tags, comma-separated (e.g. fintech, edtech, kids)"
+                        className="w-full px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => updateField("portfolioItems", [...profile.portfolioItems, { url: "", description: "", domain_tags: [] }])}
+                  className="w-full px-4 py-2.5 border border-dashed border-gray-300 rounded-lg text-[14px] text-gray-600 hover:border-[#6B46C1] hover:text-[#6B46C1] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add portfolio item
+                </button>
+              </div>
+            )}
+
+            {/* Section: Mutual Connections */}
+            {!canAccessProfileSection("mutual") ? (
+              <FeatureLockOverlay feature="mutual" requiredPlan="pro" onUpgrade={handleUpgrade}>
+                <div id="section-mutual" ref={(el) => { sectionRefs.current.mutual = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px] opacity-60">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                      <User className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">Mutual Connections <FeatureLockBadge feature="mutual" requiredPlan="pro" /></h3>
+                      <p className="text-sm text-gray-500">When you have a warm intro, the AI uses our highest-converting template — leading with the mutual contact.</p>
+                    </div>
+                  </div>
+                </div>
+              </FeatureLockOverlay>
+            ) : (
+              <div id="section-mutual" ref={(el) => { sectionRefs.current.mutual = el; }} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm scroll-mt-[130px]">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <User className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-[#1A202C] font-semibold">Mutual Connections</h3>
+                    <p className="text-[14px] text-[#718096]">List warm intros — the AI auto-detects when a contact's company matches and leads with the mutual.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-3">
+                  {profile.mutualConnections.map((m, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={m.name}
+                          onChange={(e) => {
+                            const next = [...profile.mutualConnections];
+                            next[index] = { ...next[index], name: e.target.value };
+                            updateField("mutualConnections", next);
+                          }}
+                          placeholder="Mutual's name (e.g. Stephanie Cziria)"
+                          className="flex-1 px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white"
+                        />
+                        <button
+                          onClick={() => updateField("mutualConnections", profile.mutualConnections.filter((_, i) => i !== index))}
+                          className="text-gray-400 hover:text-red-500 p-2"
+                          aria-label="Remove"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={m.company || ""}
+                        onChange={(e) => {
+                          const next = [...profile.mutualConnections];
+                          next[index] = { ...next[index], company: e.target.value };
+                          updateField("mutualConnections", next);
+                        }}
+                        placeholder="Company they work at (optional)"
+                        className="w-full px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white mb-2"
+                      />
+                      <input
+                        type="text"
+                        value={m.context}
+                        onChange={(e) => {
+                          const next = [...profile.mutualConnections];
+                          next[index] = { ...next[index], context: e.target.value };
+                          updateField("mutualConnections", next);
+                        }}
+                        placeholder="Context (e.g. 'She thought there might be a strong fit')"
+                        className="w-full px-3 py-2 border border-[#E2E8F0] rounded text-[13px] bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => updateField("mutualConnections", [...profile.mutualConnections, { name: "", context: "", company: "" }])}
+                  className="w-full px-4 py-2.5 border border-dashed border-gray-300 rounded-lg text-[14px] text-gray-600 hover:border-[#6B46C1] hover:text-[#6B46C1] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add mutual connection
+                </button>
+              </div>
             )}
 
             {/* Group: EXTRAS */}

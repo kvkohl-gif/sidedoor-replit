@@ -9,6 +9,8 @@ const VALUE_PROPS: Record<string, string> = {
   voice: "Control the tone and style of AI-generated messages",
   hooks: "Create personal connections that get responses",
   hobbies: "Share interests that build rapport with recruiters",
+  portfolio: "Trigger our highest-converting email template by attaching work samples",
+  mutual: "Warm intros are the #1 email format — list them once, the AI uses them automatically",
   outreachHub: "Track your full outreach pipeline and follow-ups",
   followUpDrafts: "AI-powered follow-up sequences to stay top of mind",
   linkedinDrafts: "Craft LinkedIn messages that get accepted",
@@ -200,7 +202,7 @@ export function FeatureLockOverlay({
 
 /* ---------- useFeatureGate ---------- */
 
-const PROFILE_SECTIONS = ["bio", "achievements", "goals", "voice", "hooks", "hobbies"];
+const PROFILE_SECTIONS = ["bio", "achievements", "goals", "voice", "hooks", "portfolio", "mutual", "hobbies"];
 
 export function useFeatureGate(feature: string): {
   isLocked: boolean;

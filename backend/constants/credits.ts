@@ -79,7 +79,7 @@ export const STRIPE_PRICE_IDS: Record<string, Record<BillingPeriod, string>> = {
 };
 
 // All profile section IDs
-const ALL_PROFILE_SECTIONS = ["resume", "bio", "achievements", "goals", "voice", "hooks", "cover", "hobbies"] as const;
+const ALL_PROFILE_SECTIONS = ["resume", "bio", "achievements", "goals", "voice", "hooks", "portfolio", "mutual", "cover", "hobbies"] as const;
 const STARTER_PROFILE_SECTIONS = ["resume", "cover"] as const;
 
 export const PLAN_FEATURES = {
