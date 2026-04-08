@@ -23,6 +23,39 @@ export interface ContactSearchRequest {
   employee_count?: number; // Company size from Apollo org data
 }
 
+/**
+ * Map a job title to the seniority levels we should TARGET for hiring managers.
+ * For an intern, we want managers/leads, NOT directors/VPs/C-suite.
+ * For a senior IC, we want managers and directors. For a director-level role,
+ * we want VPs and C-suite who are 1-2 levels up.
+ *
+ * This prevents the system from labeling "Deputy Director" as a top match for
+ * an "Civil Engineering Intern" role.
+ */
+function targetSenioritiesForJob(jobTitle: string | undefined): string[] {
+  if (!jobTitle) return ['manager', 'director', 'head'];
+  const t = jobTitle.toLowerCase();
+
+  // Intern / entry-level → manager and senior IC are the right hiring contacts
+  if (/\b(intern|internship|new.grad|entry.level|graduate program)\b/.test(t)) {
+    return ['manager', 'senior', 'lead'];
+  }
+  // Junior / associate → manager / senior manager
+  if (/\b(junior|jr\.?|associate)\b/.test(t)) {
+    return ['manager', 'senior', 'lead', 'head'];
+  }
+  // Director / Head of → VP and C-suite
+  if (/\b(director|head of|principal)\b/.test(t)) {
+    return ['vp', 'c_suite', 'owner'];
+  }
+  // VP / Chief / SVP → C-suite and founder/owner
+  if (/\b(vp|vice president|svp|chief|c-?level|founder)\b/.test(t)) {
+    return ['c_suite', 'owner', 'partner'];
+  }
+  // Senior / Staff / Lead / Mid IC and Manager → manager + director (default sweet spot)
+  return ['manager', 'director', 'head'];
+}
+
 // Company size tiers for targeting strategy
 type CompanySizeTier = 'tiny' | 'small' | 'mid' | 'large' | 'enterprise';
 
@@ -286,7 +319,7 @@ export class EnhancedEnrichmentService {
 
           if (request.organization_id) {
             // Use organization-specific search plans
-            const searchPlans = buildApolloPlans(request.organization_id, departmentInference, request.employee_count);
+            const searchPlans = buildApolloPlans(request.organization_id, departmentInference, request.employee_count, request.job_title);
             const topDept = departmentInference.departments[0];
             const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
             
@@ -345,23 +378,21 @@ export class EnhancedEnrichmentService {
               .sort((a, b) => b.confidence - a.confidence)
               .slice(0, 5)
               .map(t => t.title);
-            
+
+            // Target seniority appropriate for the job level (intern → manager, NOT director)
+            const targetSeniorities = targetSenioritiesForJob(request.job_title);
+
             // Search for department leads using company name
             console.log(`Searching for department leads: ${primaryTitles.join(', ')}`);
-            console.log(`Department search params:`, {
-              company_name: request.company_name,
-              department: topDept.label,
-              titles: primaryTitles,
-              seniorities: ['manager', 'head', 'director', 'vp', 'c_suite']
-            });
-            
+            console.log(`Job-level-appropriate seniorities for "${request.job_title}":`, targetSeniorities);
+
             departmentLeadContacts = await apolloService.searchDepartmentLeads({
               company_name: request.company_name,
               job_title: request.job_title,
               location: request.location,
               department: topDept.label,
               titles: primaryTitles,
-              seniorities: ['manager', 'head', 'director', 'vp', 'c_suite'],
+              seniorities: targetSeniorities,
               job_country: request.job_country,
               job_region: request.job_region,
               company_hq_country: request.company_hq_country,

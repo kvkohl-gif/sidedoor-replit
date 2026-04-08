@@ -168,22 +168,72 @@ class ApolloService {
   }
 
   /**
+   * Normalize a URL or domain string to its registrable hostname.
+   * Strips protocol, www., paths, and ports.
+   * "https://andoverma.gov/jobs/123" → "andoverma.gov"
+   * "townofandover.com" → "townofandover.com"
+   */
+  static normalizeDomain(input: string | null | undefined): string | null {
+    if (!input) return null;
+    let s = input.trim().toLowerCase();
+    if (!s) return null;
+    // Strip scheme
+    s = s.replace(/^[a-z]+:\/\//, "");
+    // Strip path/query
+    s = s.split("/")[0].split("?")[0].split("#")[0];
+    // Strip port
+    s = s.split(":")[0];
+    // Strip leading www.
+    s = s.replace(/^www\./, "");
+    return s || null;
+  }
+
+  /**
+   * Compare two domains for equivalence. Returns true if they share the same
+   * registrable root (last 2 labels), e.g. "townofandover.com" == "townofandover.com"
+   * but "andoverma.gov" != "townofandover.com".
+   */
+  static domainsMatch(a: string | null, b: string | null): boolean {
+    const na = ApolloService.normalizeDomain(a);
+    const nb = ApolloService.normalizeDomain(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    // Compare registrable suffix (last two labels)
+    const aTail = na.split(".").slice(-2).join(".");
+    const bTail = nb.split(".").slice(-2).join(".");
+    return aTail === bTail;
+  }
+
+  /**
    * Find the best-matching organization from Apollo search results.
    * Returns null if no result scores above the threshold (0.6).
+   *
+   * If `expectedDomain` is provided, the matched org's domain MUST also match it
+   * (same registrable root). This prevents Apollo from returning a private company
+   * that happens to share a name with a government entity, etc.
    */
   findBestOrganizationMatch(
     organizations: ApolloOrganization[],
     expectedCompanyName: string,
-    threshold = 0.6
+    threshold = 0.6,
+    expectedDomain: string | null = null
   ): ApolloOrganization | null {
     if (organizations.length === 0) return null;
+
+    const normalizedExpected = ApolloService.normalizeDomain(expectedDomain);
 
     let bestOrg: ApolloOrganization | null = null;
     let bestScore = 0;
 
     for (const org of organizations) {
       const score = scoreOrgMatch(org.name, expectedCompanyName);
-      console.log(`  Org match: "${org.name}" vs "${expectedCompanyName}" → score ${score.toFixed(2)} (domain: ${org.primary_domain || 'none'})`);
+      const orgDomain = ApolloService.normalizeDomain(org.primary_domain);
+      const domainOk = !normalizedExpected || ApolloService.domainsMatch(orgDomain, normalizedExpected);
+      console.log(`  Org match: "${org.name}" vs "${expectedCompanyName}" → score ${score.toFixed(2)} (domain: ${orgDomain || 'none'}, expected: ${normalizedExpected || 'any'}, domainOk: ${domainOk})`);
+
+      // Hard reject if domain validation is enabled and the domain doesn't match
+      if (normalizedExpected && !domainOk) continue;
+
       if (score > bestScore) {
         bestScore = score;
         bestOrg = org;
@@ -195,7 +245,11 @@ class ApolloService {
       return bestOrg;
     }
 
-    console.log(`⚠️ No org matched "${expectedCompanyName}" above threshold ${threshold}. Best was "${bestOrg?.name}" at ${bestScore.toFixed(2)}`);
+    if (normalizedExpected) {
+      console.log(`⚠️ No org matched "${expectedCompanyName}" with domain "${normalizedExpected}" above threshold ${threshold}. Best name-only was "${bestOrg?.name}" at ${bestScore.toFixed(2)}. Returning null to prevent contact hallucination.`);
+    } else {
+      console.log(`⚠️ No org matched "${expectedCompanyName}" above threshold ${threshold}. Best was "${bestOrg?.name}" at ${bestScore.toFixed(2)}`);
+    }
     return null;
   }
 
@@ -852,14 +906,15 @@ class ApolloService {
         return [];
       }
       
-      // Use smart email discovery with actual company domain
+      // Use smart email discovery with actual company domain.
+      // Refuse to fabricate <name>.com if Apollo couldn't validate the org.
       if (companyDomain) {
         return await this.enrichAndInferEmails(result.contacts, companyDomain);
       } else {
-        console.log(`⚠️ No company domain found for ${params.company_name}, using fallback domain rules`);
-        return await this.enrichAndInferEmails(result.contacts, `${params.company_name.toLowerCase().replace(/\s+/g, '')}.com`);
+        console.log(`🚫 ABORTED location strategy enrichment: no trusted domain for ${params.company_name}`);
+        return [];
       }
-      
+
     } catch (error) {
       console.error(`Error in location strategy ${strategy.name}:`, error);
       return [];
@@ -901,12 +956,13 @@ class ApolloService {
 
       console.log(`Found ${candidateContacts.length} candidate contacts in fallback, processing emails...`);
       
-      // Use smart email discovery with actual company domain
+      // Use smart email discovery with actual company domain.
+      // Refuse to fabricate <name>.com if no trusted domain available.
       if (companyDomain) {
         return await this.enrichAndInferEmails(candidateContacts, companyDomain);
       } else {
-        console.log(`⚠️ No company domain found for ${params.company_name}, using fallback domain`);
-        return await this.enrichAndInferEmails(candidateContacts, `${params.company_name.toLowerCase().replace(/\s+/g, '')}.com`);
+        console.log(`🚫 ABORTED fallback enrichment: no trusted domain for ${params.company_name}`);
+        return [];
       }
 
     } catch (error) {
@@ -1310,12 +1366,26 @@ class ApolloService {
     }
 
     try {
-      // Find and validate the correct organization
-      const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      // Find and validate the correct organization, cross-validating against the
+      // user-provided website domain when available. If no domain match, return empty
+      // rather than picking the wrong company and hallucinating contacts.
+      const expectedDomain = ApolloService.normalizeDomain(params.website_url);
+      const organizations = await this.searchOrganizations({
+        company_name: params.company_name,
+        domain: expectedDomain || undefined,
+      });
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name, 0.6, expectedDomain);
       const companyDomain = matchedOrg?.primary_domain || null;
       const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
-      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'})`);
+      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'})`);
+
+      // CRITICAL: If the user provided a domain and we couldn't validate the org,
+      // return empty rather than searching with a fabricated domain. This prevents
+      // hallucinated contacts from a wrong-Apollo-org match.
+      if (expectedDomain && !matchedOrg) {
+        console.log(`🚫 ABORTED recruiting search: user provided domain "${expectedDomain}" but no Apollo org matched. Refusing to fabricate.`);
+        return [];
+      }
 
       const searchPayload: any = {
         person_titles: RECRUITER_TITLES,
@@ -1328,7 +1398,7 @@ class ApolloService {
         searchPayload.organization_ids = [resolvedOrgId];
         console.log(`Using organization_id for recruiting search: ${resolvedOrgId} (from: ${params.organization_id ? 'request' : 'org match'})`);
       } else {
-        // Fallback to name-based search only if no org match found
+        // Fallback to name-based search only if no org match found AND no expected domain
         searchPayload.q_organization_name = params.company_name;
         console.log(`⚠️ No validated org — using fuzzy company name for recruiting search: ${params.company_name}`);
       }
@@ -1345,11 +1415,13 @@ class ApolloService {
       console.log(`Recruiting search found ${result.contacts.length} contacts (already processed)`);
 
       // Use smart email discovery with actual company domain
-      if (companyDomain) {
-        return await this.enrichAndInferEmails(result.contacts, companyDomain);
+      // Prefer: matched Apollo org domain → user-provided domain → REFUSE (no fabrication)
+      const trustedDomain = companyDomain || expectedDomain;
+      if (trustedDomain) {
+        return await this.enrichAndInferEmails(result.contacts, trustedDomain);
       } else {
-        console.log(`⚠️ No company domain found for recruiting search, using fallback`);
-        return await this.enrichAndInferEmails(result.contacts, `${params.company_name.toLowerCase().replace(/\s+/g, '')}.com`);
+        console.log(`🚫 ABORTED recruiting enrichment: no trusted domain available for ${params.company_name}. Refusing to fabricate <name>.com pattern.`);
+        return [];
       }
 
     } catch (error) {
@@ -1381,12 +1453,24 @@ class ApolloService {
     }
 
     try {
-      // Find and validate the correct organization
-      const organizations = await this.searchOrganizations({ company_name: params.company_name });
-      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name);
+      // Find and validate the correct organization, cross-validating against the
+      // user-provided website domain when available.
+      const expectedDomain = ApolloService.normalizeDomain(params.website_url);
+      const organizations = await this.searchOrganizations({
+        company_name: params.company_name,
+        domain: expectedDomain || undefined,
+      });
+      const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name, 0.6, expectedDomain);
       const companyDomain = matchedOrg?.primary_domain || null;
       const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
-      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'})`);
+      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'})`);
+
+      // CRITICAL: If the user provided a domain and we couldn't validate the org,
+      // return empty rather than searching with a fabricated domain.
+      if (expectedDomain && !matchedOrg) {
+        console.log(`🚫 ABORTED department lead search: user provided domain "${expectedDomain}" but no Apollo org matched.`);
+        return [];
+      }
 
       const searchPayload: any = {
         person_titles: params.titles,
@@ -1423,12 +1507,14 @@ class ApolloService {
         console.log(`  Contact ${index + 1}: ${contact.full_name} - ${contact.title} - Email: ${contact.email || 'None'}`);
       });
 
-      // Use smart email discovery with actual company domain
-      if (companyDomain) {
-        return await this.enrichAndInferEmails(result.contacts, companyDomain);
+      // Use smart email discovery with actual company domain.
+      // Prefer: matched Apollo org domain → user-provided domain → REFUSE (no fabrication)
+      const trustedDomain = companyDomain || expectedDomain;
+      if (trustedDomain) {
+        return await this.enrichAndInferEmails(result.contacts, trustedDomain);
       } else {
-        console.log(`⚠️ No company domain found for department search, using fallback`);
-        return await this.enrichAndInferEmails(result.contacts, `${params.company_name.toLowerCase().replace(/\s+/g, '')}.com`);
+        console.log(`🚫 ABORTED department enrichment: no trusted domain available for ${params.company_name}.`);
+        return [];
       }
 
     } catch (error) {

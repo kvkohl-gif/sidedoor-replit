@@ -175,9 +175,70 @@ export interface ApolloSearchPlan {
 }
 
 /**
+ * Determine seniority tiers appropriate for the job's level.
+ * For an intern/junior role, hiring managers are NOT directors/VPs — they're managers
+ * and senior ICs who would actually be supervising the intern.
+ */
+function tieredSenioritiesForJobLevel(jobTitle: string | undefined): {
+  TIER_1: string[]; TIER_2: string[]; TIER_3: string[];
+} {
+  if (!jobTitle) {
+    return {
+      TIER_1: ['director', 'vp', 'c_suite', 'head'],
+      TIER_2: ['manager', 'lead'],
+      TIER_3: ['senior'],
+    };
+  }
+  const t = jobTitle.toLowerCase();
+  // Intern / new grad → managers and seniors are the actual hiring contacts
+  if (/\b(intern|internship|new.grad|entry.level|graduate program)\b/.test(t)) {
+    return {
+      TIER_1: ['manager', 'lead'],
+      TIER_2: ['senior'],
+      TIER_3: ['head'],
+    };
+  }
+  // Junior / associate → managers and senior managers
+  if (/\b(junior|jr\.?|associate)\b/.test(t)) {
+    return {
+      TIER_1: ['manager', 'lead'],
+      TIER_2: ['senior', 'head'],
+      TIER_3: ['director'],
+    };
+  }
+  // Director/Head/Principal level → VP and C-suite are the hiring contacts
+  if (/\b(director|head of|principal)\b/.test(t)) {
+    return {
+      TIER_1: ['vp', 'c_suite'],
+      TIER_2: ['head', 'director'],
+      TIER_3: ['owner', 'partner'],
+    };
+  }
+  // VP/Chief/SVP/Founder → only C-suite peers
+  if (/\b(vp|vice president|svp|chief|c-?level|founder)\b/.test(t)) {
+    return {
+      TIER_1: ['c_suite', 'owner'],
+      TIER_2: ['vp', 'head'],
+      TIER_3: ['partner'],
+    };
+  }
+  // Senior IC / Manager / mid-level (default)
+  return {
+    TIER_1: ['director', 'vp', 'c_suite', 'head'],
+    TIER_2: ['manager', 'lead'],
+    TIER_3: ['senior'],
+  };
+}
+
+/**
  * Build a prioritized search plan based on department inference
  */
-export function buildApolloPlans(orgId: string, inference: DepartmentInference, employeeCount?: number): ApolloSearchPlan[] {
+export function buildApolloPlans(
+  orgId: string,
+  inference: DepartmentInference,
+  employeeCount?: number,
+  jobTitle?: string
+): ApolloSearchPlan[] {
   const topDept = inference.departments.sort((a, b) => b.confidence - a.confidence)[0];
   const deptFilters = topDept ? APOLLO_DEPT_MAP[topDept.id] : [];
 
@@ -193,10 +254,10 @@ export function buildApolloPlans(orgId: string, inference: DepartmentInference, 
       .map(x => x.title)
   );
 
-  // Tiered seniority levels for waterfall search
-  const TIER_1 = ['director', 'vp', 'c_suite', 'head'];        // Skip-level / senior decision-makers
-  const TIER_2 = ['manager', 'lead'];                            // Direct hiring managers
-  const TIER_3 = ['senior'];                                     // Senior ICs / team leads (advocates)
+  // Tiered seniority levels for waterfall search — calibrated to the job level
+  // so an intern role doesn't get matched against C-suite contacts as "Top Match"
+  const { TIER_1, TIER_2, TIER_3 } = tieredSenioritiesForJobLevel(jobTitle);
+  console.log(`[buildApolloPlans] Job: "${jobTitle}" → TIER_1=${TIER_1.join(',')} TIER_2=${TIER_2.join(',')} TIER_3=${TIER_3.join(',')}`);
 
   // Adapt strategy to company size
   const isSmall = (employeeCount || 0) <= 200;

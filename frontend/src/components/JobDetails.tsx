@@ -164,13 +164,68 @@ function formatSeniority(s: string | null): string | null {
   return map[s.toLowerCase()] || s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 }
 
-function getMatchInfo(contact: Recruiter): { label: string; color: string; dotColor: string } {
+// Job seniority levels (ordered low → high). Used to compare against contact seniority
+// so we don't label a Director as "Top Match" for an Intern role.
+const JOB_SENIORITY_RANK: Record<string, number> = {
+  intern: 0, entry: 1, junior: 1, associate: 2, mid: 3,
+  senior: 4, lead: 5, staff: 5, principal: 6, manager: 6,
+  director: 7, head: 7, vp: 8, chief: 9, c_suite: 9,
+};
+
+const CONTACT_SENIORITY_RANK: Record<string, number> = {
+  entry: 1, junior: 1, associate: 2, mid: 3,
+  senior: 4, lead: 5, staff: 5, principal: 6, manager: 6,
+  director: 7, head: 7, vp: 8, c_suite: 9, chief: 9,
+};
+
+function getJobSeniorityRank(jobTitle: string | null): number {
+  if (!jobTitle) return 4; // default to "senior" baseline
+  const t = jobTitle.toLowerCase();
+  if (/\b(intern|internship)\b/.test(t)) return 0;
+  if (/\b(entry.level|new.grad|graduate)\b/.test(t)) return 1;
+  if (/\b(junior|jr\.?)\b/.test(t)) return 1;
+  if (/\b(associate)\b/.test(t)) return 2;
+  if (/\bchief\b|\bcoo\b|\bceo\b|\bcto\b|\bcfo\b|\bcmo\b|\bcpo\b/.test(t)) return 9;
+  if (/\bvp\b|vice president/.test(t)) return 8;
+  if (/\bdirector\b|\bhead of\b/.test(t)) return 7;
+  if (/\b(principal|staff)\b/.test(t)) return 6;
+  if (/\bmanager\b/.test(t)) return 6;
+  if (/\b(senior|sr\.?|lead)\b/.test(t)) return 4;
+  return 3; // mid-level default
+}
+
+function getContactSeniorityRank(contactSeniority: string | null): number {
+  if (!contactSeniority) return 3;
+  return CONTACT_SENIORITY_RANK[contactSeniority.toLowerCase()] ?? 3;
+}
+
+function getMatchInfo(
+  contact: Recruiter,
+  jobTitle: string | null = null
+): { label: string; color: string; dotColor: string } {
+  const jobRank = getJobSeniorityRank(jobTitle);
+  const contactRank = getContactSeniorityRank(contact.seniority);
+  // A contact is a "good match" if they're at most 2 levels above the job
+  // (e.g. for an intern, anything above Manager is overshooting; for a Senior PM,
+  //  Director is fine but VP is borderline and CSuite is overshoot)
+  const gap = contactRank - jobRank;
+
   if (contact.outreachBucket === "department_lead") {
-    if (contact.seniority && /director|vp|head|c_suite|chief/i.test(contact.seniority)) {
+    // Hiring manager — ideal is 1-2 levels above the candidate
+    if (gap >= 0 && gap <= 2) {
       return { label: "Top Match", color: "#059669", dotColor: "#10b981" };
     }
+    if (gap >= 3 && gap <= 4) {
+      return { label: "Reach", color: "#d97706", dotColor: "#f59e0b" };
+    }
+    if (gap > 4) {
+      return { label: "Overshoot", color: "#9ca3af", dotColor: "#d1d5db" };
+    }
+    // Contact is below the job level — might still be useful but not ideal
     return { label: "Strong", color: "#0891b2", dotColor: "#22d3ee" };
   }
+
+  // Recruiters / non-HM contacts
   if (contact.seniority && /senior|lead|head/i.test(contact.seniority)) {
     return { label: "Strong", color: "#7c3aed", dotColor: "#a78bfa" };
   }
@@ -696,7 +751,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
             const vs = contact.verificationStatus || "unknown";
             const cfg = emailStatusConfig[vs] || emailStatusConfig.unknown;
             const StatusIcon = cfg.icon;
-            const matchInfo = getMatchInfo(contact);
+            const matchInfo = getMatchInfo(contact, submission?.jobTitle ?? null);
             const hasMessages = contact.emailDraft || contact.linkedinMessage;
             const isGenerating = generatingMessageFor === contact.id;
             const isContacted = contact.contactStatus && contact.contactStatus !== "not_contacted";

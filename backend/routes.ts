@@ -566,7 +566,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           company_hq_country: apolloParams.company_hq_country,
           remote_hiring_countries: apolloParams.remote_hiring_countries,
           organization_id: resolvedOrgId,
-          employee_count: employeeCount
+          employee_count: employeeCount,
+          // CRITICAL: pass the resolved domain so Apollo org match can be cross-validated
+          // and email pattern inference uses the real company domain (not a fabricated one).
+          website_url: resolvedDomain || aiInferredDomain || (jobUrl ? new URL(jobUrl).hostname : undefined),
         });
 
         console.log(`Apollo search completed:`, apolloSearchResult.searchMetadata);
