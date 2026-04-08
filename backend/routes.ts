@@ -154,7 +154,8 @@ async function resolveCompanyViaApollo(
   jobUrl: string | null,
   extractedCompanyName: string,
   jobContent?: string,
-  aiInferredDomain?: string
+  aiInferredDomain?: string,
+  jobLocation?: string  // e.g. "Andover, MA" or "Massachusetts" — disambiguates same-name entities
 ): Promise<{
   organizationId: string | null;
   companyName: string;
@@ -270,16 +271,22 @@ async function resolveCompanyViaApollo(
         }
       }
 
-      // If enrich didn't work, fall back to search + validation
+      // If enrich didn't work, fall back to search + validation.
+      // Pass jobLocation so we can disambiguate same-name entities (e.g. multiple
+      // "Town of Andover" municipalities across states).
       if (!resolvedOrgId) {
-        const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
+        const orgLocations = jobLocation ? [jobLocation] : undefined;
+        const orgs = await apolloService.searchOrganizations({
+          company_name: extractedCompanyName,
+          organization_locations: orgLocations,
+        });
         const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName);
         if (matchedOrg) {
           resolvedOrgId = matchedOrg.id;
           resolvedName = matchedOrg.name;
           resolvedDomain = matchedOrg.primary_domain || null;
           employeeCount = matchedOrg.employees;
-          console.log(`✅ Company resolved via name search "${extractedCompanyName}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
+          console.log(`✅ Company resolved via name+location search "${extractedCompanyName}" @ "${jobLocation || 'no location'}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
         } else {
           console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via any method`);
         }
@@ -511,8 +518,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Resolve company via Apollo (text domains → AI-inferred domain → URL domains → name search)
         const jobUrl = submissionData.inputType === "url" ? submissionData.jobInput : null;
         const aiInferredDomain = jobDataExtraction?.company_domain || undefined;
-        console.log(`Resolving company via Apollo for: "${companyName}" (AI domain: ${aiInferredDomain || 'none'}, URL: ${jobUrl || 'none'}, content: ${jobContent.length} chars)`);
-        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName, jobContent, aiInferredDomain);
+        const jobLocation = jobDataExtraction?.location || undefined;
+        console.log(`Resolving company via Apollo for: "${companyName}" (AI domain: ${aiInferredDomain || 'none'}, location: ${jobLocation || 'none'}, URL: ${jobUrl || 'none'}, content: ${jobContent.length} chars)`);
+        const companyResolution = await resolveCompanyViaApollo(jobUrl, companyName, jobContent, aiInferredDomain, jobLocation);
 
         // Use Apollo-resolved data when available (more authoritative than AI extraction)
         const resolvedCompanyName = companyResolution.companyName || companyName;

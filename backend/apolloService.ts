@@ -192,6 +192,10 @@ class ApolloService {
    * Compare two domains for equivalence. Returns true if they share the same
    * registrable root (last 2 labels), e.g. "townofandover.com" == "townofandover.com"
    * but "andoverma.gov" != "townofandover.com".
+   *
+   * Also returns true if they share the same SLD with different TLDs from a known
+   * "equivalent set" (e.g. .gov / .us / .org for municipal entities). This handles
+   * cases like andoverma.gov vs andoverma.us being the same town.
    */
   static domainsMatch(a: string | null, b: string | null): boolean {
     const na = ApolloService.normalizeDomain(a);
@@ -201,7 +205,75 @@ class ApolloService {
     // Compare registrable suffix (last two labels)
     const aTail = na.split(".").slice(-2).join(".");
     const bTail = nb.split(".").slice(-2).join(".");
-    return aTail === bTail;
+    if (aTail === bTail) return true;
+
+    // Check equivalent-TLD case: same SLD, different TLD from a known group
+    const aLabels = na.split(".");
+    const bLabels = nb.split(".");
+    if (aLabels.length >= 2 && bLabels.length >= 2) {
+      const aSld = aLabels[aLabels.length - 2];
+      const bSld = bLabels[bLabels.length - 2];
+      const aTld = aLabels[aLabels.length - 1];
+      const bTld = bLabels[bLabels.length - 1];
+      const equivalentTldGroups = [
+        new Set(["gov", "us", "org", "ma.us", "il.us", "ca.us", "ny.us"]), // government
+        new Set(["edu", "org"]), // educational
+      ];
+      if (aSld === bSld) {
+        for (const group of equivalentTldGroups) {
+          if (group.has(aTld) && group.has(bTld)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Build an Apollo organization_locations[] filter from job/contact search params.
+   * Used to disambiguate same-name entities across geographies (e.g. multiple
+   * "Town of Andover" municipalities). Apollo accepts free-text city/state/country.
+   */
+  private buildOrgLocationsFilter(params: {
+    location?: string;
+    job_country?: string;
+    job_region?: string;
+    company_hq_country?: string;
+  }): string[] {
+    const out: string[] = [];
+    // Most specific first: city + state if we have it
+    if (params.location) out.push(params.location);
+    // Then state/region (e.g. "Massachusetts")
+    if (params.job_region && params.job_region !== params.location) out.push(params.job_region);
+    // Then country
+    if (params.job_country && !out.includes(params.job_country)) out.push(params.job_country);
+    if (params.company_hq_country && !out.includes(params.company_hq_country)) out.push(params.company_hq_country);
+    return out;
+  }
+
+  /**
+   * Generate plausible TLD variants of a domain. Used to retry Apollo org search
+   * when the user-provided domain (e.g. andoverma.gov) isn't in Apollo but a sibling
+   * (andoverma.us) is.
+   */
+  private generateTldVariants(domain: string | null | undefined): string[] {
+    const normalized = ApolloService.normalizeDomain(domain);
+    if (!normalized) return [];
+    const labels = normalized.split(".");
+    if (labels.length < 2) return [];
+    const sld = labels[labels.length - 2];
+    const tld = labels[labels.length - 1];
+
+    // Government TLD variants
+    const govVariants = ["gov", "us", "org"];
+    const eduVariants = ["edu", "org"];
+
+    let variants: string[] = [];
+    if (govVariants.includes(tld)) {
+      variants = govVariants.filter(t => t !== tld).map(t => `${sld}.${t}`);
+    } else if (eduVariants.includes(tld)) {
+      variants = eduVariants.filter(t => t !== tld).map(t => `${sld}.${t}`);
+    }
+    return variants;
   }
 
   /**
@@ -529,62 +601,77 @@ class ApolloService {
     if (!this.apiKey) return null;
     if (!params.domain && !params.name) return null;
 
-    try {
-      const queryParams = new URLSearchParams();
-      if (params.domain) queryParams.set('domain', params.domain);
-      if (params.name) queryParams.set('name', params.name);
-
-      console.log(`Apollo org enrich: domain=${params.domain || 'none'}, name=${params.name || 'none'}`);
-
-      const response = await fetch(
-        `${this.baseUrl}/organizations/enrich?${queryParams.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
-            "x-api-key": this.apiKey,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        console.log(`Apollo org enrich returned ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-      const org = data.organization;
-
-      if (org && org.id) {
-        console.log(`Apollo org enrich matched: "${org.name}" (id: ${org.id}, domain: ${org.primary_domain}, employees: ${org.estimated_num_employees || org.employees || 'unknown'})`);
-        return {
-          id: org.id,
-          name: org.name,
-          website_url: org.website_url,
-          primary_domain: org.primary_domain,
-          logo_url: org.logo_url,
-          description: org.short_description || org.description,
-          industry: org.industry,
-          employees: org.estimated_num_employees || org.employees,
-        };
-      }
-
-      console.log(`Apollo org enrich: no match found`);
-      return null;
-    } catch (error) {
-      console.error("Apollo org enrich error:", error);
-      return null;
+    // Build the list of domains to try: primary first, then TLD variants for govt/edu
+    const domainsToTry: (string | undefined)[] = [params.domain];
+    if (params.domain) {
+      domainsToTry.push(...this.generateTldVariants(params.domain));
     }
+    if (domainsToTry.length === 0) domainsToTry.push(undefined);
+
+    for (const domain of domainsToTry) {
+      try {
+        const queryParams = new URLSearchParams();
+        if (domain) queryParams.set('domain', domain);
+        if (params.name) queryParams.set('name', params.name);
+
+        console.log(`Apollo org enrich: domain=${domain || 'none'}, name=${params.name || 'none'}`);
+
+        const response = await fetch(
+          `${this.baseUrl}/organizations/enrich?${queryParams.toString()}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-cache",
+              "x-api-key": this.apiKey,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          console.log(`Apollo org enrich returned ${response.status} for domain="${domain || 'none'}"`);
+          continue;
+        }
+
+        const data = await response.json();
+        const org = data.organization;
+
+        if (org && org.id) {
+          console.log(`✅ Apollo org enrich matched: "${org.name}" (id: ${org.id}, domain: ${org.primary_domain}, employees: ${org.estimated_num_employees || org.employees || 'unknown'}) via "${domain || 'name-only'}"`);
+          return {
+            id: org.id,
+            name: org.name,
+            website_url: org.website_url,
+            primary_domain: org.primary_domain,
+            logo_url: org.logo_url,
+            description: org.short_description || org.description,
+            industry: org.industry,
+            employees: org.estimated_num_employees || org.employees,
+          };
+        }
+      } catch (error) {
+        console.error(`Apollo org enrich error for domain="${domain || 'none'}":`, error);
+      }
+    }
+
+    console.log(`Apollo org enrich: no match found across ${domainsToTry.length} domain attempts`);
+    return null;
   }
 
   /**
-   * Search for organizations in Apollo to get organization_id for precise matching
+   * Search for organizations in Apollo to get organization_id for precise matching.
+   *
+   * Strategy (in order):
+   *   1. Domain exact match  (most precise)
+   *   2. Domain TLD variants (for govt/edu entities that use multiple TLDs)
+   *   3. Name + location (city/state) — disambiguates "Town of X" matches across states
+   *   4. Name only (least precise — let caller validate)
    */
   async searchOrganizations(params: {
     company_name?: string;
     domain?: string;
     fallback_query?: string;
+    organization_locations?: string[]; // e.g. ["Andover, Massachusetts", "United States"]
   }): Promise<ApolloOrganization[]> {
     if (!this.apiKey) {
       throw new Error("Apollo API key is required");
@@ -594,7 +681,7 @@ class ApolloService {
       // First try exact domain match if available
       if (params.domain) {
         console.log(`Searching Apollo organizations by domain: ${params.domain}`);
-        
+
         const domainPayload = {
           q_organization_domains_list: [params.domain],
           page: 1,
@@ -618,17 +705,43 @@ class ApolloService {
             return domainData.organizations;
           }
         }
+
+        // ─── TLD variant retry ──────────────────────────────────────
+        // Government/educational entities legitimately use multiple TLDs.
+        // e.g. Town of Andover MA exists at andoverma.us AND andoverma.gov.
+        // Try common government TLD variants if the original failed.
+        const variants = this.generateTldVariants(params.domain);
+        for (const variant of variants) {
+          if (variant === params.domain) continue;
+          console.log(`Retrying Apollo org search with TLD variant: ${variant}`);
+          const variantResp = await fetch(`${this.baseUrl}/mixed_companies/search`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", "x-api-key": this.apiKey },
+            body: JSON.stringify({ q_organization_domains_list: [variant], page: 1, per_page: 10 }),
+          });
+          if (variantResp.ok) {
+            const data: OrganizationSearchResponse = await variantResp.json();
+            if (data.organizations && data.organizations.length > 0) {
+              console.log(`✅ Found ${data.organizations.length} organizations via TLD variant "${variant}"`);
+              return data.organizations;
+            }
+          }
+        }
       }
 
-      // If no domain match, try company name search
+      // If no domain match, try company name + location (disambiguates same-name entities)
       if (params.company_name) {
-        console.log(`Searching Apollo organizations by name: ${params.company_name}`);
-        
-        const namePayload = {
+        const hasLocation = params.organization_locations && params.organization_locations.length > 0;
+        console.log(`Searching Apollo organizations by name: ${params.company_name}${hasLocation ? ` + locations: ${params.organization_locations!.join(', ')}` : ''}`);
+
+        const namePayload: any = {
           q_organization_name: params.company_name,
           page: 1,
           per_page: 10
         };
+        if (hasLocation) {
+          namePayload.organization_locations = params.organization_locations;
+        }
 
         const nameResponse = await fetch(`${this.baseUrl}/mixed_companies/search`, {
           method: "POST",
@@ -1366,18 +1479,20 @@ class ApolloService {
     }
 
     try {
-      // Find and validate the correct organization, cross-validating against the
-      // user-provided website domain when available. If no domain match, return empty
-      // rather than picking the wrong company and hallucinating contacts.
+      // Find and validate the correct organization. Use domain when available,
+      // fall back to name + location to disambiguate same-name entities (e.g.
+      // multiple "Town of Andover"s across states).
       const expectedDomain = ApolloService.normalizeDomain(params.website_url);
+      const orgLocations = this.buildOrgLocationsFilter(params);
       const organizations = await this.searchOrganizations({
         company_name: params.company_name,
         domain: expectedDomain || undefined,
+        organization_locations: orgLocations.length > 0 ? orgLocations : undefined,
       });
       const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name, 0.6, expectedDomain);
       const companyDomain = matchedOrg?.primary_domain || null;
       const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
-      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'})`);
+      console.log(`Company domain for recruiting search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'}, locations: ${orgLocations.join('|') || 'none'})`);
 
       // CRITICAL: If the user provided a domain and we couldn't validate the org,
       // return empty rather than searching with a fabricated domain. This prevents
@@ -1456,14 +1571,16 @@ class ApolloService {
       // Find and validate the correct organization, cross-validating against the
       // user-provided website domain when available.
       const expectedDomain = ApolloService.normalizeDomain(params.website_url);
+      const orgLocations = this.buildOrgLocationsFilter(params);
       const organizations = await this.searchOrganizations({
         company_name: params.company_name,
         domain: expectedDomain || undefined,
+        organization_locations: orgLocations.length > 0 ? orgLocations : undefined,
       });
       const matchedOrg = this.findBestOrganizationMatch(organizations, params.company_name, 0.6, expectedDomain);
       const companyDomain = matchedOrg?.primary_domain || null;
       const resolvedOrgId = params.organization_id || matchedOrg?.id || null;
-      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'})`);
+      console.log(`Company domain for department search: ${companyDomain || 'UNKNOWN'} (org: ${matchedOrg?.name || 'NO MATCH'}, expected: ${expectedDomain || 'none'}, locations: ${orgLocations.join('|') || 'none'})`);
 
       // CRITICAL: If the user provided a domain and we couldn't validate the org,
       // return empty rather than searching with a fabricated domain.
