@@ -7,3 +7,6 @@ vite.config.ts.*
 
 # Test results
 test-results/
+
+# Apollo empirical probe captures (contain Apollo-internal data, don't commit)
+scripts/apollo-empirical-probe-results-*.json

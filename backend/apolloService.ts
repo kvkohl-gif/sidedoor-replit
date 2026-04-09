@@ -591,71 +591,72 @@ class ApolloService {
 
   /**
    * Enrich an organization using Apollo's dedicated enrich endpoint.
-   * More precise than search — designed for point lookups with name + domain.
-   * Returns null if no match found.
+   *
+   * IMPORTANT (empirically validated 2026-04-09):
+   * 1. Apollo's /organizations/enrich endpoint **only supports the `domain`
+   *    parameter**. The `name` query string is silently ignored (confirmed by
+   *    Apollo's public docs and our probe).
+   * 2. Apollo's enrich has a **secondary-domain alias index** that our search
+   *    endpoint does NOT have. Example: enrich(andoverma.us) returns the same
+   *    canonical Town of Andover org as enrich(andoverma.gov), both with
+   *    primary_domain=andoverma.gov. search({q_organization_domains_list:
+   *    ["andoverma.us"]}) returns 0 results — search is strict.
+   * 3. Therefore: prefer enrich when we have a trusted domain (it handles
+   *    aliases). Fall back to search only for disambiguation by name+location.
+   * 4. Do NOT TLD-retry inside enrich — Apollo already handles known govt/edu
+   *    aliases natively. TLD retry only makes sense on the search path.
+   *
+   * @param domain — the domain to look up. Required.
+   * @returns matched organization or null if not found
    */
-  async enrichOrganization(params: {
-    domain?: string;
-    name?: string;
-  }): Promise<ApolloOrganization | null> {
+  async enrichOrganization(domain: string): Promise<ApolloOrganization | null> {
     if (!this.apiKey) return null;
-    if (!params.domain && !params.name) return null;
+    if (!domain) return null;
 
-    // Build the list of domains to try: primary first, then TLD variants for govt/edu
-    const domainsToTry: (string | undefined)[] = [params.domain];
-    if (params.domain) {
-      domainsToTry.push(...this.generateTldVariants(params.domain));
-    }
-    if (domainsToTry.length === 0) domainsToTry.push(undefined);
+    try {
+      const queryParams = new URLSearchParams({ domain });
+      console.log(`Apollo org enrich: domain=${domain}`);
 
-    for (const domain of domainsToTry) {
-      try {
-        const queryParams = new URLSearchParams();
-        if (domain) queryParams.set('domain', domain);
-        if (params.name) queryParams.set('name', params.name);
-
-        console.log(`Apollo org enrich: domain=${domain || 'none'}, name=${params.name || 'none'}`);
-
-        const response = await fetch(
-          `${this.baseUrl}/organizations/enrich?${queryParams.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              "Cache-Control": "no-cache",
-              "x-api-key": this.apiKey,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.log(`Apollo org enrich returned ${response.status} for domain="${domain || 'none'}"`);
-          continue;
+      const response = await fetch(
+        `${this.baseUrl}/organizations/enrich?${queryParams.toString()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "x-api-key": this.apiKey,
+          },
         }
+      );
 
-        const data = await response.json();
-        const org = data.organization;
-
-        if (org && org.id) {
-          console.log(`✅ Apollo org enrich matched: "${org.name}" (id: ${org.id}, domain: ${org.primary_domain}, employees: ${org.estimated_num_employees || org.employees || 'unknown'}) via "${domain || 'name-only'}"`);
-          return {
-            id: org.id,
-            name: org.name,
-            website_url: org.website_url,
-            primary_domain: org.primary_domain,
-            logo_url: org.logo_url,
-            description: org.short_description || org.description,
-            industry: org.industry,
-            employees: org.estimated_num_employees || org.employees,
-          };
-        }
-      } catch (error) {
-        console.error(`Apollo org enrich error for domain="${domain || 'none'}":`, error);
+      if (!response.ok) {
+        console.log(`Apollo org enrich returned ${response.status} for domain="${domain}"`);
+        return null;
       }
-    }
 
-    console.log(`Apollo org enrich: no match found across ${domainsToTry.length} domain attempts`);
-    return null;
+      const data = await response.json();
+      const org = data.organization;
+
+      if (org && org.id) {
+        console.log(`✅ Apollo org enrich matched: "${org.name}" (id: ${org.id}, primary_domain: ${org.primary_domain}, employees: ${org.estimated_num_employees || org.employees || 'unknown'}) via "${domain}"`);
+        return {
+          id: org.id,
+          name: org.name,
+          website_url: org.website_url,
+          primary_domain: org.primary_domain,
+          logo_url: org.logo_url,
+          description: org.short_description || org.description,
+          industry: org.industry,
+          employees: org.estimated_num_employees || org.employees,
+        };
+      }
+
+      console.log(`Apollo org enrich: no match for domain="${domain}"`);
+      return null;
+    } catch (error) {
+      console.error(`Apollo org enrich error for domain="${domain}":`, error);
+      return null;
+    }
   }
 
   /**

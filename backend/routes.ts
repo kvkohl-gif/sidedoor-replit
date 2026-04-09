@@ -190,52 +190,35 @@ async function resolveCompanyViaApollo(
   const uniqueInferred = [...new Set(inferredDomains.filter(d => !trustedDomains.includes(d)))];
   console.log(`Company resolution: ${uniqueTrusted.length} trusted domains: [${uniqueTrusted.join(', ')}], ${uniqueInferred.length} inferred: [${uniqueInferred.join(', ')}]`);
 
-  // Step 1: Try trusted domains via Apollo enrich (precise point lookup)
+  // Step 1: Try trusted domains via Apollo enrich.
+  // Per empirical probe 2026-04-09: enrich has a secondary-domain alias index
+  // that search lacks — enrich(andoverma.us) returns the same Town of Andover
+  // org as enrich(andoverma.gov). So enrich is the right tool for trusted
+  // domain lookups. No search fallback needed: if enrich missed, search with
+  // the same domain will also miss (and will miss MORE because it's stricter).
   for (const domain of uniqueTrusted) {
     if (resolvedOrgId) break;
     try {
-      // Use enrich endpoint — designed for precise domain lookups
-      const org = await apolloService.enrichOrganization({ domain });
+      const org = await apolloService.enrichOrganization(domain);
       if (org) {
         resolvedOrgId = org.id;
         resolvedName = org.name;
         resolvedDomain = org.primary_domain || domain;
         employeeCount = org.employees;
-        console.log(`✅ Company resolved via trusted domain "${domain}": ${org.name} (id: ${org.id}, ${org.employees} employees)`);
+        console.log(`✅ Company resolved via trusted domain enrich "${domain}": ${org.name} (id: ${org.id}, primary_domain: ${org.primary_domain}, ${org.employees} employees)`);
       }
     } catch (e) {
       console.warn(`Enrich failed for trusted domain "${domain}":`, e);
     }
-
-    // Fallback to search if enrich didn't work
-    if (!resolvedOrgId) {
-      try {
-        const orgs = await apolloService.searchOrganizations({ domain });
-        if (orgs.length > 0) {
-          const org = orgs[0];
-          resolvedOrgId = org.id;
-          resolvedName = org.name;
-          resolvedDomain = org.primary_domain || domain;
-          employeeCount = org.employees;
-          console.log(`✅ Company resolved via trusted domain search "${domain}": ${org.name} (id: ${org.id})`);
-        }
-      } catch (e) {
-        console.warn(`Domain search failed for "${domain}":`, e);
-      }
-    }
   }
 
-  // Step 2: Try AI-inferred domains — validate with enrich using BOTH domain + name
+  // Step 2: Try AI-inferred domains via enrich + client-side name validation.
+  // The name validation guards against AI hallucinating a wrong domain.
   if (!resolvedOrgId) {
     for (const domain of uniqueInferred) {
       if (resolvedOrgId) break;
       try {
-        // Use enrich with BOTH domain and name for cross-validation
-        const org = await apolloService.enrichOrganization({
-          domain,
-          name: extractedCompanyName,
-        });
-
+        const org = await apolloService.enrichOrganization(domain);
         if (org) {
           // Cross-validate: does the returned org name reasonably match what we expect?
           const matchScore = scoreOrgMatch(org.name, extractedCompanyName);
@@ -255,44 +238,51 @@ async function resolveCompanyViaApollo(
     }
   }
 
-  // Step 3: Fallback to validated name-based search
-  if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified") {
+  // Step 3: Name + location search (empirically-validated disambiguation path).
+  // Per the Apollo empirical probe (scripts/apollo-empirical-probe-results-*):
+  //   - enrich({name}) with no domain is a dead call — Apollo's enrich endpoint
+  //     requires a domain. Removed.
+  //   - search({company_name, organization_locations}) correctly returns
+  //     "Town of Andover" for Andover MA while search by name alone returns
+  //     the wrong neighbor "Town of North Andover" as top match.
+  if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified" && jobLocation) {
     try {
-      // Try enrich by name first
-      const enriched = await apolloService.enrichOrganization({ name: extractedCompanyName });
-      if (enriched) {
-        const matchScore = scoreOrgMatch(enriched.name, extractedCompanyName);
-        if (matchScore >= 0.6) {
-          resolvedOrgId = enriched.id;
-          resolvedName = enriched.name;
-          resolvedDomain = enriched.primary_domain || null;
-          employeeCount = enriched.employees;
-          console.log(`✅ Company resolved via enrich by name "${extractedCompanyName}": ${enriched.name} (score: ${matchScore.toFixed(2)})`);
-        }
-      }
-
-      // If enrich didn't work, fall back to search + validation.
-      // Pass jobLocation so we can disambiguate same-name entities (e.g. multiple
-      // "Town of Andover" municipalities across states).
-      if (!resolvedOrgId) {
-        const orgLocations = jobLocation ? [jobLocation] : undefined;
-        const orgs = await apolloService.searchOrganizations({
-          company_name: extractedCompanyName,
-          organization_locations: orgLocations,
-        });
-        const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName);
-        if (matchedOrg) {
-          resolvedOrgId = matchedOrg.id;
-          resolvedName = matchedOrg.name;
-          resolvedDomain = matchedOrg.primary_domain || null;
-          employeeCount = matchedOrg.employees;
-          console.log(`✅ Company resolved via name+location search "${extractedCompanyName}" @ "${jobLocation || 'no location'}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
-        } else {
-          console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via any method`);
-        }
+      const orgs = await apolloService.searchOrganizations({
+        company_name: extractedCompanyName,
+        organization_locations: [jobLocation],
+      });
+      const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName, 0.6);
+      if (matchedOrg) {
+        resolvedOrgId = matchedOrg.id;
+        resolvedName = matchedOrg.name;
+        resolvedDomain = matchedOrg.primary_domain || null;
+        employeeCount = matchedOrg.employees;
+        console.log(`✅ Company resolved via name+location search "${extractedCompanyName}" @ "${jobLocation}": ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
       }
     } catch (e) {
-      console.warn(`Name-based company resolution failed:`, e);
+      console.warn(`Name+location company resolution failed:`, e);
+    }
+  }
+
+  // Step 4: Name-only search (last resort, stricter threshold to avoid false matches).
+  // Empirically, name-only search returns prefix-matching neighbors — e.g.
+  // search("Town of Andover") → "Town of North Andover" as top result. Use a
+  // higher match threshold (0.75) to reject these near-misses.
+  if (!resolvedOrgId && extractedCompanyName && extractedCompanyName !== "Not specified") {
+    try {
+      const orgs = await apolloService.searchOrganizations({ company_name: extractedCompanyName });
+      const matchedOrg = apolloService.findBestOrganizationMatch(orgs, extractedCompanyName, 0.75);
+      if (matchedOrg) {
+        resolvedOrgId = matchedOrg.id;
+        resolvedName = matchedOrg.name;
+        resolvedDomain = matchedOrg.primary_domain || null;
+        employeeCount = matchedOrg.employees;
+        console.log(`✅ Company resolved via name-only search "${extractedCompanyName}" (strict threshold): ${matchedOrg.name} (id: ${matchedOrg.id}, domain: ${resolvedDomain})`);
+      } else {
+        console.log(`⚠️ Could not resolve company "${extractedCompanyName}" via any method (tried: trusted domain enrich, inferred domain enrich, name+location search, name-only strict search)`);
+      }
+    } catch (e) {
+      console.warn(`Name-only company resolution failed:`, e);
     }
   }
 
