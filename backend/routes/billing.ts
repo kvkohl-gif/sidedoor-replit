@@ -4,13 +4,17 @@ import { supabaseAdmin } from "../lib/supabaseClient";
 import { STRIPE_PRICE_IDS, PLAN_CREDITS, PLAN_FEATURES, BILLING_PERIODS, type PlanType, type BillingPeriod } from "../constants/credits";
 import { getUserSubscription, resetMonthlyCredits, grantCredits, getTransactionHistory } from "../services/creditService";
 import { createNotification } from "../services/notificationService";
+import { BILLING_ENABLED } from "../lib/billingConfig";
 import { nanoid } from "nanoid";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
 
-// Guard: reject Stripe-dependent routes when key is missing
+// Guard: reject Stripe-dependent routes when key is missing or kill-switch flipped
 function requireStripe(_req: Request, res: Response, next: Function) {
+  if (!BILLING_ENABLED) {
+    return res.status(503).json({ error: "Billing is temporarily disabled" });
+  }
   if (!stripe) {
     return res.status(503).json({ error: "Stripe is not configured" });
   }
@@ -25,23 +29,26 @@ function requireAuth(req: Request, res: Response, next: Function) {
   next();
 }
 
-// ─── Gap 4: Webhook Idempotency ───
-// Track processed Stripe event IDs to prevent duplicate processing
-const processedEvents = new Map<string, number>(); // eventId -> timestamp
-const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000; // 24 hours
+// ─── Webhook Idempotency (DB-backed) ───
+// Stripe retries failed webhook deliveries, and Railway restarts wipe
+// in-memory state — so dedupe via a Supabase table keyed by event_id.
+// Returns true if this event was already processed (caller should skip).
+async function claimWebhookEvent(eventId: string, eventType: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("processed_webhook_events")
+    .insert({ event_id: eventId, event_type: eventType })
+    .select("event_id");
 
-function isEventAlreadyProcessed(eventId: string): boolean {
-  const processed = processedEvents.get(eventId);
-  if (processed) return true;
-  processedEvents.set(eventId, Date.now());
-  // Cleanup old entries every 100 events
-  if (processedEvents.size > 500) {
-    const cutoff = Date.now() - IDEMPOTENCY_TTL;
-    for (const [id, ts] of processedEvents.entries()) {
-      if (ts < cutoff) processedEvents.delete(id);
-    }
+  if (error) {
+    // 23505 = unique_violation → already processed
+    if ((error as any).code === "23505") return true;
+    // Any other error: log but fail open (process the event) so we don't silently
+    // drop legitimate events when the dedupe table itself is misbehaving.
+    console.error("[Stripe] Idempotency check failed, processing anyway:", error);
+    return false;
   }
-  return false;
+
+  return !data || data.length === 0;
 }
 
 // ─── Helper: Resolve price ID to plan type ───
@@ -391,8 +398,8 @@ export async function handleStripeWebhook(req: Request, res: Response) {
     return res.status(400).json({ error: "Invalid signature" });
   }
 
-  // Gap 4: Idempotency check — skip if we already processed this event
-  if (isEventAlreadyProcessed(event.id)) {
+  // Idempotency check — skip if we already processed this event
+  if (await claimWebhookEvent(event.id, event.type)) {
     console.log(`[Stripe] Skipping duplicate event: ${event.id} (${event.type})`);
     return res.json({ received: true, duplicate: true });
   }

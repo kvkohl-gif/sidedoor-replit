@@ -9,6 +9,11 @@ import { sessionAuth } from "./middleware/sessionAuth";
 import authRouter from "./routes/auth";
 import billingRouter, { handleStripeWebhook } from "./routes/billing";
 import { supabaseAdmin } from "./lib/supabaseClient";
+import { assertBillingConfigOnStartup } from "./lib/billingConfig";
+
+// Validate Stripe config at boot — throws in production if anything is missing
+// or if a test key (sk_test_) is set in a production environment.
+assertBillingConfigOnStartup();
 
 const app = express();
 
