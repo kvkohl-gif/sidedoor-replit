@@ -34,21 +34,22 @@ function requireAuth(req: Request, res: Response, next: Function) {
 // in-memory state — so dedupe via a Supabase table keyed by event_id.
 // Returns true if this event was already processed (caller should skip).
 async function claimWebhookEvent(eventId: string, eventType: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("processed_webhook_events")
-    .insert({ event_id: eventId, event_type: eventType })
-    .select("event_id");
+    .insert({ event_id: eventId, event_type: eventType });
 
-  if (error) {
-    // 23505 = unique_violation → already processed
-    if ((error as any).code === "23505") return true;
-    // Any other error: log but fail open (process the event) so we don't silently
-    // drop legitimate events when the dedupe table itself is misbehaving.
-    console.error("[Stripe] Idempotency check failed, processing anyway:", error);
-    return false;
-  }
+  if (!error) return false; // claimed for the first time → process
 
-  return !data || data.length === 0;
+  // 23505 = unique_violation → already processed
+  if ((error as any).code === "23505") return true;
+
+  // Any other error (e.g. table missing, network): log and fail open so we don't
+  // silently drop legitimate events when the dedupe table itself is misbehaving.
+  // The webhook handler is itself idempotent at the business-logic layer for
+  // most paths (upserts on user_id), so duplicate processing is the safer
+  // failure mode than dropping a real event.
+  console.error("[Stripe] Idempotency check failed, processing anyway:", error);
+  return false;
 }
 
 // ─── Helper: Resolve price ID to plan type ───
