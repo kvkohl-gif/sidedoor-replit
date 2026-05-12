@@ -739,7 +739,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
       ) : (
         <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)" }}>
           {/* Table header */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0, padding: "10px 20px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 260px 120px 100px 90px", gap: 0, padding: "10px 20px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb" }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Contact</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Email</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</span>
@@ -766,7 +766,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                   className="jd-expand-row"
                   onClick={() => setExpandedContact(isExpanded ? null : contact.id)}
                   style={{
-                    display: "grid", gridTemplateColumns: "1fr 180px 120px 100px 90px", gap: 0,
+                    display: "grid", gridTemplateColumns: "1fr 260px 120px 100px 90px", gap: 0,
                     padding: "14px 20px", alignItems: "center",
                     borderBottom: (isLast && !isExpanded) ? "none" : "1px solid #f3f4f6",
                   }}
@@ -786,11 +786,44 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
                         {contact.name || "Unknown"}
-                        {contact.linkedinUrl && (
-                          <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-                            <Linkedin size={13} style={{ color: "#0a66c2", opacity: 0.6 }} />
-                          </a>
-                        )}
+                        {/* LinkedIn icon: link to profile if known, otherwise
+                            a LinkedIn people search prefilled with the
+                            contact's name + company so the user can find them
+                            manually when Apollo didn't return a URL. Different
+                            opacity makes it visually obvious which is which. */}
+                        {(() => {
+                          const linkedinSearchUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contact.name || ""} ${submission?.companyName || ""}`.trim())}`;
+                          const href = contact.linkedinUrl || linkedinSearchUrl;
+                          const isVerifiedLink = !!contact.linkedinUrl;
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  style={{ display: "inline-flex", alignItems: "center" }}
+                                >
+                                  <Linkedin
+                                    size={13}
+                                    style={{ color: "#0a66c2", opacity: isVerifiedLink ? 1 : 0.4 }}
+                                  />
+                                </a>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="bottom"
+                                sideOffset={4}
+                                collisionPadding={8}
+                                className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[260px] shadow-lg"
+                              >
+                                {isVerifiedLink
+                                  ? "Open LinkedIn profile"
+                                  : "We couldn't find a LinkedIn URL for this contact — click to search LinkedIn manually."}
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })()}
                       </div>
                       <div style={{ fontSize: 12, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {contact.title || "No title"}
@@ -805,11 +838,32 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                         <span style={{ fontSize: 12, color: "#6b7280", fontFamily: "'SF Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {contact.email}
                         </span>
+                        {/* Verification badge — text + icon makes it scannable
+                            without hovering. Tooltip explains the status when
+                            user wants more detail. side="bottom" so it doesn't
+                            get clipped near the top of the page. */}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-default"><StatusIcon size={12} style={{ color: cfg.color, flexShrink: 0 }} /></span>
+                            <span
+                              className="cursor-default"
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 3,
+                                fontSize: 10, fontWeight: 600,
+                                padding: "2px 6px", borderRadius: 4,
+                                background: cfg.bg, color: cfg.color,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <StatusIcon size={10} />
+                              {cfg.text}
+                            </span>
                           </TooltipTrigger>
-                          <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                          <TooltipContent
+                            side="bottom"
+                            sideOffset={4}
+                            collisionPadding={8}
+                            className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[260px] leading-relaxed shadow-lg"
+                          >
                             {cfg.tooltip}
                           </TooltipContent>
                         </Tooltip>
@@ -871,11 +925,22 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      {contact.linkedinUrl && (
+                      {contact.linkedinUrl ? (
                         <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                           style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#2563eb", textDecoration: "none", fontWeight: 500 }}
                         >
                           <Linkedin size={12} /> LinkedIn Profile
+                        </a>
+                      ) : (
+                        <a
+                          href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contact.name || ""} ${submission?.companyName || ""}`.trim())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#9ca3af", textDecoration: "none", fontWeight: 500 }}
+                          title="No LinkedIn URL on file — click to search LinkedIn manually"
+                        >
+                          <Linkedin size={12} /> Search LinkedIn
                         </a>
                       )}
                     </div>
