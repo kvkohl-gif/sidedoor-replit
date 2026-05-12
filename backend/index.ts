@@ -9,6 +9,7 @@ import { sessionAuth } from "./middleware/sessionAuth";
 import authRouter from "./routes/auth";
 import billingRouter, { handleStripeWebhook } from "./routes/billing";
 import { handleEmailWebhook } from "./routes/emailTracking";
+import cronRouter from "./routes/cron";
 import { supabaseAdmin } from "./lib/supabaseClient";
 import { assertBillingConfigOnStartup, assertSecurityConfigOnStartup } from "./lib/billingConfig";
 
@@ -184,6 +185,7 @@ app.use((req, res, next) => {
   // Apply rate limiters
   app.use("/api/auth", authLimiter, authRouter);
   app.use("/api/billing", billingRouter);
+  app.use("/api/cron", cronRouter); // Cron secret guards each route inside
   app.use("/api", apiLimiter);
 
   const server = await registerRoutes(app);

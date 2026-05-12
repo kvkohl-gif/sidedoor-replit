@@ -1,9 +1,8 @@
 import { Router, Request, Response } from "express";
 import crypto from "node:crypto";
-import { logEmailEvent, isEmailConfigured, sendEmail, generateTrackingId } from "../services/emailService";
+import { logEmailEvent } from "../services/emailService";
 import { supabaseAdmin } from "../lib/supabaseClient";
 import { logActivity } from "../services/outreachActivityService";
-import { enforceDailySendCap, recipientDomainAllowed } from "../middleware/sendQuota";
 
 const router = Router();
 
@@ -170,102 +169,90 @@ router.get("/track/click/:trackingId", async (req: Request, res: Response) => {
 // for HMAC signature verification before express.json() parses. See
 // handleEmailWebhook export below.)
 
-// Send email for a contact (authenticated)
+// ─── Outreach send model ──────────────────────────────────────────────
+// SideDoor does NOT send recruiter emails on behalf of users. Users compose
+// in our UI, then open in their own email client (mailto:) and send from
+// their own address. This keeps the conversation between the candidate and
+// the recruiter directly — no platform-as-spam-relay risk, no Reply-To
+// gymnastics, and replies land in the user's inbox where they belong.
+//
+// The old /outreach/send-email endpoint (which used Resend to send from
+// hello@thesidedoor.ai) is removed. The new /outreach/mark-sent endpoint
+// just logs activity for tracking purposes after the user sent manually.
+
 function requireAuth(req: Request, res: Response, next: Function) {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   next();
 }
 
-// SECURITY (audit C7/M1/M9):
-// - enforceDailySendCap blocks per-plan abuse (free=5, starter=50, pro=200, max=500/day).
-// - We reject obviously bad recipient domains (mailinator, etc.).
-// - subject/html have hard size caps to limit abuse storage and outbound payload.
-// - The route already verifies the user owns the contact via job_submission.
+// Tombstone for the old endpoint. 410 Gone tells any cached frontend bundles
+// to stop calling this route. Removed after one deploy cycle.
+router.post("/outreach/send-email", (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "endpoint_removed",
+    message:
+      "Platform-side email sending has been retired. Use the 'Open in email app' button " +
+      "to send from your own email account, then 'Mark as sent' in the UI to log it.",
+  });
+});
+
+// POST /api/outreach/mark-sent
+// User pressed "Mark as sent" after composing in their own email client.
+// We update the contact status + log an outreach_activities row so the
+// dashboard reflects the send. No email is dispatched.
 const SUBJECT_MAX = 500;
-const HTML_MAX = 100_000; // 100 KB — generous for HTML emails, blocks 1 MB blobs.
+const NOTES_MAX = 5_000;
 
-router.post("/outreach/send-email", requireAuth, enforceDailySendCap, async (req: Request, res: Response) => {
-  if (!isEmailConfigured()) {
-    return res.status(503).json({ error: "Email sending is not configured. Contact support to enable." });
-  }
-
+router.post("/outreach/mark-sent", requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.id;
-  const { contactId, subject, html } = req.body;
+  const { contactId, subject, notes } = req.body;
 
-  if (!contactId || !subject || !html) {
-    return res.status(400).json({ error: "contactId, subject, and html are required" });
+  if (!contactId) {
+    return res.status(400).json({ error: "contactId is required" });
   }
-  if (typeof subject !== "string" || subject.length > SUBJECT_MAX) {
+  if (subject != null && (typeof subject !== "string" || subject.length > SUBJECT_MAX)) {
     return res.status(400).json({ error: `subject exceeds ${SUBJECT_MAX} characters` });
   }
-  if (typeof html !== "string" || html.length > HTML_MAX) {
-    return res.status(413).json({ error: `html body exceeds ${HTML_MAX} characters` });
+  if (notes != null && (typeof notes !== "string" || notes.length > NOTES_MAX)) {
+    return res.status(400).json({ error: `notes exceeds ${NOTES_MAX} characters` });
   }
 
-  // Verify ownership
+  // Verify ownership via the job_submission join.
   const { data: contact } = await supabaseAdmin
     .from("recruiter_contacts")
-    .select("id, email, name, job_submission_id")
+    .select("id, email, name, job_submission_id, job_submissions!inner(user_id)")
     .eq("id", contactId)
     .single();
 
-  if (!contact || !contact.email) {
-    return res.status(404).json({ error: "Contact not found or has no email" });
+  if (!contact) {
+    return res.status(404).json({ error: "Contact not found" });
   }
-
-  if (!recipientDomainAllowed(contact.email)) {
-    return res.status(400).json({ error: "Recipient domain is not permitted." });
-  }
-
-  // Verify the contact belongs to this user via job_submission
-  const { data: sub } = await supabaseAdmin
-    .from("job_submissions")
-    .select("user_id")
-    .eq("id", contact.job_submission_id)
-    .eq("user_id", userId)
-    .single();
-
-  if (!sub) {
+  if ((contact as any).job_submissions?.user_id !== userId) {
     return res.status(403).json({ error: "Not authorized" });
   }
 
-  const trackingId = generateTrackingId();
-  const result = await sendEmail({
-    to: contact.email,
-    subject,
-    html,
-    userId,
-    contactId: parseInt(contactId),
-    trackingId,
-  });
-
-  if (!result.success) {
-    return res.status(500).json({ error: result.error });
-  }
-
-  // Update contact status
+  const now = new Date().toISOString();
   await supabaseAdmin
     .from("recruiter_contacts")
     .update({
       contact_status: "email_sent",
-      last_contacted_at: new Date().toISOString(),
-      email_subject: subject,
-      last_activity_at: new Date().toISOString(),
+      last_contacted_at: now,
+      email_subject: subject || null,
+      last_activity_at: now,
     })
     .eq("id", contactId);
 
-  // Log outreach activity
   await logActivity({
     userId,
     contactId: parseInt(contactId),
     submissionId: contact.job_submission_id,
     activityType: "email_sent",
     channel: "email",
-    messageContent: html,
-    notes: `Sent: ${subject}`,
+    messageContent: notes || subject || "(sent from user's own email client)",
+    notes: notes || `Marked sent: ${subject || "(no subject)"}`,
   });
 
-  return res.json({ success: true, messageId: result.messageId, trackingId });
+  return res.json({ success: true });
 });
 
 export function registerEmailTrackingRoutes(app: any) {
