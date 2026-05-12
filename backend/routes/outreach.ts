@@ -238,7 +238,14 @@ export function registerOutreachRoutes(app: Application) {
         .limit(limit);
 
       if (search) {
-        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+        // SECURITY (audit H7): the user-supplied `search` string is interpolated
+        // into a PostgREST .or() filter expression. Without escaping, an
+        // attacker can inject extra clauses (e.g. `*,user_id.eq.<other>`) to
+        // widen results. The outer .eq("job_submissions.user_id", userId)
+        // still constrains tenancy here, but we escape defensively in case
+        // this query gets refactored away from the inner-join filter.
+        const escaped = String(search).replace(/[,()*%\\]/g, "\\$&").slice(0, 100);
+        query = query.or(`name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
       }
       if (status) {
         query = query.in("contact_status", (status as string).split(","));

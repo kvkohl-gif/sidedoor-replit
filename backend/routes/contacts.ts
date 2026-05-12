@@ -1,6 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { supabaseAdmin as supabase } from "../lib/supabaseClient";
 import { generatePersonalizedMessages } from "../personalizedMessaging";
+import { requireCredits } from "../middleware/creditGuard";
+import { deductCredits } from "../services/creditService";
+import { aiRateLimit, assertInputLength } from "../middleware/aiGuard";
 
 // Session-based authentication middleware
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -8,6 +11,14 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
+}
+
+// Helper: deduct credits after a successful AI call. Logs failure but doesn't
+// block the response (the user already got their result; we'll still bill them
+// on their next call when the balance is rechecked).
+async function deductAfterAi(req: any, description: string) {
+  if (!req.creditCost || !req.user?.id || !req.creditAction) return;
+  await deductCredits(req.user.id, req.creditCost, "ai_generation", description);
 }
 
 export function registerContactRoutes(app: Express) {
@@ -268,7 +279,7 @@ export function registerContactRoutes(app: Express) {
   });
 
   // Generate message for contact — uses consolidated personalizedMessaging service
-  app.post("/api/contacts/:id/generate-message", requireAuth, async (req: any, res) => {
+  app.post("/api/contacts/:id/generate-message", requireAuth, aiRateLimit, requireCredits("MESSAGE_DRAFT"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
@@ -344,6 +355,8 @@ export function registerContactRoutes(app: Express) {
         })
         .eq('id', contactId);
 
+      await deductAfterAi(req, `Message draft for contact ${contactId}`);
+
       res.json({
         emailSubject: messages.emailSubject,
         emailContent: messages.emailContent,
@@ -359,11 +372,12 @@ export function registerContactRoutes(app: Express) {
   });
 
   // ─── Follow-up generator ────────────────────────────────────────
-  app.post("/api/contacts/:id/generate-followup", requireAuth, async (req: any, res) => {
+  app.post("/api/contacts/:id/generate-followup", requireAuth, aiRateLimit, requireCredits("FOLLOWUP_DRAFT"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
       const { recentNews } = req.body || {};
+      if (!assertInputLength(res, recentNews, "freeText", "recentNews")) return;
 
       const { data: contact, error: fetchError } = await supabase
         .from('recruiter_contacts')
@@ -387,6 +401,7 @@ export function registerContactRoutes(app: Express) {
         templateOverride: "E_followup",
       });
 
+      await deductAfterAi(req, `Follow-up for contact ${contactId}`);
       res.json(messages);
     } catch (error) {
       console.error("Error generating follow-up:", error);
@@ -395,11 +410,14 @@ export function registerContactRoutes(app: Express) {
   });
 
   // ─── Thank-you generator ────────────────────────────────────────
-  app.post("/api/contacts/:id/generate-thankyou", requireAuth, async (req: any, res) => {
+  app.post("/api/contacts/:id/generate-thankyou", requireAuth, aiRateLimit, requireCredits("INTERVIEW_PREP"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
       const { interviewTopic, interviewDetail, followUpThought } = req.body || {};
+      if (!assertInputLength(res, interviewTopic, "freeText", "interviewTopic")) return;
+      if (!assertInputLength(res, interviewDetail, "message", "interviewDetail")) return;
+      if (!assertInputLength(res, followUpThought, "message", "followUpThought")) return;
 
       const { data: contact, error: fetchError } = await supabase
         .from('recruiter_contacts')
@@ -428,6 +446,7 @@ export function registerContactRoutes(app: Express) {
         templateOverride: "F_thank_you",
       });
 
+      await deductAfterAi(req, `Thank-you for contact ${contactId}`);
       res.json(messages);
     } catch (error) {
       console.error("Error generating thank-you:", error);
@@ -436,7 +455,7 @@ export function registerContactRoutes(app: Express) {
   });
 
   // ─── Rejection grace note generator ─────────────────────────────
-  app.post("/api/contacts/:id/generate-rejection-grace", requireAuth, async (req: any, res) => {
+  app.post("/api/contacts/:id/generate-rejection-grace", requireAuth, aiRateLimit, requireCredits("REDRAFT"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const contactId = parseInt(req.params.id);
@@ -462,6 +481,7 @@ export function registerContactRoutes(app: Express) {
         templateOverride: "G_rejection_grace",
       });
 
+      await deductAfterAi(req, `Grace note for contact ${contactId}`);
       res.json(messages);
     } catch (error) {
       console.error("Error generating grace note:", error);
