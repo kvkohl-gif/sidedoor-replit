@@ -48,6 +48,23 @@ function getPlanPrice(baseMo: number, period: BillingPeriod) {
   };
 }
 
+// Derive the user's actual billing period from their subscription's cycle
+// dates. Returns null when the user isn't on a paid plan (free tier, no
+// cycle dates set). We pick the closest match to be tolerant of slight
+// drift (proration, partial-month signups, manually-set dates).
+function getUserBillingPeriod(sub: SubscriptionData | undefined): BillingPeriod | null {
+  if (!sub || sub.plan_type === "free") return null;
+  if (!sub.billing_cycle_start || !sub.billing_cycle_end) return null;
+  const days =
+    (new Date(sub.billing_cycle_end).getTime() -
+      new Date(sub.billing_cycle_start).getTime()) /
+    (1000 * 60 * 60 * 24);
+  if (days < 60) return "monthly";       // ~30
+  if (days < 130) return "3month";       // ~90
+  if (days < 260) return "6month";       // ~180
+  return "annual";                       // ~365
+}
+
 // ── Plan data ────────────────────────────────────────────────────────
 const PLANS = [
   {
@@ -135,6 +152,16 @@ export function Subscription() {
   const creditsRemaining = subscription?.credits_remaining ?? 0;
   const creditsTotal = subscription?.credits_total ?? 50;
   const percentage = creditsTotal > 0 ? (creditsRemaining / creditsTotal) * 100 : 0;
+  const userBillingPeriod = getUserBillingPeriod(subscription);
+  const hasPaidPlan = currentPlan !== "free";
+
+  // Default the period tab to whichever interval the user is actually on, once
+  // their subscription loads. They can still click other tabs to compare —
+  // we just want their own interval pre-selected.
+  useEffect(() => {
+    if (userBillingPeriod) setBillingPeriod(userBillingPeriod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userBillingPeriod]);
 
   const trialDaysLeft =
     subscription?.plan_type === "free" && subscription?.free_tier_expires_at
@@ -372,7 +399,7 @@ export function Subscription() {
             );
           })}
         </div>
-        {billingPeriod !== "monthly" && (
+        {billingPeriod !== "monthly" && !hasPaidPlan && (
           <p
             style={{
               marginTop: 10,
@@ -397,10 +424,20 @@ export function Subscription() {
         }}
       >
         {PLANS.map((plan) => {
-          const isCurrent = currentPlan === plan.id;
+          // "CURRENT" should only highlight the card matching BOTH the user's
+          // plan AND the billing-period tab they're viewing. Without the
+          // period check, every interval tab showed the user's plan as
+          // current, which is misleading.
+          const isCurrent =
+            currentPlan === plan.id &&
+            (userBillingPeriod === null || userBillingPeriod === billingPeriod);
           const isDowngrade = getPlanRank(plan.id) < getPlanRank(currentPlan);
           const price = getPlanPrice(plan.baseMo, billingPeriod);
-          const isPopular = plan.popular;
+          // Hide "MOST POPULAR" once a user has any paid plan — they've already
+          // made a buying decision, so the comparison shifts from "shop options"
+          // to "your plan vs alternatives", and CURRENT becomes the relevant
+          // marker.
+          const isPopular = plan.popular && !hasPaidPlan;
 
           return (
             <div
