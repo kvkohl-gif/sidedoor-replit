@@ -1,6 +1,5 @@
 import { CheckCircle2, AlertCircle, Loader2, Key, ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
 import { verifyEmail } from "@/lib/auth";
 
 interface VerifyEmailScreenProps {
@@ -16,7 +15,6 @@ type VerifyState =
 
 export function VerifyEmailScreen({ onNavigate, onLogin, token }: VerifyEmailScreenProps) {
   const [state, setState] = useState<VerifyState>({ kind: "loading" });
-  const [, setLocation] = useLocation();
   // React Strict Mode mounts components twice in dev, which would double-consume
   // the one-time verification token. Guard with a ref.
   const fired = useRef(false);
@@ -34,10 +32,12 @@ export function VerifyEmailScreen({ onNavigate, onLogin, token }: VerifyEmailScr
       const result = await verifyEmail(token);
       if (result.success) {
         setState({ kind: "ok" });
-        // Backend issued a session cookie — flip the app to authenticated.
-        onLogin();
-        // Brief pause so the user sees the success state before we redirect.
-        setTimeout(() => setLocation("/dashboard"), 1200);
+        // Same race as Login — wouter's setLocation can fire before App's
+        // setIsAuthenticated propagates, briefly bouncing the user back to
+        // /login. Hard nav avoids the race and re-runs the mount auth check
+        // with the freshly-issued session cookie.
+        onLogin(); // keep for parity, no-op after reload
+        setTimeout(() => window.location.assign("/dashboard"), 1200);
       } else {
         setState({
           kind: "error",
