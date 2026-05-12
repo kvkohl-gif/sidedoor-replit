@@ -1,6 +1,5 @@
 import { Key, Mail, Lock, ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { loginUser } from "@/lib/auth";
 
 interface LoginScreenProps {
@@ -12,8 +11,6 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [, setLocation] = useLocation();
-
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,8 +21,16 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
     const result = await loginUser(email, password);
 
     if (result.success) {
-      onLogin();
-      setLocation('/dashboard');
+      // HARD navigation to /dashboard. We previously used wouter's
+      // setLocation here, but that races with App.tsx's setIsAuthenticated:
+      // if wouter's location update applied before the React state update,
+      // App re-rendered with location=/dashboard + isAuthenticated=false and
+      // bounced back to /login (forcing the user to click Login twice).
+      // window.location.assign triggers a full reload, which re-runs App's
+      // mount auth check — the freshly-set cookie wins, and the user lands
+      // on the dashboard reliably on the first click.
+      onLogin(); // keep for parity, no-op after the reload
+      window.location.assign("/dashboard");
       return;
     }
 
