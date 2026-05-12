@@ -1885,7 +1885,7 @@ export function OutreachHub({ onNavigate }: OutreachHubProps) {
               style={{ ...tabStyle(activeTab === tab.key), display: "inline-flex", alignItems: "center", gap: 4 }}
             >
               {tab.label}
-              {lockedTabs.has(tab.key) && (
+              {lockedTabs.has(tab.key) && !canAccessOutreachHub && (
                 <FeatureLockBadge feature="outreachHub" requiredPlan="pro" />
               )}
             </button>
