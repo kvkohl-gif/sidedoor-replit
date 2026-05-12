@@ -14,8 +14,11 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
 
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setVerificationNotice(null);
     setIsLoading(true);
 
     const result = await loginUser(email, password);
@@ -23,10 +26,21 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
     if (result.success) {
       onLogin();
       setLocation('/dashboard');
-    } else {
-      alert(result.error || 'Login failed');
-      setIsLoading(false);
+      return;
     }
+
+    // Backend returns { error: "email_not_verified" } if the user hasn't
+    // clicked their verification link yet (and also auto-resends the email).
+    if (!result.success && result.code === "email_not_verified") {
+      setVerificationNotice(
+        result.message || "Please verify your email — we just re-sent the link.",
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    alert(result.error || result.message || 'Login failed');
+    setIsLoading(false);
   };
 
   return (
@@ -58,6 +72,11 @@ export function LoginScreen({ onNavigate, onLogin }: LoginScreenProps) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6" style={{ maxWidth: '384px', marginLeft: 'auto', marginRight: 'auto' }}>
+            {verificationNotice && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900">
+                {verificationNotice}
+              </div>
+            )}
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-[14px] font-medium text-[#1A202C] mb-2">
