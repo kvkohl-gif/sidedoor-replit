@@ -1,0 +1,61 @@
+name: Trial reminder emails (daily cron)
+
+# Hits POST /api/cron/trial-reminders on production once a day.
+# The endpoint queries free-tier users approaching trial expiry and sends
+# the appropriate reminder email (3 days out, 1 day out, day-of). It's
+# idempotent — re-runs are safe.
+#
+# Schedule: 14:00 UTC = 10 AM ET (during DST) / 9 AM ET (outside DST).
+# GitHub cron is best-effort and may run a few minutes late under load —
+# we don't depend on exact timing.
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:        # adds a manual "Run workflow" button in the Actions UI
+    inputs:
+      target:
+        description: "Which environment to ping"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target URL
+        id: url
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "staging" ]; then
+            echo "url=https://sidedoor-replit-staging.up.railway.app/api/cron/trial-reminders" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://app.thesidedoor.ai/api/cron/trial-reminders" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Call /api/cron/trial-reminders
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          URL: ${{ steps.url.outputs.url }}
+        run: |
+          set -euo pipefail
+          echo "POST $URL"
+          # -fsS: fail on HTTP error, silent (no progress bar), still show errors.
+          # --max-time 60: cron job should finish way faster, abort if it hangs.
+          # We capture HTTP status separately so the workflow surfaces it cleanly.
+          response=$(curl -sS --max-time 60 \
+            -w "\n__HTTP_STATUS__:%{http_code}\n" \
+            -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            "$URL")
+          echo "$response"
+          status=$(echo "$response" | grep "__HTTP_STATUS__:" | sed 's/.*://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Cron call returned HTTP $status"
+            exit 1
+          fi
+          echo "✅ Cron job ran successfully"
