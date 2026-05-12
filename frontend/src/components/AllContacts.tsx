@@ -133,13 +133,32 @@ const css = `
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    overflow: hidden;
+    /* overflow-x: auto lets the table scroll horizontally when the viewport
+       is narrower than the table's min-width (so columns can stay readable
+       instead of getting squished). overflow-y: hidden preserves the rounded
+       corners on the wrapper. */
+    overflow-x: auto;
+    overflow-y: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
   }
 
   .contacts-table-wrap table {
     width: 100%;
+    /* Pin a sensible minimum so on narrow viewports the table scrolls instead
+       of squishing the Sourced For column to unreadable widths. */
+    min-width: 1100px;
     border-collapse: collapse;
+  }
+
+  /* Sourced For column: long job titles ("Senior Product Manager —
+     Product-Led Growth (PLG + AI-aware)") were getting clipped with no
+     way to see the full text. Truncate with ellipsis + show full string
+     on hover via the title attribute. */
+  .sourced-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .contacts-table-wrap thead th {
