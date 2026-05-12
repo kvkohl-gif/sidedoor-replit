@@ -273,8 +273,17 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
           return (
             <div
               key={job.id}
-              className="group bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-5 hover:border-[#6B46C1] hover:shadow-md transition-all"
+              className="group bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-5 hover:border-[#6B46C1] hover:shadow-md transition-all cursor-pointer"
               data-testid={`job-card-${job.id}`}
+              role="link"
+              tabIndex={0}
+              onClick={() => onNavigate("job-details", { submissionId: job.id })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onNavigate("job-details", { submissionId: job.id });
+                }
+              }}
             >
               <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                 <div className="flex-1 min-w-0">
@@ -327,9 +336,12 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                 </div>
 
                 <div className="flex flex-col gap-3 lg:items-end">
-                  <div className="relative">
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => setOpenStatusDropdown(openStatusDropdown === job.id ? null : job.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenStatusDropdown(openStatusDropdown === job.id ? null : job.id);
+                      }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border w-fit hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.border }}
                       data-testid={`status-dropdown-${job.id}`}
@@ -344,7 +356,10 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                         {JOB_STATUSES.map((s) => (
                           <button
                             key={s.value}
-                            onClick={() => handleStatusChange(job.id, s.value)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(job.id, s.value);
+                            }}
                             className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors flex items-center gap-2 ${
                               job.status === s.value ? "bg-purple-50" : ""
                             }`}
@@ -375,7 +390,10 @@ export function JobHistory({ onNavigate }: JobHistoryProps) {
                       <Archive className={`w-4 h-4 ${job.archived ? "text-[#6B46C1]" : ""}`} />
                     </button>
                     <button
-                      onClick={() => onNavigate("job-details", { submissionId: job.id })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNavigate("job-details", { submissionId: job.id });
+                      }}
                       className="px-3 py-1.5 bg-[#6B46C1] text-white rounded-lg hover:bg-[#5a3ba1] transition-colors text-sm font-medium flex items-center gap-1"
                       data-testid={`button-view-details-${job.id}`}
                     >
