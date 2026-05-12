@@ -3,6 +3,8 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { Browser, Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { JSDOM } from 'jsdom';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 
 // Enable stealth mode to avoid bot detection
 puppeteer.use(StealthPlugin());
@@ -23,10 +25,16 @@ export class URLScrapingService {
    */
   async scrapeJobURL(url: string): Promise<ScrapedJobData> {
     try {
-      // Validate URL
+      // Validate URL shape
       if (!this.isValidURL(url)) {
         throw new Error('Invalid URL format');
       }
+
+      // SSRF guard — refuse URLs that resolve to private/loopback/link-local IPs.
+      // Without this, an attacker can submit `http://169.254.169.254/...` (cloud
+      // metadata) or internal Railway hostnames and have us fetch them.
+      const ssrfErr = await this.assertPublicTarget(url);
+      if (ssrfErr) throw new Error(ssrfErr);
 
       console.log(`Scraping job URL: ${url}`);
 
@@ -288,15 +296,87 @@ export class URLScrapingService {
   }
 
   /**
-   * Validate URL format
+   * Validate URL shape (sync). Used as a cheap pre-check before the
+   * async SSRF guard.
    */
   private isValidURL(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') return false;
+      // Reject non-default ports — job postings live on 80/443.
+      if (urlObj.port && urlObj.port !== '80' && urlObj.port !== '443') return false;
+      return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * SECURITY (audit H3): SSRF guard.
+   * Resolves the URL's hostname and rejects anything that points to private,
+   * loopback, link-local, or otherwise non-public address space. This prevents
+   * an attacker from submitting a URL like `http://169.254.169.254/...` (cloud
+   * metadata) or `http://localhost:5000/api/...` (loopback to our own admin
+   * surface) and having Puppeteer fetch it on their behalf.
+   *
+   * Returns null on success, or an error string on rejection.
+   */
+  private async assertPublicTarget(url: string): Promise<string | null> {
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { return 'Invalid URL'; }
+
+    const hostname = parsed.hostname;
+
+    // Resolve all A/AAAA records and check every one. We must not race against
+    // DNS rebinding by trusting only the first record.
+    let addrs: string[] = [];
+    try {
+      // If the hostname is already a literal IP, dns.lookup returns it verbatim.
+      const lookups = await dns.lookup(hostname, { all: true, verbatim: true });
+      addrs = lookups.map((l) => l.address);
+    } catch {
+      return `Could not resolve host: ${hostname}`;
+    }
+
+    for (const addr of addrs) {
+      if (this.isPrivateAddress(addr)) {
+        return `Refusing to scrape non-public address: ${hostname} -> ${addr}`;
+      }
+    }
+    return null;
+  }
+
+  private isPrivateAddress(ip: string): boolean {
+    const family = net.isIP(ip);
+    if (family === 0) return true; // unparseable: treat as private (deny)
+
+    if (family === 4) {
+      const parts = ip.split('.').map((n) => parseInt(n, 10));
+      if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+      const [a, b] = parts;
+      if (a === 10) return true;                                 // 10.0.0.0/8
+      if (a === 127) return true;                                // 127.0.0.0/8
+      if (a === 169 && b === 254) return true;                   // 169.254.0.0/16 (link-local + cloud metadata)
+      if (a === 172 && b >= 16 && b <= 31) return true;          // 172.16.0.0/12
+      if (a === 192 && b === 168) return true;                   // 192.168.0.0/16
+      if (a === 100 && b >= 64 && b <= 127) return true;         // 100.64.0.0/10 (CGNAT)
+      if (a === 0) return true;                                  // 0.0.0.0/8
+      if (a >= 224) return true;                                 // multicast + reserved
+      return false;
+    }
+
+    // IPv6: normalize and check known reserved ranges.
+    const v6 = ip.toLowerCase();
+    if (v6 === '::' || v6 === '::1') return true;
+    if (v6.startsWith('fe80:')) return true;                     // link-local
+    if (v6.startsWith('fc') || v6.startsWith('fd')) return true; // ULA fc00::/7
+    if (v6.startsWith('::ffff:')) {
+      // IPv4-mapped: re-check via the mapped address.
+      const mapped = v6.replace('::ffff:', '');
+      return this.isPrivateAddress(mapped);
+    }
+    if (v6.startsWith('ff')) return true;                        // multicast
+    return false;
   }
 
   /**

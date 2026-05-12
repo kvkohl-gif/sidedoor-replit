@@ -6,7 +6,6 @@ import { registerOutreachProfileRoutes } from "./routes/outreachProfile";
 import { registerNotificationRoutes } from "./routes/notifications";
 import { registerOutreachRoutes } from "./routes/outreach";
 import { registerEmailTrackingRoutes } from "./routes/emailTracking";
-import dbTestRouter from "./routes/dbTest";
 import { supabaseAdmin } from "./lib/supabaseClient";
 // Use supabaseAdmin for all queries — the app handles auth via sessionAuth middleware
 // (supabase anon key is blocked by RLS since we don't use Supabase Auth)
@@ -24,6 +23,7 @@ import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { requireCredits } from "./middleware/creditGuard";
 import { deductCredits } from "./services/creditService";
+import { aiRateLimit, assertInputLength } from "./middleware/aiGuard";
 
 /**
  * Extract company slug/domain from common job board URLs.
@@ -347,8 +347,8 @@ function mapSubmissionToFrontend(row: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Supabase database test route
-  app.use("/api/db-test", dbTestRouter);
+  // (Removed unauthenticated /api/db-test route — was leaking user records
+  // including bcrypt password_hash. See security audit C4.)
 
   /*
    * OLD PASSPORT-BASED AUTH (REPLACED WITH SESSION-BASED AUTH)
@@ -1130,7 +1130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/recruiters/:recruiterId/generate-messages", requireAuth, async (req: any, res) => {
+  app.post("/api/recruiters/:recruiterId/generate-messages", requireAuth, aiRateLimit, requireCredits("MESSAGE_DRAFT"), async (req: any, res) => {
     try {
       const userId = req.user.id;
       const recruiterId = parseInt(req.params.recruiterId);
@@ -1230,6 +1230,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error(`Failed to create LinkedIn template: ${linkedinError.message}`);
       }
 
+      if (req.creditCost && req.user?.id) {
+        await deductCredits(req.user.id, req.creditCost, "ai_generation", `Generate messages for recruiter ${recruiterId}`);
+      }
+
       res.json({
         email: emailTemplate,
         linkedin: linkedinTemplate
@@ -1303,12 +1307,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Message improvement endpoint
-  app.post("/api/improve-message", requireAuth, async (req, res) => {
+  app.post("/api/improve-message", requireAuth, aiRateLimit, requireCredits("REDRAFT"), async (req: any, res) => {
     try {
       const { message, tone } = req.body;
-      
+
       if (!message || !tone) {
         return res.status(400).json({ message: "Message and tone are required" });
+      }
+      if (!assertInputLength(res, message, "message", "message")) return;
+      if (typeof tone !== "string" || tone.length > 32) {
+        return res.status(400).json({ message: "Invalid tone" });
       }
 
       const tonePrompts = {
@@ -1327,7 +1335,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         temperature: 0.7,
         maxTokens: 500,
       });
-      
+
+      if (req.creditCost && req.user?.id) {
+        await deductCredits(req.user.id, req.creditCost, "ai_generation", `Improve message (${tone})`);
+      }
+
       res.json({ improvedMessage });
     } catch (error) {
       console.error("Error improving message:", error);

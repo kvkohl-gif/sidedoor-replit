@@ -66,3 +66,51 @@ export function assertBillingConfigOnStartup(): void {
   }
   console.warn(message);
 }
+
+// ─── Security config validation (audit-driven) ───────────────────────
+// Production must have CAPTCHA + email-webhook secret + an email provider
+// configured. Without these, the app's bot defenses and webhook integrity
+// checks degrade silently. Fail fast at boot instead.
+export function assertSecurityConfigOnStartup(): void {
+  if (!isProd) {
+    console.log("[security] non-prod env — skipping strict security config check");
+    return;
+  }
+
+  const errors: string[] = [];
+
+  if (!process.env.TURNSTILE_SECRET_KEY) {
+    errors.push(
+      "TURNSTILE_SECRET_KEY is not set — signup CAPTCHA will reject every request. " +
+        "Get a free Cloudflare Turnstile sitekey + secret at https://dash.cloudflare.com/?to=/:account/turnstile.",
+    );
+  }
+  if (!process.env.EMAIL_WEBHOOK_SECRET) {
+    errors.push(
+      "EMAIL_WEBHOOK_SECRET is not set — /api/webhooks/email will return 503. " +
+        "Generate with `openssl rand -hex 32` and configure your email provider to send X-Webhook-Signature header.",
+    );
+  }
+  // Email provider needed for verification + reset emails.
+  const provider = (process.env.EMAIL_PROVIDER || "").toLowerCase();
+  if (provider !== "resend" && provider !== "sendgrid") {
+    errors.push(`EMAIL_PROVIDER must be "resend" or "sendgrid" (got "${provider}")`);
+  } else if (provider === "resend" && !process.env.RESEND_API_KEY) {
+    errors.push("EMAIL_PROVIDER=resend but RESEND_API_KEY is not set");
+  } else if (provider === "sendgrid" && !process.env.SENDGRID_API_KEY) {
+    errors.push("EMAIL_PROVIDER=sendgrid but SENDGRID_API_KEY is not set");
+  }
+  if (!process.env.EMAIL_FROM) {
+    errors.push("EMAIL_FROM is not set — verification emails won't have a From address");
+  }
+
+  if (errors.length === 0) {
+    console.log("[security] config validated");
+    return;
+  }
+
+  throw new Error(
+    "[security] configuration errors:\n" +
+      errors.map((e) => `  - ${e}`).join("\n"),
+  );
+}

@@ -1,6 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin as supabase } from "../lib/supabaseClient";
 import { callClaude } from "../claude";
+import { requireCredits } from "../middleware/creditGuard";
+import { deductCredits } from "../services/creditService";
+import { aiRateLimit, assertInputLength } from "../middleware/aiGuard";
 
 function requireAuth(req: Request, res: Response, next: () => void) {
   if (!req.user) return res.status(401).json({ error: "Not authenticated" });
@@ -154,18 +157,25 @@ export function registerOutreachProfileRoutes(app: Express) {
     }
   });
 
-  app.post("/api/outreach-profile/ai-suggest", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/outreach-profile/ai-suggest", requireAuth, aiRateLimit, requireCredits("AI_PROFILE_SUGGEST"), async (req: any, res: Response) => {
     try {
       const { section, context } = req.body;
 
       if (!section || !context) {
         return res.status(400).json({ error: "Missing section or context" });
       }
+      if (typeof section !== "string" || section.length > 64) {
+        return res.status(400).json({ error: "Invalid section" });
+      }
 
       const resumeText = context.resumeText || "";
       if (!resumeText.trim()) {
         return res.status(400).json({ error: "No resume text provided. Upload or paste your resume first." });
       }
+      // SECURITY: cap user-controlled inputs that flow into the LLM prompt to
+      // prevent token-burn abuse (audit C1).
+      if (!assertInputLength(res, resumeText, "resumeText", "resumeText")) return;
+      if (!assertInputLength(res, context.existingBio, "bio", "existingBio")) return;
 
       let systemPrompt = "";
       let userPrompt = "";
@@ -218,6 +228,10 @@ ${resumeText}`;
         temperature: 0.7,
         maxTokens: 1000,
       });
+
+      if (req.creditCost && req.user?.id) {
+        await deductCredits(req.user.id, req.creditCost, "ai_generation", `Profile AI suggest (${section})`);
+      }
 
       if (section === "bio") {
         res.json({ suggestion: raw });

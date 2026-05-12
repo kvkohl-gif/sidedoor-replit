@@ -85,6 +85,51 @@ export async function sendEmail(params: {
   }
 }
 
+/**
+ * Send a transactional email (verification, password reset, etc.) without
+ * the recruiter-contact tracking machinery. Returns success/error.
+ */
+export async function sendTransactionalEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (!isEmailConfigured()) {
+    return { success: false, error: "Email provider not configured" };
+  }
+  try {
+    let messageId: string | undefined;
+    if (EMAIL_PROVIDER === "sendgrid") {
+      const sgMail = await import("@sendgrid/mail");
+      sgMail.default.setApiKey(SENDGRID_API_KEY);
+      const [response] = await sgMail.default.send({
+        to: params.to,
+        from: EMAIL_FROM,
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+      });
+      messageId = response?.headers?.["x-message-id"];
+    } else if (EMAIL_PROVIDER === "resend") {
+      const { Resend } = await import("resend");
+      const resend = new Resend(RESEND_API_KEY);
+      const result = await resend.emails.send({
+        from: EMAIL_FROM,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+      });
+      messageId = result.data?.id;
+    }
+    return { success: true, messageId };
+  } catch (error: any) {
+    console.error("[EmailService] Transactional send failed:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function logEmailEvent(
   trackingId: string,
   eventType: string,

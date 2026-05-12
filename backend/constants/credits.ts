@@ -7,6 +7,8 @@ export const CREDIT_COSTS = {
   REDRAFT: 2,            // Re-draft with different tone
   INTERVIEW_PREP: 5,     // Interview prep per company (MAX)
   LINKEDIN_MESSAGE: 2,   // LinkedIn message draft
+  MESSAGE_DRAFT: 2,      // Re-generate the initial outreach email/message after the search
+  AI_PROFILE_SUGGEST: 3, // Outreach-profile suggestions (bio, achievements, story hooks)
 } as const;
 
 export const PLAN_CREDITS: Record<string, { total: number; monthly: number }> = {
