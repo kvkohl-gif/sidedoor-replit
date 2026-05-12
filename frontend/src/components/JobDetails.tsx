@@ -806,8 +806,9 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                                   style={{ display: "inline-flex", alignItems: "center" }}
                                 >
                                   <Linkedin
-                                    size={13}
-                                    style={{ color: "#0a66c2", opacity: isVerifiedLink ? 1 : 0.4 }}
+                                    size={15}
+                                    strokeWidth={2.25}
+                                    style={{ color: isVerifiedLink ? "#0a66c2" : "#64748b", opacity: isVerifiedLink ? 1 : 0.85 }}
                                   />
                                 </a>
                               </TooltipTrigger>
@@ -815,7 +816,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                                 side="bottom"
                                 sideOffset={4}
                                 collisionPadding={8}
-                                className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[260px] shadow-lg"
+                                style={{ background: "#111827", color: "#fff", fontSize: 12, padding: "6px 10px", borderRadius: 6, maxWidth: 260, lineHeight: 1.4, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 50 }}
                               >
                                 {isVerifiedLink
                                   ? "Open LinkedIn profile"
@@ -862,7 +863,7 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                             side="bottom"
                             sideOffset={4}
                             collisionPadding={8}
-                            className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[260px] leading-relaxed shadow-lg"
+                            style={{ background: "#111827", color: "#fff", fontSize: 12, padding: "6px 10px", borderRadius: 6, maxWidth: 260, lineHeight: 1.4, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 50 }}
                           >
                             {cfg.tooltip}
                           </TooltipContent>
@@ -920,7 +921,12 @@ export function JobDetails({ submissionId, onNavigate }: JobDetailsProps) {
                           <TooltipTrigger asChild>
                             <span className="cursor-default"><span style={{ color: "#9ca3af" }}>Email:</span> <span style={{ color: cfg.color }}>{cfg.text}</span></span>
                           </TooltipTrigger>
-                          <TooltipContent side="top" className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg max-w-[240px] leading-relaxed shadow-lg">
+                          <TooltipContent
+                            side="top"
+                            sideOffset={4}
+                            collisionPadding={8}
+                            style={{ background: "#111827", color: "#fff", fontSize: 12, padding: "6px 10px", borderRadius: 6, maxWidth: 240, lineHeight: 1.4, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 50 }}
+                          >
                             {cfg.tooltip}
                           </TooltipContent>
                         </Tooltip>
