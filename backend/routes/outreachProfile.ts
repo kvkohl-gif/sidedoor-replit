@@ -4,6 +4,7 @@ import { callClaude } from "../claude";
 import { requireCredits } from "../middleware/creditGuard";
 import { deductCredits } from "../services/creditService";
 import { aiRateLimit, assertInputLength } from "../middleware/aiGuard";
+import { markChecklistItem } from "../services/onboardingService";
 
 function requireAuth(req: Request, res: Response, next: () => void) {
   if (!req.user) return res.status(401).json({ error: "Not authenticated" });
@@ -146,6 +147,14 @@ export function registerOutreachProfileRoutes(app: Express) {
         if (error) throw error;
         result = data;
       }
+
+      // Auto-mark onboarding items based on what's now in the profile.
+      // Fire-and-forget — these write to the users table; an error here
+      // shouldn't fail the profile save the user explicitly invoked.
+      const bioFilled = typeof body.bio === "string" && body.bio.trim().length > 0;
+      const resumeFilled = typeof body.resumeText === "string" && body.resumeText.trim().length > 0;
+      if (bioFilled) void markChecklistItem(userId, "bio_added").catch(() => {});
+      if (resumeFilled) void markChecklistItem(userId, "resume_uploaded").catch(() => {});
 
       res.json({
         success: true,

@@ -339,6 +339,33 @@ export function OutreachProfile({ onNavigate }: OutreachProfileProps) {
     saveMutation.mutate(profile);
   };
 
+  // Auto-save: persist any local profile changes 1.5s after the user stops
+  // typing/editing. Prevents data loss when users navigate away after
+  // accepting AI suggestions or filling fields and forgetting to click "Save
+  // Profile". The Save Profile button still works for explicit saves.
+  // Skip auto-save before the initial fetch lands (would overwrite existing
+  // data with the empty default state) and during in-flight saves.
+  const lastSavedRef = useRef<string>("");
+  useEffect(() => {
+    if (!fetchedProfile) return; // wait for initial load
+    const serialized = JSON.stringify(profile);
+    // Initialize the baseline on first load — don't auto-save on hydration.
+    if (lastSavedRef.current === "") {
+      lastSavedRef.current = serialized;
+      return;
+    }
+    if (serialized === lastSavedRef.current) return; // no actual change
+    if (saveMutation.isPending) return;
+
+    const timer = setTimeout(() => {
+      lastSavedRef.current = serialized;
+      setSaveStatus("saving");
+      saveMutation.mutate(profile);
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, fetchedProfile]);
+
   const updateField = useCallback((field: keyof ProfileData, value: any) => {
     setProfile(prev => ({ ...prev, [field]: value }));
   }, []);

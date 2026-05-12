@@ -24,6 +24,7 @@ import { nanoid } from "nanoid";
 import { requireCredits } from "./middleware/creditGuard";
 import { deductCredits } from "./services/creditService";
 import { aiRateLimit, assertInputLength } from "./middleware/aiGuard";
+import { markChecklistItem } from "./services/onboardingService";
 
 /**
  * Extract company slug/domain from common job board URLs.
@@ -709,6 +710,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `Job search: ${completeSubmission.company_name || "Unknown"} — ${completeSubmission.job_title || "Unknown"}`,
             jobSubmission.id
           );
+        }
+
+        // Auto-mark onboarding: ran first search + (since the pipeline finds
+        // contacts and generates messages) viewed contact + first message.
+        if (req.user?.id) {
+          const userId = req.user.id;
+          void markChecklistItem(userId, "first_search").catch(() => {});
+          void markChecklistItem(userId, "first_contact_viewed").catch(() => {});
+          void markChecklistItem(userId, "first_message_generated").catch(() => {});
         }
 
         res.json({ id: jobSubmission.id, submission: mapSubmissionToFrontend(completeSubmission), runId });
