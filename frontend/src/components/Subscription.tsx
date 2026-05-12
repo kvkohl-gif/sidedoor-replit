@@ -870,6 +870,21 @@ export function Subscription() {
   );
 
   // ── History Tab ──────────────────────────────────────────────────
+  // Maps the raw transaction_type from credit_transactions to a human-friendly
+  // label + color. Anything not listed falls back to a neutral grey badge so
+  // new transaction types added later don't crash the UI.
+  const TX_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
+    search_spend:           { label: "Job Search",        bg: "#EDE9FE", fg: "#5B21B6" },
+    ai_generation:          { label: "AI Draft",           bg: "#DBEAFE", fg: "#1D4ED8" },
+    purchase:               { label: "Plan Purchase",      bg: "#D1FAE5", fg: "#065F46" },
+    monthly_reset:          { label: "Monthly Reset",      bg: "#D1FAE5", fg: "#065F46" },
+    plan_upgrade:           { label: "Upgrade Bonus",      bg: "#D1FAE5", fg: "#065F46" },
+    free_grant:             { label: "Trial Credits",      bg: "#FEF3C7", fg: "#92400E" },
+    admin_grant:            { label: "Manual Grant",       bg: "#FEF3C7", fg: "#92400E" },
+    subscription_canceled:  { label: "Subscription Canceled", bg: "#FEE2E2", fg: "#991B1B" },
+  };
+  const txStyle = (type: string) => TX_LABELS[type] || { label: type, bg: "#F3F4F6", fg: "#374151" };
+
   const renderHistoryTab = () => (
     <div
       style={{
@@ -907,7 +922,24 @@ export function Subscription() {
                 borderBottom: idx < transactions.length - 1 ? "1px solid #f3f4f6" : "none",
               }}
             >
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  {(() => {
+                    const s = txStyle(tx.transaction_type);
+                    return (
+                      <span style={{
+                        background: s.bg,
+                        color: s.fg,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.02em",
+                      }}>{s.label}</span>
+                    );
+                  })()}
+                </div>
                 <p style={{ fontSize: 14, fontWeight: 500, color: "#111827", margin: 0 }}>
                   {tx.description}
                 </p>
