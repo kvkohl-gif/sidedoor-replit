@@ -568,18 +568,59 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
     },
   });
 
+  // Marks the contact as "sent" after the user manually sent from their own
+  // email client. For email, hits /api/outreach/mark-sent which also logs a
+  // row in outreach_activities. For LinkedIn (no separate logging endpoint
+  // yet), falls back to the contact PATCH which just updates status.
   const markSentMutation = useMutation({
     mutationFn: async (channel: "email" | "linkedin") => {
       if (!contactId) return;
-      await apiRequest("PATCH", `/api/contacts/${contactId}`, {
-        contactStatus: channel === "email" ? "email_sent" : "linkedin_sent",
-        lastContactedAt: new Date().toISOString(),
-      });
+      if (channel === "email") {
+        await apiRequest("POST", "/api/outreach/mark-sent", {
+          contactId,
+          subject: defaultEmailSubject(),
+          notes: emailDraft.slice(0, 5000),
+        });
+      } else {
+        await apiRequest("PATCH", `/api/contacts/${contactId}`, {
+          contactStatus: "linkedin_sent",
+          lastContactedAt: new Date().toISOString(),
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
     },
   });
+
+  // Helper: default subject line for the mailto: link (and mark-sent log).
+  function defaultEmailSubject(): string {
+    const jobTitle = (contact as any)?.jobSubmissions?.jobTitle || (contact as any)?.jobTitle;
+    const companyName = (contact as any)?.jobSubmissions?.companyName || (contact as any)?.companyName;
+    if (jobTitle && companyName) return `Reaching out about the ${jobTitle} role at ${companyName}`;
+    if (jobTitle) return `Reaching out about the ${jobTitle} role`;
+    if (companyName) return `Reaching out about an opportunity at ${companyName}`;
+    return "Reaching out";
+  }
+
+  // Build a mailto: URI with To, Subject, Body pre-filled. Opens the user's
+  // default email client (Gmail web, Apple Mail, Outlook desktop, etc.) so
+  // they send from their OWN address — replies route directly back to them.
+  function openInEmailClient() {
+    if (!contact?.email) return;
+    const subject = defaultEmailSubject();
+    const body = emailDraft;
+    // mailto: max URL length varies by client (~2000 chars in Outlook is the
+    // notorious floor). For long bodies, copy to clipboard instead and tell
+    // the user to paste — better UX than a truncated email.
+    const mailtoUrl = `mailto:${encodeURIComponent(contact.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (mailtoUrl.length > 1900) {
+      copyToClipboard(`Subject: ${subject}\n\n${body}`);
+      alert("Email body is too long for some mail apps to handle via mailto. We've copied subject + body to your clipboard — paste it into a fresh draft.");
+      return;
+    }
+    window.location.href = mailtoUrl;
+  }
 
   const refineMutation = useMutation({
     mutationFn: async (instructions: string) => {
@@ -859,11 +900,19 @@ export function ContactDetail({ onNavigate, contactId }: ContactDetailProps) {
               )}
               {hasEmail && (
                 <div className="cd-msg-actions">
+                  <button
+                    className="cd-btn primary"
+                    onClick={openInEmailClient}
+                    disabled={!contact.email}
+                    title={contact.email ? "Open in your email client" : "No email on file for this contact"}
+                  >
+                    <Mail size={13} /> Open in email app
+                  </button>
                   <button className="cd-btn secondary" onClick={() => {
                     const text = emailDraft;
                     copyToClipboard(text);
                   }}>
-                    <Copy size={13} /> Copy to Clipboard
+                    <Copy size={13} /> Copy
                   </button>
                   <button
                     className="cd-btn secondary"

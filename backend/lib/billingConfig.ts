@@ -91,6 +91,12 @@ export function assertSecurityConfigOnStartup(): void {
         "Generate with `openssl rand -hex 32` and configure your email provider to send X-Webhook-Signature header.",
     );
   }
+  if (!process.env.CRON_SECRET) {
+    errors.push(
+      "CRON_SECRET is not set — /api/cron/* will return 503, so trial-end reminder emails won't go out. " +
+        "Generate with `openssl rand -hex 32` and pass it to your cron caller via the X-Cron-Secret header.",
+    );
+  }
   // Email provider needed for verification + reset emails.
   const provider = (process.env.EMAIL_PROVIDER || "").toLowerCase();
   if (provider !== "resend" && provider !== "sendgrid") {

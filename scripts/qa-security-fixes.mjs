@@ -140,6 +140,7 @@ catch (e) { console.log("__THROW__:" + e.message); }
         NODE_ENV: "production",
         TURNSTILE_SECRET_KEY: "ts_secret",
         EMAIL_WEBHOOK_SECRET: "email_sec",
+        CRON_SECRET: "cron_sec",
         EMAIL_PROVIDER: "resend",
         RESEND_API_KEY: "re_key",
         EMAIL_FROM: "hello@sidedoor.app",

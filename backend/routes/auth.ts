@@ -6,6 +6,7 @@ import { createFreeSubscription } from "../services/creditService";
 import { initializeOnboarding } from "../services/onboardingService";
 import { verifyTurnstile } from "../lib/turnstile";
 import { sendTransactionalEmail } from "../services/emailService";
+import { sendPasswordResetEmail, sendWelcomeEmail } from "../services/platformEmails";
 
 const router = Router();
 
@@ -286,15 +287,16 @@ router.post("/forgot-password", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Internal server error" });
     }
 
-    // TODO: Wire up email sending here. For now, return the link directly
-    // BUT ONLY in non-production builds. In prod, we never echo the token —
-    // otherwise anyone who knows a target email can take over the account.
-    console.log(`[Password Reset] Token generated for ${normalizedEmail}: ${token}`);
+    // Fire-and-forget: send the actual reset email. We don't block the response
+    // on it (success path is the same regardless), but we log failures.
+    void sendPasswordResetEmail(normalizedEmail, token);
+    console.log(`[Password Reset] Token generated for ${normalizedEmail}`);
 
     if (process.env.NODE_ENV !== "production") {
+      // Dev convenience: also echo the link so local development works without
+      // a configured email provider.
       return res.json({
         ...successResponse,
-        // DEV ONLY: remove resetLink once email sending is wired up
         resetLink: `/reset-password?token=${token}`,
       });
     }
@@ -428,15 +430,30 @@ router.post("/verify-email", async (req: Request, res: Response) => {
 
     // Grant the trial credits + onboarding now (they were withheld at signup
     // to deny credit-farming attacks). Idempotent — if a free subscription
-    // already exists this is a no-op.
+    // already exists this is a no-op, and we treat this as a re-verification
+    // (e.g. user clicked the link twice) so we don't re-send the welcome email.
     const { data: existingSub } = await supabaseAdmin
       .from("user_subscriptions")
       .select("id")
       .eq("user_id", row.user_id)
       .single();
-    if (!existingSub) {
+    const isFirstVerification = !existingSub;
+    if (isFirstVerification) {
       await createFreeSubscription(row.user_id);
       await initializeOnboarding(row.user_id);
+    }
+
+    // Send the welcome email on first verification only. Fire-and-forget; we
+    // never want a flaky send to block the activation flow.
+    if (isFirstVerification) {
+      const { data: userRow } = await supabaseAdmin
+        .from("users")
+        .select("email, first_name")
+        .eq("id", row.user_id)
+        .single();
+      if (userRow?.email) {
+        void sendWelcomeEmail(userRow.email, userRow.first_name || undefined);
+      }
     }
 
     // Burn the token + any siblings.
