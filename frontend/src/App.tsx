@@ -20,6 +20,7 @@ import { LoginScreen } from "../components/Login";
 import { SignupScreen } from "../components/Signup";
 import { ForgotPasswordScreen } from "../components/ForgotPassword";
 import { ResetPasswordScreen } from "../components/ResetPassword";
+import { VerifyEmailScreen } from "../components/VerifyEmail";
 
 // Map page names (used by child components) to URL paths
 const pageToPath: Record<string, string> = {
@@ -38,6 +39,7 @@ const pageToPath: Record<string, string> = {
   privacy: "/privacy",
   "forgot-password": "/forgot-password",
   "reset-password": "/reset-password",
+  "verify-email": "/verify-email",
   login: "/login",
   signup: "/signup",
 };
@@ -56,6 +58,7 @@ const pathToPage: Record<string, string> = {
   "/privacy": "privacy",
   "/forgot-password": "forgot-password",
   "/reset-password": "reset-password",
+  "/verify-email": "verify-email",
   "/login": "login",
   "/signup": "signup",
 };
@@ -175,7 +178,7 @@ export default function App() {
   }
 
   // Public pages — no Layout wrapper, no auth required
-  const publicPages = ["/login", "/signup", "/terms", "/privacy", "/forgot-password", "/reset-password"];
+  const publicPages = ["/login", "/signup", "/terms", "/privacy", "/forgot-password", "/reset-password", "/verify-email"];
   if (publicPages.some(p => location === p || location.startsWith(p + "?"))) {
     return (
       <><StagingBanner /><div className={stagingOffset}><Switch>
@@ -208,6 +211,18 @@ export default function App() {
           {() => {
             const token = new URLSearchParams(window.location.search).get("token") || "";
             return <ResetPasswordScreen onNavigate={handleNavigate} token={token} />;
+          }}
+        </Route>
+        <Route path="/verify-email">
+          {() => {
+            const token = new URLSearchParams(window.location.search).get("token") || "";
+            return (
+              <VerifyEmailScreen
+                onNavigate={handleNavigate}
+                onLogin={() => setIsAuthenticated(true)}
+                token={token}
+              />
+            );
           }}
         </Route>
       </Switch></div></>

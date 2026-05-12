@@ -1,11 +1,22 @@
-import { Key, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Key, Mail, Lock, User, ArrowRight, MailCheck } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { registerUser } from "@/lib/auth";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 interface SignupScreenProps {
   onNavigate: (page: string) => void;
   onSignup: () => void;
+}
+
+// Mirrors backend rule: ≥12 chars, must contain a letter and a digit, no
+// trivially-common patterns. Backend re-validates; this is just to fail fast
+// in the UI.
+function clientSidePasswordError(pw: string): string | null {
+  if (pw.length < 12) return "Password must be at least 12 characters";
+  if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return "Password must include at least one letter and one number";
+  if (/^(password|letmein|qwerty|111111|123456|iloveyou|admin)/i.test(pw)) return "Password is too common — please choose another";
+  return null;
 }
 
 export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
@@ -16,6 +27,8 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null); // when set, show "check your email"
   const [, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,23 +40,62 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
       return;
     }
 
-    if (password.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
+    const pwError = clientSidePasswordError(password);
+    if (pwError) {
+      setPasswordError(pwError);
+      return;
+    }
+
+    if (!captchaToken) {
+      setPasswordError("Please complete the CAPTCHA check");
       return;
     }
 
     setIsLoading(true);
 
-    const result = await registerUser(firstName, lastName, email, password);
+    const result = await registerUser(firstName, lastName, email, password, captchaToken);
 
     if (result.success) {
-      onSignup();
-      setLocation('/dashboard');
+      // Backend now sends a verification email and does NOT issue a session at
+      // signup. Show "check your email" instead of dropping into the dashboard.
+      setSubmittedEmail(email);
+      setIsLoading(false);
     } else {
-      alert(result.error || 'Signup failed');
+      alert(result.error || result.message || "Signup failed");
       setIsLoading(false);
     }
   };
+
+  // Post-signup "check your email" view
+  if (submittedEmail) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F7F5FF] to-[#FAFBFC] flex items-center justify-center p-4">
+        <div className="w-full max-w-md relative z-10">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg py-12 px-8 sm:px-10 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="w-14 h-14 bg-[#F0EBFE] rounded-full flex items-center justify-center">
+                <MailCheck className="w-7 h-7 text-[#6B46C1]" />
+              </div>
+            </div>
+            <h1 className="text-[#1A202C] mb-3">Check your email</h1>
+            <p className="text-[15px] text-[#718096] mb-6">
+              We sent a verification link to <strong className="text-[#1A202C]">{submittedEmail}</strong>.
+              Click it to activate your account and claim your free trial credits.
+            </p>
+            <p className="text-[13px] text-[#A0AEC0] mb-8">
+              Didn’t get it? Check spam, or wait 60 seconds and request another from the login page.
+            </p>
+            <button
+              onClick={() => onNavigate("login")}
+              className="text-[#6B46C1] hover:text-[#5a3ba1] font-medium text-[14px]"
+            >
+              Back to log in →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F7F5FF] to-[#FAFBFC] flex items-center justify-center p-4">
@@ -149,7 +201,7 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
                   className="w-full pl-10 pr-4 py-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent text-[14px] text-[#1A202C] placeholder:text-[#A0AEC0]"
                 />
               </div>
-              <p className="text-[12px] text-[#A0AEC0] mt-1.5">Must be at least 8 characters</p>
+              <p className="text-[12px] text-[#A0AEC0] mt-1.5">At least 12 characters, with a letter and a number</p>
             </div>
 
             {/* Confirm Password */}
@@ -176,10 +228,18 @@ export function SignupScreen({ onNavigate, onSignup }: SignupScreenProps) {
               )}
             </div>
 
+            {/* CAPTCHA */}
+            <div>
+              <TurnstileWidget
+                onToken={setCaptchaToken}
+                onError={() => setPasswordError("CAPTCHA failed to load — please refresh the page.")}
+              />
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !captchaToken}
               className="w-full bg-[#6B46C1] hover:bg-[#5a3ba1] disabled:bg-[#9F7AEA] text-white px-4 py-3 rounded-lg transition-all font-medium text-[14px] shadow-sm flex items-center justify-center gap-2 mt-8 mb-6"
             >
               {isLoading ? (
