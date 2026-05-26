@@ -339,10 +339,14 @@ export class EnhancedEnrichmentService {
                 console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
 
                 // Filter contacts for department alignment — UNLESS the plan
-                // explicitly opts out (e.g. tiny-company exec fallback, where the
-                // CEO/CTO is the real hiring manager but is in Apollo's "executive"
-                // department, not the role's department).
-                const alignedContacts = plan.skipDeptAlignment
+                // explicitly opts out OR the plan is targeting the recruiter
+                // bucket. Recruiters live in the People/HR department by
+                // definition, so checking whether they're in the role's target
+                // department (product/engineering/etc) always fails and kills
+                // every legitimate recruiter result. Recruiter plans should
+                // trust their own title filter and skip alignment.
+                const isRecruiterPlan = plan.label.startsWith('recruiter');
+                const alignedContacts = (plan.skipDeptAlignment || isRecruiterPlan)
                   ? planResults.contacts
                   : planResults.contacts.filter(contact =>
                       isContactDeptAligned(

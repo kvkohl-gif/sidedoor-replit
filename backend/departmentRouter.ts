@@ -423,10 +423,14 @@ export function buildApolloPlans(
        'Head of People', 'People Operations', 'People Partner', 'Chief of Staff',
        'Office Manager', 'Sourcer']
     : isEnterprise
-    ? ['Technical Recruiter', 'Senior Technical Recruiter', 'Talent Acquisition Partner',
-       'Talent Acquisition Manager', 'Recruiting Manager', 'Lead Recruiter', 'Senior Recruiter']
+    ? ['Recruiter', 'Technical Recruiter', 'Senior Technical Recruiter', 'Senior Recruiter',
+       'Lead Recruiter', 'Recruiting Manager', 'Talent Acquisition',
+       'Talent Acquisition Specialist', 'Senior Talent Acquisition Specialist',
+       'Talent Acquisition Partner', 'Talent Acquisition Manager', 'HR Recruiter',
+       'Sourcer', 'Talent Sourcer']
     : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent', 'Talent Acquisition',
-       'Talent Acquisition Manager', 'Head of Talent', 'HR Manager', 'People Operations'];
+       'Talent Acquisition Specialist', 'Talent Acquisition Manager', 'Head of Talent',
+       'HR Manager', 'HR Recruiter', 'People Operations'];
 
   plans.push({
     label: 'recruiter-primary',
