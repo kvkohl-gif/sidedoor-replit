@@ -190,6 +190,12 @@ export interface ApolloSearchPlan {
     reveal_personal_emails?: boolean;
   };
   hardLimit: number;
+  // When true, downstream code should skip the isContactDeptAligned filter for
+  // this plan's results. Used for plans that intentionally search OUTSIDE the
+  // job's target department — e.g. the tiny-company executive fallback, where
+  // the CEO/CTO is the real hiring manager despite being in the "executive"
+  // department in Apollo.
+  skipDeptAlignment?: boolean;
 }
 
 /**
@@ -388,16 +394,38 @@ export function buildApolloPlans(
     });
   }
 
+  // Tiny-company executive fallback: at <=100 employees, a dedicated department lead
+  // often doesn't exist yet. The actual hiring manager for a PM/eng/design/etc role
+  // is the CEO, CTO, or a founder. Apollo categorizes those people as "executive"
+  // department, so no title/department-filtered plan will surface them. This plan
+  // pulls C-suite/founders/owners with no title or department filter as a last
+  // resort. Capped tightly so it doesn't dominate when better matches exist.
+  const isTiny = (employeeCount || 0) > 0 && (employeeCount || 0) <= 100;
+  if (isTiny) {
+    plans.push({
+      label: 'hm-tiny-company-execs',
+      payload: {
+        organization_ids: [orgId],
+        person_seniorities: ['c_suite', 'founder', 'owner'],
+        per_page: 5,
+        reveal_personal_emails: true
+      },
+      hardLimit: 3,
+      skipDeptAlignment: true // execs aren't in the target dept by definition
+    });
+  }
+
   // ── RECRUITER/GATEKEEPER BUCKET ────────────────────────────
 
   // For small companies, recruiters might have generalist titles
   const recruiterTitles = isSmall
-    ? ['Recruiter', 'Talent Acquisition', 'HR Manager', 'Head of People',
-       'People Operations', 'Chief of Staff', 'Office Manager']
+    ? ['Recruiter', 'Talent', 'Talent Acquisition', 'Head of Talent', 'HR Manager',
+       'Head of People', 'People Operations', 'People Partner', 'Chief of Staff',
+       'Office Manager', 'Sourcer']
     : isEnterprise
     ? ['Technical Recruiter', 'Senior Technical Recruiter', 'Talent Acquisition Partner',
        'Talent Acquisition Manager', 'Recruiting Manager', 'Lead Recruiter', 'Senior Recruiter']
-    : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent Acquisition',
+    : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent', 'Talent Acquisition',
        'Talent Acquisition Manager', 'Head of Talent', 'HR Manager', 'People Operations'];
 
   plans.push({

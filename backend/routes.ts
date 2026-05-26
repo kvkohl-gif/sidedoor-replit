@@ -657,32 +657,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // If no Apollo contacts found, create a placeholder message using Supabase
+        // If no Apollo contacts found, leave recruiter_contacts empty for this job.
+        // The frontend renders an empty-state UI when zero rows exist, so a synthetic
+        // placeholder row is unnecessary — and was actively harmful, because the
+        // outreach_bucket column defaults to "recruiter" and the placeholder was
+        // therefore counted in the "Recruiters" chip on the job detail page, creating
+        // a misleading "1 Recruiter / 0 results" contradiction.
         if (apolloSearchResult.contacts.length === 0) {
-          console.log("No Apollo contacts found - no fallback contacts will be generated");
-          
-          // Create a single informational record indicating no contacts were found
-          const { error: placeholderError } = await supabase
-            .from('recruiter_contacts')
-            .insert({
-              job_submission_id: updatedSubmission.id,
-              name: "No Recruiter Contacts Found",
-              title: "Apollo search returned no results",
-              email: null,
-              linkedin_url: null,
-              confidence_score: 0,
-              source: "Apollo Search",
-              email_verified: "false",
-              verification_status: "unknown",
-              source_platform: "apollo",
-              recruiter_confidence: 0.0,
-            });
-          
-          if (placeholderError) {
-            console.error("Failed to create placeholder contact:", placeholderError);
-          } else {
-            console.log("Created placeholder record for no contacts found");
-          }
+          console.log("No Apollo contacts found - leaving recruiter_contacts empty (frontend renders empty state)");
         }
 
         console.log(`Total contacts added: ${totalContactsAdded}`);

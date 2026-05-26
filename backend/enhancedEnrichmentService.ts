@@ -338,15 +338,20 @@ export class EnhancedEnrichmentService {
                 const planResults = await apolloService.executeApolloSearch(plan.payload);
                 console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
 
-                // Filter contacts for department alignment
-                const alignedContacts = planResults.contacts.filter(contact =>
-                  isContactDeptAligned(
-                    contact.title || '',
-                    (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
-                    topDept.id,
-                    crossTitles
-                  )
-                );
+                // Filter contacts for department alignment — UNLESS the plan
+                // explicitly opts out (e.g. tiny-company exec fallback, where the
+                // CEO/CTO is the real hiring manager but is in Apollo's "executive"
+                // department, not the role's department).
+                const alignedContacts = plan.skipDeptAlignment
+                  ? planResults.contacts
+                  : planResults.contacts.filter(contact =>
+                      isContactDeptAligned(
+                        contact.title || '',
+                        (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
+                        topDept.id,
+                        crossTitles
+                      )
+                    );
 
                 // Dedup across search tiers
                 const uniqueAligned = alignedContacts.filter(contact => {
