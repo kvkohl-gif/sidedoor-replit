@@ -34,9 +34,17 @@ function TooltipTrigger({
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
 }
 
+// IMPORTANT: globals.css uses `@import "tailwindcss"` (v4 syntax) but the
+// installed package is Tailwind v3.4 — so arbitrary utility classes like
+// `bg-primary` / `bg-gray-900` are never generated. The original shadcn
+// className-based styling resulted in transparent tooltips with invisible
+// white text everywhere they were used. We apply the dark theme as inline
+// styles so the tooltip always renders correctly regardless of Tailwind state.
+// Caller-provided `style` overrides defaults via spread order.
 function TooltipContent({
   className,
-  sideOffset = 0,
+  style,
+  sideOffset = 4,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -45,14 +53,24 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
-        className={cn(
-          "bg-primary text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-1.5 text-xs text-balance",
-          className,
-        )}
+        collisionPadding={8}
+        className={cn("z-50", className)}
+        style={{
+          background: "#111827",
+          color: "#fff",
+          fontSize: 12,
+          lineHeight: 1.4,
+          padding: "6px 10px",
+          borderRadius: 6,
+          maxWidth: 260,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          zIndex: 50,
+          ...style,
+        }}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="bg-primary fill-primary z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+        <TooltipPrimitive.Arrow style={{ fill: "#111827" }} width={10} height={5} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );
