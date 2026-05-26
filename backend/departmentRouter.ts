@@ -26,6 +26,24 @@ export const APOLLO_DEPT_MAP: Record<DeptId, string[]> = {
   legal: ['legal']
 };
 
+// Canonical leadership-title variants per department. Claude's inference often omits
+// some of these (e.g. "Head of Product"), which causes Apollo person_titles filtering
+// to miss real hiring managers whose actual titles use that variant.
+const DEPT_CANONICAL_LEADERSHIP_TITLES: Record<DeptId, string[]> = {
+  product: ['Head of Product', 'VP of Product', 'Chief Product Officer', 'Director of Product', 'Senior Product Manager', 'Product Manager'],
+  engineering: ['Head of Engineering', 'VP of Engineering', 'Chief Technology Officer', 'CTO', 'Director of Engineering', 'Engineering Manager'],
+  design: ['Head of Design', 'VP of Design', 'Chief Design Officer', 'Director of Design', 'Design Manager'],
+  data: ['Head of Data', 'VP of Data', 'Chief Data Officer', 'Director of Data', 'Director of Analytics', 'Data Science Manager'],
+  it: ['Head of IT', 'VP of IT', 'Chief Information Officer', 'CIO', 'Director of IT', 'IT Manager'],
+  marketing: ['Head of Marketing', 'VP of Marketing', 'Chief Marketing Officer', 'CMO', 'Director of Marketing', 'Marketing Manager'],
+  sales: ['Head of Sales', 'VP of Sales', 'Chief Revenue Officer', 'CRO', 'Director of Sales', 'Sales Manager'],
+  customer_success: ['Head of Customer Success', 'VP of Customer Success', 'Director of Customer Success', 'Customer Success Manager'],
+  operations: ['Head of Operations', 'VP of Operations', 'Chief Operating Officer', 'COO', 'Director of Operations'],
+  people: ['Head of People', 'VP of People', 'Chief People Officer', 'CHRO', 'Director of People', 'HR Manager'],
+  finance: ['Head of Finance', 'VP of Finance', 'Chief Financial Officer', 'CFO', 'Director of Finance'],
+  legal: ['Head of Legal', 'VP of Legal', 'Chief Legal Officer', 'General Counsel', 'Director of Legal']
+};
+
 // Titles to avoid when searching for non-CS roles
 const TITLE_STOPWORDS = [
   'sales development', 'account executive', 'customer success manager',
@@ -172,6 +190,16 @@ export interface ApolloSearchPlan {
     reveal_personal_emails?: boolean;
   };
   hardLimit: number;
+  // When true, downstream code should skip the isContactDeptAligned filter for
+  // this plan's results. Legacy flag — the new scoring layer in
+  // enhancedEnrichmentService no longer calls isContactDeptAligned, but this
+  // remains for any code path still on the older filter.
+  skipDeptAlignment?: boolean;
+  // When true, this plan's results are added directly to the HM bucket without
+  // going through the contactScoring ranker. Used for plans that surface
+  // legitimate hiring managers whose titles won't match the role's keyword bag
+  // — e.g. CEO/CTO for a tiny-company PM search. Scoring would drop them.
+  bypassScoring?: boolean;
 }
 
 /**
@@ -242,11 +270,23 @@ export function buildApolloPlans(
   const topDept = inference.departments.sort((a, b) => b.confidence - a.confidence)[0];
   const deptFilters = topDept ? APOLLO_DEPT_MAP[topDept.id] : [];
 
-  const primaryTitles = sanitizeTitles(
-    inference.primary_titles
-      .sort((a, b) => b.confidence - a.confidence)
-      .map(x => x.title)
-  );
+  // Merge Claude-inferred titles with canonical leadership-title variants for the top
+  // department. Claude's list is often incomplete (e.g. misses "Head of Product"),
+  // and Apollo's person_titles filter is OR-matched against actual titles, so any
+  // missing variant means real hiring managers get filtered out.
+  const inferredTitles = inference.primary_titles
+    .sort((a, b) => b.confidence - a.confidence)
+    .map(x => x.title);
+  const canonicalLeadership = topDept ? DEPT_CANONICAL_LEADERSHIP_TITLES[topDept.id] : [];
+  const mergedTitleSet = new Set<string>();
+  const mergedTitles: string[] = [];
+  for (const t of [...inferredTitles, ...canonicalLeadership]) {
+    const key = t.trim().toLowerCase();
+    if (!key || mergedTitleSet.has(key)) continue;
+    mergedTitleSet.add(key);
+    mergedTitles.push(t.trim());
+  }
+  const primaryTitles = sanitizeTitles(mergedTitles);
 
   const crossTitles = sanitizeTitles(
     inference.cross_function_titles
@@ -266,6 +306,25 @@ export function buildApolloPlans(
   const plans: ApolloSearchPlan[] = [];
 
   // ── HIRING MANAGER BUCKET ──────────────────────────────────
+
+  // Plan 0 — broad recall plan. Filter by dept + seniority only, NO title
+  // filter. The downstream scoring layer (contactScoring.ts) decides who
+  // matches. This is the primary HM signal; the title-based tier plans below
+  // are kept as backstops for when Apollo's dept tagging is missing or wrong.
+  if (deptFilters.length > 0) {
+    plans.push({
+      label: 'hm-broad-dept-seniority',
+      payload: {
+        organization_ids: [orgId],
+        person_departments: deptFilters,
+        person_seniorities: [...TIER_1, ...TIER_2, ...TIER_3],
+        per_page: 25,
+        reveal_personal_emails: true,
+      },
+      hardLimit: 25, // collect lots; scorer will prune
+      skipDeptAlignment: true, // scorer handles relevance
+    });
+  }
 
   // Tier 1: Director/VP/Head in the department (skip-level decision-makers)
   // For small companies, combine Tier 1+2 since fewer people exist
@@ -324,6 +383,25 @@ export function buildApolloPlans(
     hardLimit: 3
   });
 
+  // Safety net 2: Department match WITHOUT title filter — catches people whose actual
+  // title doesn't match any of our inferred/canonical title strings but who Apollo has
+  // tagged in the right department (e.g. "Head of Product, Originations" when the title
+  // list only has "Head of Product Management"). Downstream isContactDeptAligned filters
+  // these for real relevance before they reach the user.
+  if (deptFilters.length > 0) {
+    plans.push({
+      label: 'hm-safety-dept-no-titles',
+      payload: {
+        organization_ids: [orgId],
+        person_departments: deptFilters,
+        person_seniorities: [...TIER_1, ...TIER_2],
+        per_page: 10,
+        reveal_personal_emails: true
+      },
+      hardLimit: 5
+    });
+  }
+
   // Cross-functional contacts (e.g. Engineering Manager for a PM role)
   if (crossTitles.length) {
     plans.push({
@@ -339,17 +417,44 @@ export function buildApolloPlans(
     });
   }
 
+  // Tiny-company executive fallback: at <=100 employees, a dedicated department lead
+  // often doesn't exist yet. The actual hiring manager for a PM/eng/design/etc role
+  // is the CEO, CTO, or a founder. Apollo categorizes those people as "executive"
+  // department, so no title/department-filtered plan will surface them. This plan
+  // pulls C-suite/founders/owners with no title or department filter as a last
+  // resort. Capped tightly so it doesn't dominate when better matches exist.
+  const isTiny = (employeeCount || 0) > 0 && (employeeCount || 0) <= 100;
+  if (isTiny) {
+    plans.push({
+      label: 'hm-tiny-company-execs',
+      payload: {
+        organization_ids: [orgId],
+        person_seniorities: ['c_suite', 'founder', 'owner'],
+        per_page: 5,
+        reveal_personal_emails: true
+      },
+      hardLimit: 3,
+      skipDeptAlignment: true, // execs aren't in the target dept by definition
+      bypassScoring: true, // their titles won't match the role's keyword bag either
+    });
+  }
+
   // ── RECRUITER/GATEKEEPER BUCKET ────────────────────────────
 
   // For small companies, recruiters might have generalist titles
   const recruiterTitles = isSmall
-    ? ['Recruiter', 'Talent Acquisition', 'HR Manager', 'Head of People',
-       'People Operations', 'Chief of Staff', 'Office Manager']
+    ? ['Recruiter', 'Talent', 'Talent Acquisition', 'Head of Talent', 'HR Manager',
+       'Head of People', 'People Operations', 'People Partner', 'Chief of Staff',
+       'Office Manager', 'Sourcer']
     : isEnterprise
-    ? ['Technical Recruiter', 'Senior Technical Recruiter', 'Talent Acquisition Partner',
-       'Talent Acquisition Manager', 'Recruiting Manager', 'Lead Recruiter', 'Senior Recruiter']
-    : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent Acquisition',
-       'Talent Acquisition Manager', 'Head of Talent', 'HR Manager', 'People Operations'];
+    ? ['Recruiter', 'Technical Recruiter', 'Senior Technical Recruiter', 'Senior Recruiter',
+       'Lead Recruiter', 'Recruiting Manager', 'Talent Acquisition',
+       'Talent Acquisition Specialist', 'Senior Talent Acquisition Specialist',
+       'Talent Acquisition Partner', 'Talent Acquisition Manager', 'HR Recruiter',
+       'Sourcer', 'Talent Sourcer']
+    : ['Recruiter', 'Senior Recruiter', 'Technical Recruiter', 'Talent', 'Talent Acquisition',
+       'Talent Acquisition Specialist', 'Talent Acquisition Manager', 'Head of Talent',
+       'HR Manager', 'HR Recruiter', 'People Operations'];
 
   plans.push({
     label: 'recruiter-primary',

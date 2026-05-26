@@ -89,15 +89,20 @@ export interface ProcessedContact {
   apolloContact?: ApolloContact; // Optional for enrichment compatibility
 }
 
-// Predefined recruiter titles for Apollo filtering
+// Predefined recruiter titles for Apollo filtering.
+// Apollo's person_titles is a contains-match against actual person titles, so we
+// need both bare forms ("talent" matches "Sam Schatz - Talent") and compound forms.
 const RECRUITER_TITLES = [
   "recruiter",
   "technical recruiter",
   "senior recruiter",
   "lead recruiter",
+  "recruiting",
   "recruiting coordinator",
   "recruiting manager",
   "recruiting lead",
+  "head of recruiting",
+  "talent",
   "talent acquisition",
   "talent acquisition specialist",
   "talent acquisition partner",
@@ -107,6 +112,7 @@ const RECRUITER_TITLES = [
   "talent acquisition recruiter",
   "talent development manager",
   "talent manager",
+  "head of talent",
   "acquisition manager",
   "acquisition specialist",
   "people operations manager",
@@ -115,6 +121,7 @@ const RECRUITER_TITLES = [
   "people operations coordinator",
   "people operations lead",
   "people operations director",
+  "head of people",
   "people partner",
   "people experience lead",
   "people experience manager",
@@ -122,7 +129,8 @@ const RECRUITER_TITLES = [
   "human resources business partner",
   "talent partner",
   "talent sourcer",
-  "senior talent sourcer"
+  "senior talent sourcer",
+  "sourcer"
 ];
 
 /**
