@@ -191,11 +191,15 @@ export interface ApolloSearchPlan {
   };
   hardLimit: number;
   // When true, downstream code should skip the isContactDeptAligned filter for
-  // this plan's results. Used for plans that intentionally search OUTSIDE the
-  // job's target department — e.g. the tiny-company executive fallback, where
-  // the CEO/CTO is the real hiring manager despite being in the "executive"
-  // department in Apollo.
+  // this plan's results. Legacy flag — the new scoring layer in
+  // enhancedEnrichmentService no longer calls isContactDeptAligned, but this
+  // remains for any code path still on the older filter.
   skipDeptAlignment?: boolean;
+  // When true, this plan's results are added directly to the HM bucket without
+  // going through the contactScoring ranker. Used for plans that surface
+  // legitimate hiring managers whose titles won't match the role's keyword bag
+  // — e.g. CEO/CTO for a tiny-company PM search. Scoring would drop them.
+  bypassScoring?: boolean;
 }
 
 /**
@@ -302,6 +306,25 @@ export function buildApolloPlans(
   const plans: ApolloSearchPlan[] = [];
 
   // ── HIRING MANAGER BUCKET ──────────────────────────────────
+
+  // Plan 0 — broad recall plan. Filter by dept + seniority only, NO title
+  // filter. The downstream scoring layer (contactScoring.ts) decides who
+  // matches. This is the primary HM signal; the title-based tier plans below
+  // are kept as backstops for when Apollo's dept tagging is missing or wrong.
+  if (deptFilters.length > 0) {
+    plans.push({
+      label: 'hm-broad-dept-seniority',
+      payload: {
+        organization_ids: [orgId],
+        person_departments: deptFilters,
+        person_seniorities: [...TIER_1, ...TIER_2, ...TIER_3],
+        per_page: 25,
+        reveal_personal_emails: true,
+      },
+      hardLimit: 25, // collect lots; scorer will prune
+      skipDeptAlignment: true, // scorer handles relevance
+    });
+  }
 
   // Tier 1: Director/VP/Head in the department (skip-level decision-makers)
   // For small companies, combine Tier 1+2 since fewer people exist
@@ -411,7 +434,8 @@ export function buildApolloPlans(
         reveal_personal_emails: true
       },
       hardLimit: 3,
-      skipDeptAlignment: true // execs aren't in the target dept by definition
+      skipDeptAlignment: true, // execs aren't in the target dept by definition
+      bypassScoring: true, // their titles won't match the role's keyword bag either
     });
   }
 

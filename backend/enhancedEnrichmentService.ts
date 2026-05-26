@@ -4,6 +4,7 @@ import { analyzeEmailPatterns, type EmailSuggestion, type PatternAnalysisResult 
 import { emailPatternInference, type InferredEmail, type EmailPattern } from "./emailPatternInference";
 import { extractRecruiterName, generateTwoBucketTargets, type RecruiterNameExtraction, type TwoBucketTargets } from "./openai";
 import { inferDepartmentTargets, buildApolloPlans, isContactDeptAligned, type DepartmentInference, type ApolloSearchPlan } from "./departmentRouter";
+import { buildRoleKeywordBag, scoreContact, getJobSeniorityRank, getContactSeniorityRank, HM_SCORE_THRESHOLD, type RankedCandidate } from "./contactScoring";
 import { classifyJobRole, type RoleLookupResult } from "./roleTaxonomyService";
 import { EmailValidationGuardrails, ValidatedEmail } from "./emailValidationGuardrails";
 import type { InsertRecruiterContact } from "@shared/schema";
@@ -321,64 +322,107 @@ export class EnhancedEnrichmentService {
             // Use organization-specific search plans
             const searchPlans = buildApolloPlans(request.organization_id, departmentInference, request.employee_count, request.job_title);
             const topDept = departmentInference.departments[0];
-            const crossTitles = departmentInference.cross_function_titles.map(t => t.title);
-            
+
             console.log(`Search plans: ${searchPlans.map(p => p.label).join(' → ')}`);
-            
-            // Execute search plans in priority order (with dedup across tiers)
-            let totalContacts: ProcessedContact[] = [];
-            const seenContactKeys = new Set<string>();
+
+            // ── New flow ──────────────────────────────────────────────
+            // 1. Recruiter plans → bucket directly (recruiters need broad-net
+            //    title matching, not relevance scoring).
+            // 2. HM plans → collect ALL candidates into a pool, dedup, then
+            //    score+rank with contactScoring.ts. Take top-N. This replaces
+            //    the previous "first plan that returns something wins" model
+            //    that was prone to surfacing weak matches just because they
+            //    were found first.
+            const hmCandidatePool: Array<{
+              contact: ProcessedContact;
+              apolloDept: string | string[] | null;
+              apolloSeniority: string | null;
+            }> = [];
+            const seenHmKeys = new Set<string>();
+            const seenRecruiterKeys = new Set<string>();
+
             for (const plan of searchPlans) {
-              if (totalContacts.length >= 12) break; // Stop when we have enough contacts
+              const isRecruiterPlan = plan.label.startsWith('recruiter');
 
               console.log(`Executing search plan: ${plan.label}`);
               console.log(`Search payload:`, JSON.stringify(plan.payload, null, 2));
 
               try {
                 const planResults = await apolloService.executeApolloSearch(plan.payload);
-                console.log(`${plan.label}: Found ${planResults.contacts.length} contacts`);
+                console.log(`${plan.label}: Found ${planResults.contacts.length} contacts from Apollo`);
 
-                // Filter contacts for department alignment — UNLESS the plan
-                // explicitly opts out OR the plan is targeting the recruiter
-                // bucket. Recruiters live in the People/HR department by
-                // definition, so checking whether they're in the role's target
-                // department (product/engineering/etc) always fails and kills
-                // every legitimate recruiter result. Recruiter plans should
-                // trust their own title filter and skip alignment.
-                const isRecruiterPlan = plan.label.startsWith('recruiter');
-                const alignedContacts = (plan.skipDeptAlignment || isRecruiterPlan)
-                  ? planResults.contacts
-                  : planResults.contacts.filter(contact =>
-                      isContactDeptAligned(
-                        contact.title || '',
-                        (contact.apolloContact as any)?.person?.department || (contact.apolloContact as any)?.person?.functions,
-                        topDept.id,
-                        crossTitles
-                      )
-                    );
-
-                // Dedup across search tiers
-                const uniqueAligned = alignedContacts.filter(contact => {
-                  const key = `${contact.full_name.toLowerCase()}|${contact.email?.toLowerCase() || ''}`;
-                  if (seenContactKeys.has(key)) return false;
-                  seenContactKeys.add(key);
-                  return true;
-                });
-
-                console.log(`${plan.label}: ${alignedContacts.length}/${planResults.contacts.length} dept-aligned, ${uniqueAligned.length} unique`);
-
-                // Classify contacts into buckets
-                if (plan.label === 'recruiter-primary') {
-                  recruiterContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
+                if (isRecruiterPlan) {
+                  // Recruiters: trust the title filter, dedup, take hardLimit.
+                  const unique = planResults.contacts.filter(c => {
+                    const key = `${c.full_name.toLowerCase()}|${c.email?.toLowerCase() || ''}`;
+                    if (seenRecruiterKeys.has(key)) return false;
+                    seenRecruiterKeys.add(key);
+                    return true;
+                  });
+                  recruiterContacts.push(...unique.slice(0, plan.hardLimit));
+                  console.log(`${plan.label}: kept ${Math.min(unique.length, plan.hardLimit)} recruiters`);
+                } else if (plan.bypassScoring) {
+                  // Direct-to-HM-bucket plans (e.g. tiny-company exec fallback).
+                  // Score would drop these because their titles don't match the
+                  // role's keyword bag — but they're legitimate hiring managers.
+                  const unique = planResults.contacts.filter(c => {
+                    const key = `${c.full_name.toLowerCase()}|${c.email?.toLowerCase() || ''}`;
+                    if (seenHmKeys.has(key)) return false;
+                    seenHmKeys.add(key);
+                    return true;
+                  });
+                  departmentLeadContacts.push(...unique.slice(0, plan.hardLimit));
+                  console.log(`${plan.label}: bypassed scoring, kept ${Math.min(unique.length, plan.hardLimit)} direct hires`);
                 } else {
-                  departmentLeadContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
+                  // HM plans: add to pool, dedup. No scoring yet — collect first.
+                  for (const c of planResults.contacts) {
+                    const key = `${c.full_name.toLowerCase()}|${c.email?.toLowerCase() || ''}`;
+                    if (seenHmKeys.has(key)) continue;
+                    seenHmKeys.add(key);
+                    const apolloPerson = (c.apolloContact as any)?.person || (c.apolloContact as any);
+                    hmCandidatePool.push({
+                      contact: c,
+                      apolloDept: apolloPerson?.department ?? apolloPerson?.functions ?? null,
+                      apolloSeniority: apolloPerson?.seniority ?? null,
+                    });
+                  }
+                  console.log(`${plan.label}: added ${planResults.contacts.length} to HM candidate pool (pool size: ${hmCandidatePool.length})`);
                 }
-
-                totalContacts.push(...uniqueAligned.slice(0, plan.hardLimit));
               } catch (planError) {
                 console.error(`Search plan ${plan.label} failed:`, planError);
               }
             }
+
+            // ── Score and rank HM candidates ─────────────────────────
+            const bag = buildRoleKeywordBag({
+              jobTitle: request.job_title || '',
+              topDept: topDept.id,
+            });
+            const jobSeniorityRank = getJobSeniorityRank(request.job_title);
+            console.log(`[scoring] Role keyword bag: dept=${bag.topDept}, primary=[${bag.primary.join(',')}], boost=[${bag.boost.join(',')}], jobSeniorityRank=${jobSeniorityRank}`);
+
+            const ranked = hmCandidatePool
+              .map(c => ({
+                contact: c.contact,
+                apolloDept: c.apolloDept,
+                score: scoreContact({
+                  title: c.contact.title || '',
+                  apolloDepartment: c.apolloDept,
+                  bag,
+                  jobSeniorityRank,
+                  contactSeniorityRank: getContactSeniorityRank(c.apolloSeniority),
+                }),
+              }))
+              .filter(r => r.score.total >= HM_SCORE_THRESHOLD)
+              .sort((a, b) => b.score.total - a.score.total);
+
+            console.log(`[scoring] ${hmCandidatePool.length} HM candidates → ${ranked.length} above threshold (${HM_SCORE_THRESHOLD})`);
+            ranked.slice(0, 10).forEach(r => {
+              console.log(`  ${r.score.total.toFixed(2)} | ${r.contact.full_name} (${r.contact.title}) | ${r.score.reasons.join(' · ')}`);
+            });
+
+            const TOP_N_HMS = 5;
+            departmentLeadContacts.push(...ranked.slice(0, TOP_N_HMS).map(r => r.contact));
           } else {
             // Fallback to company name searches with department-specific titles
             console.log("No organization_id, using company name-based department search...");
